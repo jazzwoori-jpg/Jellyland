@@ -1,7 +1,8 @@
 /* JELLY LAND 맵 생성 — 광장(plaza) & 팬 라운지(lounge) */
 (function () {
   const OUT = "#3a2530";
-  const FONT = "'Galmuri11', 'Galmuri9', monospace";
+  const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', monospace";
+  const T = (k) => window.I18N.t(k);
   function rng(seed) { return () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296); }
   function cv(w, h) { const c = document.createElement("canvas"); c.width = w; c.height = h; const x = c.getContext("2d"); x.imageSmoothingEnabled = false; return [c, x]; }
   const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
@@ -118,10 +119,10 @@
     const CX = 640, CY = 500;
     const gardens = [[420, 380], [860, 380], [420, 650], [860, 650]];
     const buildings = [
-      { id: "gallery", name: "포토 갤러리", x: 250, y: 118, w: 190, h: 130, roof: "#ff7fae", wall: "#fff4e2", trim: "#c98b5a", icon: "📷" },
-      { id: "albums", name: "앨범 기록관", x: 840, y: 118, w: 190, h: 130, roof: "#9d7cf0", wall: "#fff4e2", trim: "#a86d42", icon: "💿" },
-      { id: "cinema", name: "젤리 시네마", x: 150, y: 420, w: 170, h: 130, roof: "#ff6b6b", wall: "#fff0da", trim: "#8f5a34", icon: "🎬" },
-      { id: "lounge", name: "팬 라운지", x: 960, y: 420, w: 176, h: 136, roof: "#4fc3b0", wall: "#fff4e2", trim: "#a86d42", icon: "💬" },
+      { id: "gallery", name: T("bGallery"), x: 250, y: 118, w: 190, h: 130, roof: "#ff7fae", wall: "#fff4e2", trim: "#c98b5a", icon: "📷" },
+      { id: "albums", name: T("bAlbums"), x: 840, y: 118, w: 190, h: 130, roof: "#9d7cf0", wall: "#fff4e2", trim: "#a86d42", icon: "💿" },
+      { id: "cinema", name: T("bCinema"), x: 150, y: 420, w: 170, h: 130, roof: "#ff6b6b", wall: "#fff0da", trim: "#8f5a34", icon: "🎬" },
+      { id: "lounge", name: T("bLounge"), x: 960, y: 420, w: 176, h: 136, roof: "#4fc3b0", wall: "#fff4e2", trim: "#a86d42", icon: "💬" },
     ];
     const paving = (x, y) => {
       const dx = Math.abs(x - CX), dy = Math.abs(y - CY);
@@ -268,8 +269,8 @@
 
     const zones = [
       ...buildings.map((b) => ({ id: b.id, x: b.door.x - 20, y: b.door.y - 8, w: 40, h: 26, label: b.name })),
-      { id: "profile", x: CX - 60, y: CY - 10, w: 120, h: 70, label: "조젤리 프로필" },
-      { id: "guide", x: 530, y: 800, w: 60, h: 26, label: "안내 게시판" },
+      { id: "profile", x: CX - 60, y: CY - 10, w: 120, h: 70, label: T("zProfile") },
+      { id: "guide", x: 530, y: 800, w: 60, h: 26, label: T("zGuide") },
     ];
 
     return {
@@ -355,7 +356,7 @@
     x.fillStyle = OUT; x.fillRect(220, 6, 200, 60); x.fillStyle = "#2a2433"; x.fillRect(223, 9, 194, 54);
     x.font = `bold 16px ${FONT}`; x.textAlign = "center"; x.textBaseline = "middle";
     x.fillStyle = "#ff8fb8"; x.fillText("JELLY TALK ♪", 320, 30);
-    x.font = `11px ${FONT}`; x.fillStyle = "#8fe3cf"; x.fillText("팬 라운지에 오신 걸 환영해요", 320, 50);
+    x.font = `11px ${FONT}`; x.fillStyle = "#8fe3cf"; x.fillText(T("loungeScreen"), 320, 50);
     // 포스터
     [[150, 20, "#9d7cf0"], [460, 20, "#ffd34d"]].forEach(([px, py, col]) => { x.fillStyle = OUT; x.fillRect(px, py, 30, 40); x.fillStyle = col; x.fillRect(px + 2, py + 2, 26, 36); x.fillStyle = "#fff"; x.fillRect(px + 8, py + 10, 14, 14); x.fillStyle = OUT; x.fillRect(px + 13, py + 13, 4, 8); });
     // 무대
@@ -382,7 +383,7 @@
 
     const collide = (px, py) => colliders.some(([a, b, w, h]) => px > a && px < a + w && py > b && py < b + h);
     return {
-      id: "lounge", W, H, ground: g, objects, colliders: [], zones: [{ id: "exit", x: 290, y: 388, w: 60, h: 32, label: "광장으로 나가기" }],
+      id: "lounge", W, H, ground: g, objects, colliders: [], zones: [{ id: "exit", x: 290, y: 388, w: 60, h: 32, label: T("zExit") }],
       walkable: (px, py) => px > 10 && px < W - 10 && py > 92 && py < H - 4 && !collide(px, py),
       spawn: { x: 320, y: 380 }, artist: null, icons: [],
     };

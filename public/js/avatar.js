@@ -26,6 +26,7 @@
     { name: "포도 재킷", top: "#9b7bea", top2: "#7a5bcf", bot: "#3a3350", skirt: "#3a3350", acc: "#ffd66b" },
     { name: "세일러", top: "#f7f4ff", top2: "#d9d4ec", bot: "#34407a", skirt: "#34407a", acc: "#34407a", bow: "#e0405a" },
     { name: "딸기 오버롤", top: "#fff3f6", top2: "#f2d7de", bot: "#e85a6e", skirt: "#e85a6e", acc: "#e85a6e", overall: true },
+    { name: "블랙 재킷", top: "#26222e", top2: "#16131b", bot: "#26222e", skirt: "#26222e", acc: "#f1ecf7", pearls: true },
   ];
 
   function draw(ctx, av, x, y, dir = "down", frame = 0, opts = {}) {
@@ -68,6 +69,7 @@
     if (of.overall) { R(5, 14, 6, 3, of.bot); R(6, 12, 1, 2, of.bot); R(9, 12, 1, 2, of.bot); }
     if (!side && of.acc && !of.overall) R(7, 12, 2, 1, of.acc);
     if (!side && of.bow && dir !== "up") { R(7, 12, 2, 1, of.bow); R(6, 12, 1, 1, of.bow); R(9, 12, 1, 1, of.bow); }
+    if (of.pearls && !side) { R(5, 14, 1, 1, "#f1ecf7"); R(10, 15, 1, 1, "#f1ecf7"); R(7, 13, 1, 4, "#4a4458"); }
     if (outfitIs(of, "피아노 턱시도") && dir !== "up") R(7, 13, 2, 3, "#fff");
     // 하의: 여성은 치마, 남성은 바지 라인
     if (fem) {
@@ -133,5 +135,5 @@
     return "#" + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, "0")).join("");
   }
   window.Avatar = { draw, SKINS, HAIR_COLORS, HAIRS, OUTFITS, mix,
-    random: () => ({ gender: Math.random() < 0.5 ? "f" : "m", hair: (Math.random() * 5) | 0, hairColor: (Math.random() * 8) | 0, skin: (Math.random() * 5) | 0, outfit: (Math.random() * 6) | 0 }) };
+    random: () => ({ gender: Math.random() < 0.5 ? "f" : "m", hair: (Math.random() * HAIRS.length) | 0, hairColor: (Math.random() * HAIR_COLORS.length) | 0, skin: (Math.random() * SKINS.length) | 0, outfit: (Math.random() * OUTFITS.length) | 0 }) };
 })();

@@ -2,11 +2,19 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>JELLY LAND — 피아니스트 조젤리 프로필 월드</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+<title>JELLY LAND — Jo Jelly Profile World</title>
 <meta name="description" content="피아니스트 조젤리(Jo Jelly)의 오픈월드 프로필 게임, JELLY LAND">
 <meta name="theme-color" content="#ff7fae">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'><rect x='3' y='3' width='10' height='10' fill='%233a2530'/><rect x='4' y='4' width='8' height='8' fill='%23ff7fae'/><rect x='5' y='5' width='2' height='2' fill='%23fff'/></svg>">
+<!-- 모바일 홈 화면에 추가 시 앱처럼 전체 화면 -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="JELLY LAND">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="img/icon-192.png">
+<link rel="apple-touch-icon" href="img/icon-180.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri/dist/galmuri.css">
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -15,35 +23,37 @@
 
 <!-- 타이틀 / 로그인 -->
 <div id="title" class="overlay">
+  <div class="lang-top" id="lang-top"></div>
   <div class="logo"><span class="j">J</span>ELLY <span class="j" style="animation-delay:.3s">L</span>AND</div>
-  <div class="subtitle">♪ 피아니스트 조젤리의 프로필 월드 ♪</div>
+  <div class="subtitle" data-i18n="subtitle"></div>
   <div class="auth win">
-    <div class="win-head">🍬 입장하기</div>
+    <div class="win-head" data-i18n="enter"></div>
     <div class="body">
       <div id="auth-forms">
         <div class="tabs">
-          <button class="btn sm on" data-tab="login">로그인</button>
-          <button class="btn sm" data-tab="signup">회원가입</button>
+          <button class="btn sm on" data-tab="login" data-i18n="login"></button>
+          <button class="btn sm" data-tab="signup" data-i18n="signup"></button>
         </div>
         <form id="f-login">
-          <label class="field"><span>이메일</span><input type="email" name="email" autocomplete="email" placeholder="jelly@example.com" required></label>
-          <label class="field"><span>비밀번호</span><input type="password" name="password" autocomplete="current-password" placeholder="비밀번호" required></label>
+          <label class="field"><span data-i18n="email"></span><input type="email" name="email" autocomplete="email" inputmode="email" autocapitalize="off" placeholder="jelly@example.com" required></label>
+          <label class="field"><span data-i18n="password"></span><input type="password" name="password" autocomplete="current-password" required></label>
           <div class="err"></div>
-          <button class="btn pink go" type="submit">로그인하고 입장 ▶</button>
+          <button class="btn pink go" type="submit" data-i18n="loginGo"></button>
         </form>
         <form id="f-signup" class="hidden">
-          <label class="field"><span>이메일 (로그인 아이디)</span><input type="email" name="email" autocomplete="email" placeholder="jelly@example.com" required></label>
-          <label class="field"><span>비밀번호 (6자 이상)</span><input type="password" name="password" autocomplete="new-password" minlength="6" required></label>
-          <label class="field"><span>비밀번호 확인</span><input type="password" name="password2" autocomplete="new-password" minlength="6" required></label>
+          <div class="field"><span data-i18n="language"></span><div class="lang-pick" id="lang-pick"></div></div>
+          <label class="field"><span data-i18n="emailId"></span><input type="email" name="email" autocomplete="email" inputmode="email" autocapitalize="off" placeholder="jelly@example.com" required></label>
+          <label class="field"><span data-i18n="password6"></span><input type="password" name="password" autocomplete="new-password" minlength="6" required></label>
+          <label class="field"><span data-i18n="password2"></span><input type="password" name="password2" autocomplete="new-password" minlength="6" required></label>
           <div class="err"></div>
-          <button class="btn grape go" type="submit">회원가입 ✦</button>
+          <button class="btn grape go" type="submit" data-i18n="signupGo"></button>
         </form>
-        <div class="hint">가입한 이메일이 로그인 아이디가 돼요.<br>다음 단계에서 나만의 캐릭터를 만들어요!</div>
+        <div class="hint" data-i18n="authHint"></div>
       </div>
       <div id="auth-continue" class="hidden">
-        <p style="text-align:center;margin:6px 0 14px"><b id="cont-name"></b> 님, 다시 오셨네요!</p>
-        <button class="btn pink go" id="btn-continue">JELLY LAND 입장 ▶</button>
-        <button class="btn sm" id="btn-switch" style="width:100%;margin-top:10px">다른 계정으로 로그인</button>
+        <p style="text-align:center;margin:6px 0 14px" id="cont-name"></p>
+        <button class="btn pink go" id="btn-continue" data-i18n="enterWorld"></button>
+        <button class="btn sm" id="btn-switch" style="width:100%;margin-top:10px" data-i18n="switchAcc"></button>
       </div>
     </div>
   </div>
@@ -52,25 +62,25 @@
 <!-- 캐릭터 만들기 -->
 <div id="creator" class="overlay hidden">
   <div class="creator win">
-    <div class="win-head">✂ 나만의 캐릭터 만들기</div>
+    <div class="win-head" data-i18n="creatorTitle"></div>
     <div class="body">
       <div class="stage">
         <canvas id="preview" width="32" height="40"></canvas>
-        <button class="btn sm" id="btn-rand">🎲 랜덤</button>
+        <button class="btn sm" id="btn-rand" data-i18n="random"></button>
       </div>
       <div id="opts">
-        <div class="opt"><h4>닉네임</h4><input class="inp" id="nick" maxlength="12" placeholder="광장에서 보일 이름 (최대 12자)"></div>
-        <div class="opt"><h4>성별</h4><div class="chips" id="o-gender"></div></div>
-        <div class="opt"><h4>헤어 스타일</h4><div class="chips" id="o-hair"></div></div>
-        <div class="opt"><h4>헤어 컬러</h4><div class="chips" id="o-hairColor"></div></div>
-        <div class="opt"><h4>피부색</h4><div class="chips" id="o-skin"></div></div>
-        <div class="opt"><h4>옷</h4><div class="chips" id="o-outfit"></div></div>
+        <div class="opt"><h4 data-i18n="nickname"></h4><input class="inp" id="nick" maxlength="12" data-i18n-ph="nickPh" autocomplete="off"></div>
+        <div class="opt"><h4 data-i18n="gender"></h4><div class="chips" id="o-gender"></div></div>
+        <div class="opt"><h4 data-i18n="hair"></h4><div class="chips" id="o-hair"></div></div>
+        <div class="opt"><h4 data-i18n="hairColor"></h4><div class="chips" id="o-hairColor"></div></div>
+        <div class="opt"><h4 data-i18n="skin"></h4><div class="chips" id="o-skin"></div></div>
+        <div class="opt"><h4 data-i18n="outfit"></h4><div class="chips" id="o-outfit"></div></div>
         <div class="err" id="c-err"></div>
       </div>
     </div>
     <div class="foot">
-      <button class="btn hidden" id="btn-cancel">취소</button>
-      <button class="btn pink" id="btn-enter">JELLY LAND 입장! ▶</button>
+      <button class="btn hidden" id="btn-cancel" data-i18n="cancel"></button>
+      <button class="btn pink" id="btn-enter"></button>
     </div>
   </div>
 </div>
@@ -79,21 +89,22 @@
 <div id="hud" class="hidden">
   <div class="hud-top">
     <div class="mini-logo">JELLY LAND</div>
-    <div class="me-card win"><canvas id="me-face" width="16" height="20"></canvas><div><b id="me-name"></b><small id="online">접속 중</small></div></div>
+    <div class="me-card win"><canvas id="me-face" width="16" height="20"></canvas><div><b id="me-name"></b><small id="online"></small></div></div>
     <div class="hud-btns">
-      <button class="btn sm" id="btn-edit">👕 꾸미기</button>
-      <button class="btn sm" id="btn-help">❔ 도움말</button>
-      <button class="btn sm" id="btn-logout">로그아웃</button>
+      <button class="btn sm" id="btn-edit" data-i18n="edit"></button>
+      <button class="btn sm" id="btn-lang" data-i18n="langBtn"></button>
+      <button class="btn sm" id="btn-help" data-i18n="help"></button>
+      <button class="btn sm" id="btn-logout" data-i18n="logout"></button>
     </div>
   </div>
-  <div id="minimap-wrap" class="win"><canvas id="minimap"></canvas><div class="mm-label" id="mm-label">광장 지도</div></div>
+  <div id="minimap-wrap" class="win"><canvas id="minimap"></canvas><div class="mm-label" id="mm-label"></div></div>
   <div id="notice" class="win hidden"></div>
   <div id="prompt" class="win hidden"></div>
-  <div id="chat" class="win hidden">
-    <div class="win-head" id="chat-head" style="cursor:pointer">💬 팬 라운지 채팅 <span class="x" id="chat-toggle">_</span></div>
+  <div id="chat" class="win">
+    <div class="win-head" id="chat-head"><span id="chat-title"></span><span class="badge hidden" id="chat-badge">0</span><span class="x" id="chat-toggle">_</span></div>
     <div class="log" id="chat-log"></div>
-    <div class="opts hidden" id="chat-opts"><label><input type="checkbox" id="chat-notice"> 공지로 등록 (아티스트 전용)</label></div>
-    <form id="chat-form"><input class="inp" id="chat-input" maxlength="200" placeholder="메시지를 입력하세요 (Enter)" autocomplete="off"><button class="btn sm pink">보내기</button></form>
+    <div class="opts hidden" id="chat-opts"><label><input type="checkbox" id="chat-notice"> <span data-i18n="noticeOpt"></span></label></div>
+    <form id="chat-form" autocomplete="off"><input class="inp" id="chat-input" maxlength="200" data-i18n-ph="chatPh" enterkeyhint="send"><button class="btn sm pink" data-i18n="send"></button></form>
   </div>
   <div id="joy"><div class="knob"></div></div>
   <button id="act" class="btn pink">A</button>
@@ -109,9 +120,10 @@
 
 <div id="toast" class="win" style="opacity:0"></div>
 <div id="fade"></div>
-<div id="demo" class="hidden" title="서버 없이 실행 중 — 데이터는 이 브라우저에만 저장돼요">DEMO MODE</div>
+<div id="demo" class="hidden">DEMO MODE</div>
 
 <script src="js/config.js"></script>
+<script src="js/i18n.js"></script>
 <script src="js/api.js"></script>
 <script src="js/avatar.js"></script>
 <script src="js/world.js"></script>

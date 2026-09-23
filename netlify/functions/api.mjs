@@ -1,12 +1,13 @@
 // JELLY LAND API — Netlify Functions (v2) + Netlify Blobs
 // 경로: /api/*
-//   POST /api/signup    {email, password}
+//   POST /api/signup    {email, password, lang}
 //   POST /api/login     {email, password}
 //   GET  /api/me
 //   POST /api/avatar    {nickname, avatar}
+//   POST /api/settings  {lang}
 //   POST /api/presence  {scene, x, y, dir, moving}
-//   GET  /api/chat?room=lounge&since=0
-//   POST /api/chat      {room, text, notice?}
+//   GET  /api/chat?room=plaza|lounge&since=0
+//   POST /api/chat      {room, text, notice?}   ← 보낼 때 한/영/일 3개 언어로 자동 번역해 저장
 //   DELETE /api/chat?key=...        (아티스트 전용)
 import { getStore } from "@netlify/blobs";
 import crypto from "node:crypto";
@@ -17,9 +18,12 @@ const json = (data, status = 200) =>
     status,
     headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
   });
-const err = (msg, status = 400) => json({ error: msg }, status);
+// code는 화면에서 사용자 언어로 바꿔 보여주기 위한 키
+const err = (code, status = 400) => json({ error: code, code }, status);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const LANGS = ["ko", "en", "ja"];
+const ROOMS = ["plaza", "lounge"];
 const b64u = (buf) => Buffer.from(buf).toString("base64url");
 
 // ---- 서명 키: 환경변수 JWT_SECRET 우선, 없으면 Blobs에 자동 생성·저장 ----
@@ -36,9 +40,8 @@ async function getSecret() {
   cachedSecret = s;
   return s;
 }
-
 async function signToken(payload) {
-  const body = b64u(JSON.stringify({ ...payload, exp: Date.now() + 1000 * 60 * 60 * 24 * 14 }));
+  const body = b64u(JSON.stringify({ ...payload, exp: Date.now() + 1000 * 60 * 60 * 24 * 30 }));
   const sig = crypto.createHmac("sha256", await getSecret()).update(body).digest("base64url");
   return `${body}.${sig}`;
 }
@@ -54,103 +57,146 @@ async function verifyToken(token) {
 }
 
 function hashPassword(pw, salt = crypto.randomBytes(16).toString("hex")) {
-  const hash = crypto.scryptSync(pw, salt, 64).toString("hex");
-  return { salt, hash };
+  return { salt, hash: crypto.scryptSync(pw, salt, 64).toString("hex") };
 }
 function checkPassword(pw, salt, hash) {
-  const h = crypto.scryptSync(pw, salt, 64);
-  return crypto.timingSafeEqual(h, Buffer.from(hash, "hex"));
+  return crypto.timingSafeEqual(crypto.scryptSync(pw, salt, 64), Buffer.from(hash, "hex"));
 }
 
 const artistEmails = () =>
   (process.env.ARTIST_EMAILS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
-
 const userKey = (email) => "u/" + crypto.createHash("sha256").update(email).digest("hex");
 const publicUser = (u) => ({
   id: u.id,
   email: u.email,
   nickname: u.nickname || "",
   avatar: u.avatar || null,
+  lang: LANGS.includes(u.lang) ? u.lang : "ko",
   role: artistEmails().includes(u.email) ? "artist" : "fan",
 });
 
 async function auth(req) {
-  const h = req.headers.get("authorization") || "";
-  const p = await verifyToken(h.replace(/^Bearer\s+/i, ""));
+  const p = await verifyToken((req.headers.get("authorization") || "").replace(/^Bearer\s+/i, ""));
   if (!p) return null;
-  const u = await store("jl-users").get(userKey(p.email), { type: "json" });
-  return u || null;
+  return (await store("jl-users").get(userKey(p.email), { type: "json" })) || null;
 }
-
 const clean = (s, n) => String(s ?? "").replace(/[\u0000-\u001f]/g, "").trim().slice(0, n);
 
+// ================= 번역 =================
+// 1) 환경변수 DEEPL_API_KEY 가 있으면 DeepL (무료 플랜: 월 50만 자)
+// 2) 없으면 MyMemory 무료 API (키 불필요, 하루 사용량 제한 있음 — MYMEMORY_EMAIL 설정 시 한도 증가)
+function detectLang(text) {
+  if (/[가-힣ㄱ-ㆎ]/.test(text)) return "ko";
+  if (/[぀-ヿㇰ-ㇿ一-鿿]/.test(text)) return "ja";
+  return "en";
+}
+const withTimeout = (ms) => { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal; };
+
+async function translateDeepL(text, from, to) {
+  const key = process.env.DEEPL_API_KEY;
+  const host = key.endsWith(":fx") ? "api-free.deepl.com" : "api.deepl.com";
+  const target = { ko: "KO", en: "EN-US", ja: "JA" }[to];
+  const r = await fetch(`https://${host}/v2/translate`, {
+    method: "POST",
+    headers: { authorization: `DeepL-Auth-Key ${key}`, "content-type": "application/json" },
+    body: JSON.stringify({ text: [text], source_lang: from.toUpperCase(), target_lang: target }),
+    signal: withTimeout(5000),
+  });
+  if (!r.ok) throw new Error("deepl " + r.status);
+  const d = await r.json();
+  return d.translations?.[0]?.text || null;
+}
+async function translateMyMemory(text, from, to) {
+  const email = process.env.MYMEMORY_EMAIL ? `&de=${encodeURIComponent(process.env.MYMEMORY_EMAIL)}` : "";
+  const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${from}|${to}${email}`, { signal: withTimeout(5000) });
+  if (!r.ok) throw new Error("mymemory " + r.status);
+  const d = await r.json();
+  const out = d?.responseData?.translatedText;
+  if (Number(d?.responseStatus) !== 200 || !out || /MYMEMORY WARNING|QUERY LENGTH LIMIT/i.test(out)) throw new Error("mymemory quota");
+  return out;
+}
+async function translateAll(text) {
+  const src = detectLang(text);
+  const tr = { [src]: text };
+  // 이모지·숫자·기호만 있는 메시지는 번역하지 않음
+  if (!/[\p{L}]/u.test(text)) { for (const l of LANGS) tr[l] = text; return { lang: src, tr }; }
+  await Promise.all(LANGS.filter((l) => l !== src).map(async (to) => {
+    try {
+      tr[to] = process.env.DEEPL_API_KEY ? await translateDeepL(text, src, to) : await translateMyMemory(text, src, to);
+    } catch (e) {
+      console.warn("translate failed", src, to, e.message);
+    }
+  }));
+  return { lang: src, tr };
+}
+
+// ================= 라우터 =================
 export default async (req) => {
   const url = new URL(req.url);
   const route = url.pathname.replace(/^\/api\/?/, "").replace(/\/$/, "");
   const method = req.method;
   let body = {};
-  if (method === "POST") {
-    try { body = await req.json(); } catch { body = {}; }
-  }
+  if (method === "POST") { try { body = await req.json(); } catch { body = {}; } }
 
   try {
-    if (route === "health") return json({ ok: true });
+    if (route === "health") return json({ ok: true, translator: process.env.DEEPL_API_KEY ? "deepl" : "mymemory" });
 
-    // ---------- 회원가입 ----------
     if (route === "signup" && method === "POST") {
       const email = clean(body.email, 120).toLowerCase();
       const password = String(body.password || "");
-      if (!EMAIL_RE.test(email)) return err("올바른 이메일 주소를 입력해주세요.");
-      if (password.length < 6) return err("비밀번호는 6자 이상이어야 해요.");
+      if (!EMAIL_RE.test(email)) return err("email");
+      if (password.length < 6) return err("pw6");
       const users = store("jl-users");
       const key = userKey(email);
-      if (await users.get(key)) return err("이미 가입된 이메일이에요. 로그인해주세요.", 409);
+      if (await users.get(key)) return err("exists", 409);
       const { salt, hash } = hashPassword(password);
-      const user = { id: crypto.randomUUID(), email, salt, hash, nickname: "", avatar: null, createdAt: Date.now() };
+      const user = {
+        id: crypto.randomUUID(), email, salt, hash, nickname: "", avatar: null,
+        lang: LANGS.includes(body.lang) ? body.lang : "ko", createdAt: Date.now(),
+      };
       await users.setJSON(key, user);
       return json({ token: await signToken({ email, id: user.id }), user: publicUser(user) });
     }
 
-    // ---------- 로그인 ----------
     if (route === "login" && method === "POST") {
       const email = clean(body.email, 120).toLowerCase();
-      const password = String(body.password || "");
       const user = await store("jl-users").get(userKey(email), { type: "json" });
-      if (!user || !checkPassword(password, user.salt, user.hash))
-        return err("이메일 또는 비밀번호가 올바르지 않아요.", 401);
+      if (!user || !checkPassword(String(body.password || ""), user.salt, user.hash)) return err("login", 401);
       return json({ token: await signToken({ email, id: user.id }), user: publicUser(user) });
     }
 
     // ---------- 이하 로그인 필요 ----------
     const user = await auth(req);
-    if (!user) return err("로그인이 필요해요.", 401);
+    if (!user) return err("auth", 401);
     const me = publicUser(user);
+    const saveUser = () => store("jl-users").setJSON(userKey(user.email), user);
 
     if (route === "me") return json({ user: me });
 
     if (route === "avatar" && method === "POST") {
       const nickname = clean(body.nickname, 12);
-      if (nickname.length < 1) return err("닉네임을 입력해주세요.");
+      if (!nickname) return err("nick");
       const a = body.avatar || {};
+      const n = (v) => Math.max(0, Math.min(9, v | 0));
       user.nickname = nickname;
-      user.avatar = {
-        gender: a.gender === "m" ? "m" : "f",
-        hair: Math.max(0, Math.min(9, a.hair | 0)),
-        hairColor: Math.max(0, Math.min(9, a.hairColor | 0)),
-        skin: Math.max(0, Math.min(9, a.skin | 0)),
-        outfit: Math.max(0, Math.min(9, a.outfit | 0)),
-      };
-      await store("jl-users").setJSON(userKey(user.email), user);
+      user.avatar = { gender: a.gender === "m" ? "m" : "f", hair: n(a.hair), hairColor: n(a.hairColor), skin: n(a.skin), outfit: n(a.outfit) };
+      await saveUser();
+      return json({ user: publicUser(user) });
+    }
+
+    if (route === "settings" && method === "POST") {
+      if (LANGS.includes(body.lang)) user.lang = body.lang;
+      await saveUser();
       return json({ user: publicUser(user) });
     }
 
     // ---------- 접속자 위치 공유 ----------
     if (route === "presence" && method === "POST") {
       const ps = store("jl-presence");
-      const scene = clean(body.scene, 20) || "plaza";
+      const scene = ROOMS.includes(body.scene) ? body.scene : "plaza";
       const now = Date.now();
       await ps.setJSON("p/" + user.id, {
-        id: user.id, name: me.nickname, avatar: me.avatar, role: me.role, scene,
+        id: user.id, name: me.nickname, avatar: me.avatar, role: me.role, lang: me.lang, scene,
         x: +body.x || 0, y: +body.y || 0, dir: clean(body.dir, 5), moving: !!body.moving, ts: now,
       });
       const { blobs } = await ps.list({ prefix: "p/" });
@@ -165,47 +211,49 @@ export default async (req) => {
       return json({ others, online });
     }
 
-    // ---------- 커뮤니티 채팅 ----------
+    // ---------- 채팅 (광장 / 팬 라운지) ----------
     if (route === "chat") {
       const cs = store("jl-chat");
-      const room = clean(url.searchParams.get("room") || body.room, 20) || "lounge";
+      const room = ROOMS.includes(url.searchParams.get("room") || body.room) ? (url.searchParams.get("room") || body.room) : "lounge";
       if (method === "GET") {
         const since = +url.searchParams.get("since") || 0;
         const { blobs } = await cs.list({ prefix: `m/${room}/` });
-        const keys = blobs.map((b) => b.key).sort().slice(-60);
-        const msgs = (await Promise.all(keys.map((k) => cs.get(k, { type: "json" }).then((m) => m && { ...m, key: k }))))
-          .filter((m) => m && m.ts > since);
+        const keys = blobs.map((b) => b.key).sort().slice(-50);
+        // since 이후 메시지만 가져옴 (키에 시간이 들어 있음)
+        const fresh = keys.filter((k) => +k.split("/")[2].split("-")[0] >= since); // 같은 ms 메시지 누락 방지 (중복은 화면에서 걸러냄)
+        const msgs = (await Promise.all(fresh.map((k) => cs.get(k, { type: "json" }).then((m) => m && { ...m, key: k })))).filter(Boolean);
         const notice = await cs.get(`notice/${room}`, { type: "json" });
         return json({ messages: msgs, notice: notice || null });
       }
       if (method === "POST") {
         const text = clean(body.text, 200);
-        if (!text) return err("메시지를 입력해주세요.");
+        if (!text) return err("msg");
+        const { lang, tr } = await translateAll(text);
         if (body.notice) {
-          if (me.role !== "artist") return err("공지는 조젤리만 작성할 수 있어요.", 403);
-          const n = { text, ts: Date.now(), name: me.nickname };
+          if (me.role !== "artist") return err("notice", 403);
+          const n = { text, lang, tr, ts: Date.now(), name: me.nickname };
           await cs.setJSON(`notice/${room}`, n);
           return json({ notice: n });
         }
         const ts = Date.now();
         const key = `m/${room}/${String(ts).padStart(15, "0")}-${crypto.randomBytes(3).toString("hex")}`;
-        const m = { id: user.id, name: me.nickname || "익명", role: me.role, text, ts };
+        const m = { id: user.id, name: me.nickname || "?", role: me.role, text, lang, tr, ts };
         await cs.setJSON(key, m);
         return json({ message: { ...m, key } });
       }
       if (method === "DELETE") {
-        if (me.role !== "artist") return err("권한이 없어요.", 403);
+        if (me.role !== "artist") return err("forbidden", 403);
         const key = url.searchParams.get("key") || "";
-        if (!key.startsWith(`m/`)) return err("잘못된 요청");
+        if (key.startsWith("notice/")) { await cs.delete(key); return json({ ok: true }); }
+        if (!key.startsWith("m/")) return err("forbidden", 400);
         await cs.delete(key);
         return json({ ok: true });
       }
     }
-
-    return err("Not found", 404);
+    return err("notfound", 404);
   } catch (e) {
     console.error(e);
-    return err("서버 오류가 발생했어요. 잠시 후 다시 시도해주세요.", 500);
+    return err("server", 500);
   }
 };
 
