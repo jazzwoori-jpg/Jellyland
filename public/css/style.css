@@ -254,3 +254,19 @@ body.touch #prompt { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 130px
   #minimap { width: 110px; }
 }
 body.touch #notice { top: calc(max(12px, env(safe-area-inset-top)) + 150px); bottom: auto; }
+
+/* ================= v3: 큰 닫기 버튼 · 전송 중 표시 ================= */
+.win-head .x-big {
+  margin-left: auto; min-width: 44px; min-height: 44px; padding: 0 12px; font-size: 20px; line-height: 1;
+  color: var(--ink); text-shadow: none; border-width: 3px;
+}
+.modal .win-head { padding: 6px 8px 6px 14px; }
+.modal-foot { padding: 10px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 3px dashed var(--cream2); display: flex; justify-content: center; background: var(--cream); border-radius: 0 0 6px 6px; }
+.close-big { width: min(360px, 100%); min-height: 52px; font-size: 18px; font-weight: bold; }
+body.touch .modal { max-height: calc(var(--vh, 100vh) - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+
+#chat .msg.pending { opacity: .55; }
+#chat .msg.artist b { color: #2882e6; }
+#chat .msg.artist b::before { content: '✦ '; color: #5fc8ff; }
+#modal { align-items: safe center; }
+.modal { max-height: calc(var(--vh, 100vh) - 32px); }

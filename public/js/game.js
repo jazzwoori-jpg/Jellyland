@@ -33,6 +33,7 @@
     chat: { since: 0, seen: new Set(), msgs: [], notice: null, unread: 0 },
     online: 1,
     modalOpen: false,
+    lastInput: 0,
     t: 0,
   };
 
@@ -89,7 +90,6 @@
     buildMinimap();
     updateSceneLabels();
     resetChat();
-    sendPresence();
   }
   function updateSceneLabels() {
     if (!G.scene) return;
@@ -181,7 +181,10 @@
       }
     }
     const len = Math.hypot(vx, vy);
+    const wasMoving = p.moving;
     p.moving = len > 0.05;
+    if (p.moving) G.lastInput = Date.now();
+    if (p.moving !== wasMoving && G.mode === "world") kickSync(); // 출발·정지 순간 바로 알림
     if (p.moving) {
       if (len > 1) { vx /= len; vy /= len; }
       const sp = 92 * dt;
@@ -193,12 +196,14 @@
       p.t += dt;
       if (G.target && Math.hypot(p.x - ox, p.y - oy) < 0.01) { p.stuck = (p.stuck || 0) + dt; if (p.stuck > 0.35) { G.target = null; G.pendingZone = null; p.stuck = 0; } } else p.stuck = 0;
     }
+    // 다른 플레이어: 받은 위치까지 실제 걷는 속도로 부드럽게 이동 (뚝뚝 끊김 방지)
     for (const o of G.others.values()) {
-      const k = Math.min(1, dt * 8);
-      const dx = o.x - o.rx, dy = o.y - o.ry;
-      o.rx += dx * k; o.ry += dy * k;
-      o.walking = Math.hypot(dx, dy) > 0.6;
-      if (o.walking) o.t = (o.t || 0) + dt;
+      const dx = o.x - o.rx, dy = o.y - o.ry, d = Math.hypot(dx, dy);
+      if (d > 160) { o.rx = o.x; o.ry = o.y; o.walking = false; continue; }
+      const sp = Math.max(92, d * 2.2) * dt;
+      if (d <= sp) { o.rx = o.x; o.ry = o.y; } else { o.rx += (dx / d) * sp; o.ry += (dy / d) * sp; }
+      o.walking = d > 0.8;
+      if (o.walking) { o.t = (o.t || 0) + dt; o.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up"; }
     }
     updateNPCs(dt);
     const w = scene();
@@ -258,7 +263,9 @@
     for (const o of list) {
       if (o.char) {
         const c = o.char;
-        Avatar.draw(ctx, c.av, c.x, c.y, c.dir, c.bobby ? Math.floor(G.t / 500) % 2 : c.frame, { crown: c.crown });
+        if (c.artist) drawAura(c.x, c.y, G.t);
+        Avatar.draw(ctx, c.av, c.x, c.y, c.dir, c.bobby ? Math.floor(G.t / 500) % 2 : c.frame, { crown: false });
+        if (c.artist) drawSparkles(c.x, c.y, G.t);
       } else o.draw(ctx, G.t);
     }
     if (G.target) { ctx.fillStyle = "rgba(255,127,174,.8)"; const r = 3 + (Math.floor(G.t / 150) % 2); ctx.fillRect(G.target.x - r, G.target.y - 1, r * 2, 2); ctx.fillRect(G.target.x - 1, G.target.y - r, 2, r * 2); }
@@ -275,21 +282,58 @@
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     const now = Date.now();
     for (const c of chars) {
-      const X = sx(c.x), Y = sy(c.y - 27 - (c.crown ? 3 : 0));
+      const X = sx(c.x), Y = sy(c.y - 29);
       ctx.font = `${c.me || c.artist ? "bold " : ""}12px ${FONT}`;
-      const tw = ctx.measureText(c.name).width + 10;
-      ctx.fillStyle = c.artist ? "rgba(224,88,140,.92)" : c.me ? "rgba(58,37,48,.85)" : c.npc ? "rgba(79,195,176,.85)" : "rgba(58,37,48,.6)";
+      const tw = ctx.measureText(c.artist ? "✦ " + c.name : c.name).width + 10;
+      ctx.fillStyle = c.artist ? "rgba(40,130,230,.95)" : c.me ? "rgba(58,37,48,.85)" : c.npc ? "rgba(79,195,176,.85)" : "rgba(58,37,48,.6)";
       ctx.fillRect(X - tw / 2, Y - 9, tw, 17);
-      ctx.fillStyle = "#fff"; ctx.fillText(c.name, X, Y);
+      ctx.fillStyle = "#fff"; ctx.fillText(c.artist ? "✦ " + c.name : c.name, X, Y);
       const b = c.id && G.bubbles.get(c.id);
       if (b && b.until > now) drawBubble(X, Y - 14, msgText(b.m));
       if (c.artist && !c.id && G.scene === "plaza" && Math.floor(G.t / 4000) % 3 === 0) drawBubble(X, Y - 14, t("artistHello"));
     }
-    if (G.mode === "world") drawMinimapFrame();
+    if (G.mode === "world" && G.t - (G.mmT || 0) > 120) { G.mmT = G.t; drawMinimapFrame(); } // 지도는 초당 8번만 (폰 부담 줄이기)
   }
+  // 아티스트(조젤리) 전용: 영롱한 푸른 빛 오라 + 반짝이
+  function drawAura(x, y, tt) {
+    const pulse = 0.75 + Math.sin(tt / 380) * 0.25;
+    ctx.save();
+    // 푸른 후광 (밝은 바닥에서도 잘 보이도록 진한 파랑 → 투명)
+    const R = 30 * pulse + 6;
+    const g = ctx.createRadialGradient(x, y - 12, 3, x, y - 12, R);
+    g.addColorStop(0, "rgba(120,215,255,.75)");
+    g.addColorStop(0.5, "rgba(60,150,255,.38)");
+    g.addColorStop(1, "rgba(40,110,255,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.ellipse(x, y - 12, R * 0.8, R, 0, 0, Math.PI * 2); ctx.fill();
+    // 위로 올라가는 빛기둥
+    const g2 = ctx.createLinearGradient(0, y - 56, 0, y);
+    g2.addColorStop(0, "rgba(140,225,255,0)");
+    g2.addColorStop(1, `rgba(140,225,255,${0.35 * pulse})`);
+    ctx.fillStyle = g2; ctx.fillRect(x - 7, y - 56, 14, 56);
+    // 발밑 빛 고리
+    ctx.fillStyle = `rgba(80,190,255,${0.55 + 0.35 * pulse})`;
+    for (let i = -11; i <= 11; i++) { const h = Math.round(Math.sqrt(121 - i * i) / 3); ctx.fillRect(x + i, y - h + 1, 1, 1); ctx.fillRect(x + i, y + h + 1, 1, 1); }
+    ctx.restore();
+  }
+  function drawSparkles(x, y, tt) {
+    ctx.save();
+    for (let i = 0; i < 6; i++) {
+      const a = tt / 700 + (i * Math.PI) / 3;
+      const r = 13 + Math.sin(tt / 300 + i) * 2;
+      const sx = Math.round(x + Math.cos(a) * r), sy = Math.round(y - 12 + Math.sin(a) * r * 0.8 - ((tt / 25 + i * 9) % 18) * 0.3);
+      const on = (Math.floor(tt / 160) + i) % 3;
+      ctx.fillStyle = on === 0 ? "#ffffff" : on === 1 ? "#9fe8ff" : "#5fb8ff";
+      ctx.fillRect(sx, sy, 1, 1);
+      if (on === 0) { ctx.fillRect(sx - 1, sy, 3, 1); ctx.fillRect(sx, sy - 1, 1, 3); }
+    }
+    ctx.restore();
+  }
+  const wrapCache = new Map();
   function drawBubble(X, Y, text) {
     ctx.font = `12px ${FONT}`;
-    const lines = wrapPx(text, 150).slice(0, 3);
+    let lines = wrapCache.get(text);
+    if (!lines) { lines = wrapPx(text, 150).slice(0, 3); if (wrapCache.size > 200) wrapCache.clear(); wrapCache.set(text, lines); }
     const w = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 16, h = lines.length * 16 + 8;
     const x = X - w / 2, y = Y - h;
     ctx.fillStyle = "#3a2530"; ctx.fillRect(x - 2, y - 2, w + 4, h + 4); ctx.fillRect(X - 4, Y, 8, 6);
@@ -359,6 +403,7 @@
 
   // ---------------- 모달 콘텐츠 ----------------
   function openModal(title, html, onMount) {
+    $("#modal-close-big").textContent = t("close");
     $("#modal-title").textContent = title;
     $("#modal-body").innerHTML = html;
     $("#modal").classList.remove("hidden");
@@ -368,6 +413,7 @@
   }
   function closeModal() { $("#modal").classList.add("hidden"); $("#modal-body").innerHTML = ""; G.modalOpen = false; }
   $("#modal-close").addEventListener("click", closeModal);
+  $("#modal-close-big").addEventListener("click", closeModal);
   $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
 
   function openGallery() {
@@ -461,27 +507,43 @@
     });
   });
 
-  // ---------------- 네트워크: 접속자 ----------------
-  let presBusy = false;
-  async function sendPresence() {
-    if (G.mode !== "world" || API.demo || presBusy || document.hidden) return;
-    presBusy = true;
-    try {
-      const r = await API.presence({ scene: G.scene, x: Math.round(G.player.x), y: Math.round(G.player.y), dir: G.player.dir, moving: G.player.moving });
-      const seen = new Set();
-      for (const o of r.others) {
-        seen.add(o.id);
-        const ex = G.others.get(o.id);
-        if (ex) Object.assign(ex, { x: o.x, y: o.y, dir: o.dir, name: o.name, avatar: o.avatar, role: o.role });
-        else G.others.set(o.id, { ...o, rx: o.x, ry: o.y });
-      }
-      for (const id of [...G.others.keys()]) if (!seen.has(id)) G.others.delete(id);
-      G.online = r.online || 1;
-      $("#online").textContent = t("online", { n: G.online });
-    } catch (e) { if (e.status === 401) return logout(); }
-    finally { presBusy = false; }
+  // ---------------- 네트워크: 위치 + 채팅을 한 번에 (sync) ----------------
+  // 주변에 사람이 있거나 내가 움직이면 자주(0.9초), 혼자 가만히 있으면 드물게(5초) 확인 → 빠르고 저렴
+  let syncBusy = false, syncTimer = null, lastSync = 0, lastSent = "";
+  function nextSyncDelay() {
+    if (document.hidden) return 15000;
+    const active = G.player.moving || G.others.size > 0 || Date.now() - G.lastInput < 4000;
+    return active ? 900 : 5000;
   }
-  setInterval(sendPresence, 1500);
+  function scheduleSync(ms) { clearTimeout(syncTimer); syncTimer = setTimeout(doSync, ms ?? nextSyncDelay()); }
+  function kickSync() { if (Date.now() - lastSync > 250) scheduleSync(0); }
+  async function doSync() {
+    if (G.mode !== "world" || syncBusy) return scheduleSync();
+    syncBusy = true; lastSync = Date.now();
+    const room = G.scene;
+    try {
+      const r = await API.sync({ scene: room, x: Math.round(G.player.x), y: Math.round(G.player.y), dir: G.player.dir, since: G.chat.since });
+      if (room !== G.scene) return;
+      applyOthers(r.others || []);
+      if (!API.demo) { G.online = r.online || 1; $("#online").textContent = t("online", { n: G.online }); }
+      applyChat(r.messages || [], r.notice);
+    } catch (e) {
+      if (e.status === 401) {
+        try { G.user = await API.me(); } catch { return logout(); } // 예전 토큰이면 새 토큰으로 교체
+      }
+    } finally { syncBusy = false; scheduleSync(); }
+  }
+  function applyOthers(list) {
+    const now = Date.now();
+    for (const o of list) {
+      const ex = G.others.get(o.id);
+      if (ex) Object.assign(ex, { x: o.x, y: o.y, dir: o.dir, name: o.name, avatar: o.avatar, role: o.role, seen: now });
+      else G.others.set(o.id, { ...o, rx: o.x, ry: o.y, seen: now });
+    }
+    // 잠깐 응답에서 빠져도 바로 사라지지 않게 8초 유지 (깜빡임 방지)
+    for (const [id, o] of G.others) if (now - o.seen > 8000) G.others.delete(id);
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) kickSync(); });
 
   // ---------------- 채팅 (광장 / 팬 라운지, 자동 번역) ----------------
   function resetChat() {
@@ -489,38 +551,31 @@
     $("#chat-log").innerHTML = "";
     $("#notice").classList.add("hidden");
     updateBadge();
-    pollChat();
+    kickSync();
   }
-  let chatBusy = false;
-  async function pollChat() {
-    if (G.mode !== "world" || chatBusy || document.hidden) return;
-    chatBusy = true;
-    const room = G.scene;
-    try {
-      const r = await API.chatList(room, G.chat.since);
-      if (room !== G.scene) return;
-      const log = $("#chat-log");
-      const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
-      const first = G.chat.since === 0;
-      for (const m of r.messages) {
-        if (G.chat.seen.has(m.key)) continue;
-        G.chat.seen.add(m.key);
-        G.chat.since = Math.max(G.chat.since, m.ts);
-        G.chat.msgs.push(m);
-        addChatLine(m);
-        if (!first || Date.now() - m.ts < 8000) G.bubbles.set(m.id, { m, until: Date.now() + 6500 });
-        if (!first && m.id !== G.user.id && $("#chat").classList.contains("collapsed")) G.chat.unread++;
-      }
-      if (G.chat.since === 0) G.chat.since = 1;
-      if (atBottom || first) log.scrollTop = log.scrollHeight;
-      G.chat.notice = r.notice;
-      renderNotice();
-      updateBadge();
-    } catch (e) { if (e.status === 401) logout(); }
-    finally { chatBusy = false; }
+  function applyChat(messages, notice) {
+    const log = $("#chat-log");
+    const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+    const first = G.chat.since === 0;
+    for (const m of messages) {
+      G.chat.since = Math.max(G.chat.since, m.ts);
+      if (G.chat.seen.has(m.key)) continue;
+      G.chat.seen.add(m.key);
+      // 내가 보낸 메시지(이미 화면에 먼저 표시됨)면 번역본으로 교체만
+      const pend = G.chat.msgs.find((x) => x.pending && x.id === m.id && x.text === m.text);
+      if (pend) { Object.assign(pend, m, { pending: false }); pend.el && pend.el.replaceWith(makeChatLine(pend)); continue; }
+      G.chat.msgs.push(m);
+      if (G.chat.msgs.length > 120) G.chat.msgs.shift();
+      addChatLine(m);
+      if (!first || Date.now() - m.ts < 8000) G.bubbles.set(m.id, { m, until: Date.now() + 6500 });
+      if (!first && m.id !== G.user.id && $("#chat").classList.contains("collapsed")) G.chat.unread++;
+    }
+    if (G.chat.since === 0) G.chat.since = 1;
+    if (atBottom || first) log.scrollTop = log.scrollHeight;
+    const nKey = notice ? notice.ts : 0, oKey = G.chat.notice ? G.chat.notice.ts : 0;
+    if (nKey !== oKey) { G.chat.notice = notice; renderNotice(); }
+    updateBadge();
   }
-  setInterval(pollChat, 2500);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) { sendPresence(); pollChat(); } });
 
   function renderNotice() {
     const n = $("#notice"), no = G.chat.notice;
@@ -530,8 +585,10 @@
     const d = $("#notice-del");
     if (d) d.addEventListener("click", async () => { try { await API.chatDelete("notice/" + G.scene); G.chat.notice = null; renderNotice(); } catch (e) { toast(e.message); } });
   }
-  function addChatLine(m) {
+  function addChatLine(m) { $("#chat-log").appendChild(makeChatLine(m)); }
+  function makeChatLine(m) {
     const d = document.createElement("div");
+    m.el = d;
     d.className = "msg" + (m.role === "artist" ? " artist" : "") + (m.id === G.user.id ? " mine" : "");
     const time = new Date(m.ts).toLocaleTimeString(I.lang === "en" ? "en-US" : I.lang === "ja" ? "ja-JP" : "ko-KR", { hour: "2-digit", minute: "2-digit" });
     const shown = msgText(m);
@@ -543,7 +600,8 @@
     }
     const del = d.querySelector(".del");
     if (del) del.addEventListener("click", async () => { try { await API.chatDelete(m.key); d.remove(); } catch (e) { toast(e.message); } });
-    $("#chat-log").appendChild(d);
+    if (m.pending) d.classList.add("pending");
+    return d;
   }
   function rerenderChat() {
     if (G.mode !== "world") return;
@@ -563,21 +621,29 @@
     else { $("#chat").classList.add("collapsed"); $("#chat-toggle").textContent = "▲"; }
   }
   $("#chat-head").addEventListener("click", toggleChat);
-  let sending = false;
   $("#chat-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const inp = $("#chat-input"), text = inp.value.trim();
     if (!text) { if (!IS_TOUCH) inp.blur(); return; }
-    if (sending) return;
-    sending = true;
     inp.value = "";
     const notice = $("#chat-notice").checked;
+    // 보내자마자 내 화면에 바로 표시 (번역은 서버에서 끝나면 자동 반영)
+    let temp = null;
+    if (!notice) {
+      temp = { id: G.user.id, name: G.user.nickname, role: G.user.role, text, ts: Date.now(), key: "tmp" + Math.random(), pending: true };
+      G.chat.msgs.push(temp); addChatLine(temp);
+      G.bubbles.set(G.user.id, { m: temp, until: Date.now() + 6500 });
+      $("#chat-log").scrollTop = $("#chat-log").scrollHeight;
+    }
     try {
-      await API.chatSend(G.scene, text, notice);
-      if (notice) { $("#chat-notice").checked = false; toast(t("noticeDone")); }
-      pollChat();
-    } catch (err) { toast(err.message); inp.value = text; }
-    finally { sending = false; }
+      const r = await API.chatSend(G.scene, text, notice);
+      if (notice) { $("#chat-notice").checked = false; toast(t("noticeDone")); G.chat.notice = r.notice; renderNotice(); }
+      else if (r.message) { G.chat.seen.add(r.message.key); Object.assign(temp, r.message, { pending: false }); temp.el && temp.el.replaceWith(makeChatLine(temp)); }
+      kickSync();
+    } catch (err) {
+      toast(err.message); inp.value = text;
+      if (temp) { temp.el && temp.el.remove(); G.chat.msgs.splice(G.chat.msgs.indexOf(temp), 1); G.bubbles.delete(G.user.id); }
+    }
   });
 
   // ---------------- 캐릭터 만들기 ----------------

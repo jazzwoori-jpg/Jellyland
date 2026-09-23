@@ -73,6 +73,11 @@
     }
     if (route === "settings") { if (b.lang) me.lang = b.lang; ls.set("jl_demo_users", users); return { user: pub(me) }; }
     if (route === "presence") return { others: [], online: 1 };
+    if (route === "sync") {
+      const room = b.scene || "plaza";
+      const all = ls.get("jl_demo_chat_" + room, []);
+      return { others: [], online: 1, messages: all.filter((m) => m.ts >= (b.since || 0)).slice(-50), notice: ls.get("jl_demo_notice_" + room, null) };
+    }
     if (route === "chat") {
       const room = q.get("room") || b.room || "lounge";
       const all = ls.get("jl_demo_chat_" + room, []);
@@ -106,6 +111,9 @@
     return { lang: src, tr };
   }
 
+  // 서버가 새 토큰(닉네임·아바타 포함)을 주면 교체
+  function keep(d) { if (d && d.token) { token = d.token; ls.set(TOKEN_KEY, token); } return d; }
+
   async function call(path, opts) { return demo ? mock(path, opts) : real(path, opts); }
 
   window.JellyAPI = {
@@ -123,9 +131,10 @@
     async signup(email, password, lang) { const d = await call("signup", { method: "POST", body: { email, password, lang } }); token = d.token; ls.set(TOKEN_KEY, token); return d.user; },
     async login(email, password) { const d = await call("login", { method: "POST", body: { email, password } }); token = d.token; ls.set(TOKEN_KEY, token); return d.user; },
     logout() { token = null; ls.del(TOKEN_KEY); },
-    async me() { return (await call("me")).user; },
-    async saveAvatar(nickname, avatar) { return (await call("avatar", { method: "POST", body: { nickname, avatar } })).user; },
-    async saveSettings(s) { return (await call("settings", { method: "POST", body: s })).user; },
+    async me() { return keep(await call("me")).user; },
+    async saveAvatar(nickname, avatar) { return keep(await call("avatar", { method: "POST", body: { nickname, avatar } })).user; },
+    async saveSettings(s) { return keep(await call("settings", { method: "POST", body: s })).user; },
+    sync: (p) => call("sync", { method: "POST", body: p }),
     presence: (p) => call("presence", { method: "POST", body: p }),
     chatList: (room, since) => call(`chat?room=${room}&since=${since || 0}`),
     chatSend: (room, text, notice) => call("chat", { method: "POST", body: { room, text, notice: !!notice } }),

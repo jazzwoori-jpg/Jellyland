@@ -41,7 +41,7 @@
       hairColors: ["블랙", "브라운", "캐러멜", "블론드", "딸기", "포도", "민트", "실버"],
       outfits: ["젤리 후디", "피아노 턱시도", "민트 캐주얼", "포도 재킷", "세일러", "딸기 오버롤", "블랙 재킷"],
       e_email: "올바른 이메일 주소를 입력해주세요.", e_pw6: "비밀번호는 6자 이상이어야 해요.", e_exists: "이미 가입된 이메일이에요. 로그인해주세요.", e_login: "이메일 또는 비밀번호가 올바르지 않아요.", e_auth: "로그인이 필요해요.", e_nick: "닉네임을 입력해주세요.", e_notice: "공지는 조젤리만 작성할 수 있어요.", e_forbidden: "권한이 없어요.", e_msg: "메시지를 입력해주세요.", e_server: "서버 오류가 발생했어요. 잠시 후 다시 시도해주세요.", e_net: "인터넷 연결을 확인해주세요.",
-      err: "요청에 실패했어요.",
+      close: "닫기", err: "요청에 실패했어요.",
     },
     en: {
       subtitle: "♪ Pianist Jo Jelly's Profile World ♪",
@@ -83,7 +83,7 @@
       hairColors: ["Black", "Brown", "Caramel", "Blonde", "Strawberry", "Grape", "Mint", "Silver"],
       outfits: ["Jelly Hoodie", "Piano Tuxedo", "Mint Casual", "Grape Jacket", "Sailor", "Berry Overalls", "Black Jacket"],
       e_email: "Please enter a valid email address.", e_pw6: "Password must be at least 6 characters.", e_exists: "This email is already registered. Please log in.", e_login: "Incorrect email or password.", e_auth: "Please log in.", e_nick: "Please enter a nickname.", e_notice: "Only Jo Jelly can post notices.", e_forbidden: "Not allowed.", e_msg: "Please enter a message.", e_server: "Server error. Please try again shortly.", e_net: "Please check your internet connection.",
-      err: "Request failed.",
+      close: "Close", err: "Request failed.",
     },
     ja: {
       subtitle: "♪ ピアニスト Jo Jelly のプロフィールワールド ♪",
@@ -125,7 +125,7 @@
       hairColors: ["ブラック", "ブラウン", "キャラメル", "ブロンド", "いちご", "ぶどう", "ミント", "シルバー"],
       outfits: ["ゼリーパーカー", "ピアノタキシード", "ミントカジュアル", "ぶどうジャケット", "セーラー", "いちごオーバーオール", "ブラックジャケット"],
       e_email: "正しいメールアドレスを入力してください。", e_pw6: "パスワードは6文字以上で入力してください。", e_exists: "このメールアドレスは登録済みです。ログインしてください。", e_login: "メールアドレスまたはパスワードが正しくありません。", e_auth: "ログインが必要です。", e_nick: "ニックネームを入力してください。", e_notice: "お知らせは Jo Jelly のみ投稿できます。", e_forbidden: "権限がありません。", e_msg: "メッセージを入力してください。", e_server: "サーバーエラーが発生しました。しばらくしてからもう一度お試しください。", e_net: "インターネット接続を確認してください。",
-      err: "リクエストに失敗しました。",
+      close: "閉じる", err: "リクエストに失敗しました。",
     },
   };
   const LANGS = [{ code: "ko", label: "한국어" }, { code: "en", label: "English" }, { code: "ja", label: "日本語" }];

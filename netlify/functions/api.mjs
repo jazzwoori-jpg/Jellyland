@@ -5,7 +5,7 @@
 //   GET  /api/me
 //   POST /api/avatar    {nickname, avatar}
 //   POST /api/settings  {lang}
-//   POST /api/presence  {scene, x, y, dir, moving}
+//   POST /api/sync      {scene, x, y, dir, since}  ← 위치 + 새 채팅 + 공지를 한 번에 (빠르고 저렴)
 //   GET  /api/chat?room=plaza|lounge&since=0
 //   POST /api/chat      {room, text, notice?}   ← 보낼 때 한/영/일 3개 언어로 자동 번역해 저장
 //   DELETE /api/chat?key=...        (아티스트 전용)
@@ -75,6 +75,11 @@ const publicUser = (u) => ({
   role: artistEmails().includes(u.email) ? "artist" : "fan",
 });
 
+// 토큰에 닉네임/아바타를 담아 두면 /sync 때 회원 정보를 읽지 않아도 돼서 빠르고 저렴해요
+const tokenFor = (u) => signToken({ email: u.email, id: u.id, n: u.nickname || "", a: u.avatar || null });
+async function tokenPayload(req) {
+  return verifyToken((req.headers.get("authorization") || "").replace(/^Bearer\s+/i, ""));
+}
 async function auth(req) {
   const p = await verifyToken((req.headers.get("authorization") || "").replace(/^Bearer\s+/i, ""));
   if (!p) return null;
@@ -155,14 +160,58 @@ export default async (req) => {
         lang: LANGS.includes(body.lang) ? body.lang : "ko", createdAt: Date.now(),
       };
       await users.setJSON(key, user);
-      return json({ token: await signToken({ email, id: user.id }), user: publicUser(user) });
+      return json({ token: await tokenFor(user), user: publicUser(user) });
     }
 
     if (route === "login" && method === "POST") {
       const email = clean(body.email, 120).toLowerCase();
       const user = await store("jl-users").get(userKey(email), { type: "json" });
       if (!user || !checkPassword(String(body.password || ""), user.salt, user.hash)) return err("login", 401);
-      return json({ token: await signToken({ email, id: user.id }), user: publicUser(user) });
+      return json({ token: await tokenFor(user), user: publicUser(user) });
+    }
+
+    // ---------- 실시간 동기화: 위치 + 새 채팅 + 공지 (한 번의 요청) ----------
+    if (route === "sync" && method === "POST") {
+      const tp = await tokenPayload(req);
+      if (!tp) return err("auth", 401);
+      if (tp.n === undefined) return err("auth", 401); // 예전 토큰 → 다시 로그인
+      const role = artistEmails().includes(tp.email) ? "artist" : "fan";
+      const scene = ROOMS.includes(body.scene) ? body.scene : "plaza";
+      const other = scene === "plaza" ? "lounge" : "plaza";
+      const ps = store("jl-presence");
+      const cs = store("jl-chat");
+      const now = Date.now();
+      const since = +body.since || 0;
+      const [cur, oth, last] = await Promise.all([
+        ps.get("room/" + scene, { type: "json" }).then((v) => v || {}),
+        ps.get("room/" + other, { type: "json" }).then((v) => v || {}),
+        cs.get("last/" + scene, { type: "json" }).then((v) => v || { ts: 0, notice: null }),
+      ]);
+      const mine = cur[tp.id];
+      const entry = {
+        id: tp.id, name: tp.n, avatar: tp.a, role,
+        x: Math.round(+body.x || 0), y: Math.round(+body.y || 0), dir: clean(body.dir, 5), ts: now,
+      };
+      // 위치가 그대로이고 최근에 저장했다면 쓰기를 건너뜀 (비용 절약)
+      const unchanged = mine && mine.x === entry.x && mine.y === entry.y && mine.dir === entry.dir && mine.name === entry.name &&
+        JSON.stringify(mine.avatar) === JSON.stringify(entry.avatar) && now - mine.ts < 8000;
+      const writes = [];
+      for (const k of Object.keys(cur)) if (now - cur[k].ts > 15000) { delete cur[k]; }
+      if (!unchanged) { cur[tp.id] = entry; writes.push(ps.setJSON("room/" + scene, cur)); }
+      if (oth[tp.id]) { delete oth[tp.id]; writes.push(ps.setJSON("room/" + other, oth)); }
+      let messages = [];
+      if (last.ts > since) {
+        const { blobs } = await cs.list({ prefix: `m/${scene}/` });
+        const fresh = blobs.map((b) => b.key).sort().slice(-50).filter((k) => +k.split("/")[2].split("-")[0] >= since);
+        messages = (await Promise.all(fresh.map((k) => cs.get(k, { type: "json" }).then((m) => m && { ...m, key: k })))).filter(Boolean);
+      }
+      await Promise.all(writes);
+      const fresh = (o) => Object.values(o).filter((p) => now - p.ts < 12000);
+      return json({
+        others: fresh(cur).filter((p) => p.id !== tp.id),
+        online: fresh(cur).length + fresh(oth).filter((p) => p.id !== tp.id).length + (cur[tp.id] ? 0 : 1),
+        messages, notice: last.notice || null, lastTs: last.ts, now,
+      });
     }
 
     // ---------- 이하 로그인 필요 ----------
@@ -171,7 +220,7 @@ export default async (req) => {
     const me = publicUser(user);
     const saveUser = () => store("jl-users").setJSON(userKey(user.email), user);
 
-    if (route === "me") return json({ user: me });
+    if (route === "me") return json({ user: me, token: await tokenFor(user) });
 
     if (route === "avatar" && method === "POST") {
       const nickname = clean(body.nickname, 12);
@@ -181,13 +230,13 @@ export default async (req) => {
       user.nickname = nickname;
       user.avatar = { gender: a.gender === "m" ? "m" : "f", hair: n(a.hair), hairColor: n(a.hairColor), skin: n(a.skin), outfit: n(a.outfit) };
       await saveUser();
-      return json({ user: publicUser(user) });
+      return json({ user: publicUser(user), token: await tokenFor(user) });
     }
 
     if (route === "settings" && method === "POST") {
       if (LANGS.includes(body.lang)) user.lang = body.lang;
       await saveUser();
-      return json({ user: publicUser(user) });
+      return json({ user: publicUser(user), token: await tokenFor(user) });
     }
 
     // ---------- 접속자 위치 공유 ----------
@@ -233,18 +282,28 @@ export default async (req) => {
           if (me.role !== "artist") return err("notice", 403);
           const n = { text, lang, tr, ts: Date.now(), name: me.nickname };
           await cs.setJSON(`notice/${room}`, n);
+          const lst = (await cs.get("last/" + room, { type: "json" })) || {};
+          await cs.setJSON("last/" + room, { ts: Math.max(lst.ts || 0, n.ts), notice: n });
           return json({ notice: n });
         }
         const ts = Date.now();
         const key = `m/${room}/${String(ts).padStart(15, "0")}-${crypto.randomBytes(3).toString("hex")}`;
         const m = { id: user.id, name: me.nickname || "?", role: me.role, text, lang, tr, ts };
         await cs.setJSON(key, m);
+        const lst = (await cs.get("last/" + room, { type: "json" })) || {};
+        await cs.setJSON("last/" + room, { ts, notice: lst.notice || null });
         return json({ message: { ...m, key } });
       }
       if (method === "DELETE") {
         if (me.role !== "artist") return err("forbidden", 403);
         const key = url.searchParams.get("key") || "";
-        if (key.startsWith("notice/")) { await cs.delete(key); return json({ ok: true }); }
+        if (key.startsWith("notice/")) {
+          await cs.delete(key);
+          const r = key.split("/")[1];
+          const lst = (await cs.get("last/" + r, { type: "json" })) || {};
+          await cs.setJSON("last/" + r, { ts: lst.ts || 0, notice: null });
+          return json({ ok: true });
+        }
         if (!key.startsWith("m/")) return err("forbidden", 400);
         await cs.delete(key);
         return json({ ok: true });
