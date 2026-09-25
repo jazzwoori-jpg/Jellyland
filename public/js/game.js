@@ -707,7 +707,7 @@
     openModal(t("guideTitle"), `<ul class="guide">${t("guide").map((g) => `<li>${g}</li>`).join("")}</ul>`);
   }
   $("#btn-help").addEventListener("click", openGuide);
-  const bgmBtn = () => { $("#btn-bgm").textContent = BGM.on ? "🔊" : "🔇"; $("#btn-bgm").title = t("bgm"); };
+  function bgmBtn() { $("#btn-bgm").textContent = BGM.on ? "🔊" : "🔇"; $("#btn-bgm").title = t("bgm"); }
   $("#btn-bgm").addEventListener("click", () => { BGM.toggle(); bgmBtn(); });
   bgmBtn();
   $("#btn-gb").addEventListener("click", () => openGuestbook());
@@ -739,6 +739,11 @@
   let signupLang = I.lang;
   function renderTitleLang() {
     langButtons($("#lang-top"), I.lang, (l) => { signupLang = l; applyLang(l); });
+    // 로그인 화면 배경음악 켜기/끄기
+    const tb = document.createElement("button");
+    tb.type = "button"; tb.className = "chip bgm-title"; tb.textContent = BGM.on ? "🔊" : "🔇"; tb.title = t("bgm");
+    tb.addEventListener("click", () => { BGM.toggle(); tb.textContent = BGM.on ? "🔊" : "🔇"; bgmBtn(); });
+    $("#lang-top").appendChild(tb);
     langButtons($("#lang-pick"), signupLang, (l) => { signupLang = l; applyLang(l); });
   }
   $("#btn-lang").addEventListener("click", () => {
@@ -1046,7 +1051,7 @@
     checkDaily();
   }
   function logout() {
-    API.logout(); G.user = null; G.mode = "title"; G.others.clear(); BGM.stop();
+    API.logout(); G.user = null; G.mode = "title"; G.others.clear(); BGM.play("title");
     closeModal();
     $("#hud").classList.add("hidden"); $("#creator").classList.add("hidden");
     $("#title").classList.remove("hidden");
@@ -1073,6 +1078,7 @@
     buildWorlds();
     makeNPCs();
     G.scene = "plaza"; buildMinimap();
+    BGM.play("title"); // 로그인 화면 배경음악 (첫 터치 후 재생)
     requestAnimationFrame(loop);
     const demo = await API.init();
     if (demo) $("#demo").classList.remove("hidden");

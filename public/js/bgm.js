@@ -3,7 +3,7 @@
    - 하나의 오디오를 쓰고, 곡이 바뀔 때 부드럽게 줄였다 키움 (아이폰도 음량 조절되도록 Web Audio 사용)
    - 곡별로 듣던 위치를 기억해서 다시 돌아오면 이어서 재생 */
 (function () {
-  const SRC = { plaza: "audio/plaza.mp3", lounge: "audio/lounge.mp3", minigame: "audio/minigame.mp3" };
+  const SRC = { title: "audio/title.mp3", plaza: "audio/plaza.mp3", lounge: "audio/lounge.mp3", minigame: "audio/minigame.mp3" };
   const VOL = 0.35, FADE = 0.45;
   let on = true;
   try { on = localStorage.getItem("jl_bgm") !== "0"; } catch {}
