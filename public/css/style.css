@@ -473,3 +473,23 @@ body.touch .pn-hint:first-of-type { display: none; }
 .ft-lucky b { font-size: 13px; display: flex; align-items: center; gap: 6px; }
 .ft-lucky i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--ink); display: inline-block; }
 @media (max-width: 420px) { .ft-grid { grid-template-columns: auto 1fr; } }
+/* ---------- v14: 녹음 · 녹음 게시판 · 랭킹 게시판 ---------- */
+.pn-rec { display: flex; gap: 6px; align-items: center; justify-content: center; flex-wrap: wrap; border: 2px dashed #c3a2f0; border-radius: 8px; padding: 6px; background: #faf6ff; }
+.pn-rec.recording { border-color: #d8434e; background: #fff0f2; }
+.pn-rec .rc-time { font-weight: bold; font-size: 13px; min-width: 60px; text-align: center; }
+.pn-rec.recording .rc-time { color: #d8434e; animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: .45; } }
+.pn-rec .rc-left { font-size: 11px; opacity: .75; }
+.pn-rec .rc-post { display: flex; gap: 6px; flex: 1 1 100%; justify-content: center; }
+.pn-rec .rc-title { max-width: 260px; flex: 1; -webkit-user-select: text; user-select: text; }
+.rec-intro { margin-top: 0; font-size: 13px; }
+.rec-list { display: flex; flex-direction: column; gap: 6px; }
+.rec-item { display: grid; grid-template-columns: 44px 36px 1fr auto; gap: 8px; align-items: center; border: 2px solid var(--ink); border-radius: 8px; background: #fff; padding: 6px 8px; }
+.rec-item.host { background: #eef6ff; }
+.rec-item canvas { width: 32px; height: 26px; image-rendering: pixelated; background: var(--pink2); border-radius: 4px; }
+.rec-item .rec-play { width: 40px; height: 36px; justify-content: center; padding: 0; font-size: 16px; }
+.rec-item .rec-play.on { background: #ffd34d; }
+.rec-info { min-width: 0; font-size: 13px; }
+.rec-info small { opacity: .7; }
+.rec-title { color: #7a3fc0; }
+.rank-modal { margin: 0 auto; }

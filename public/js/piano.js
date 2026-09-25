@@ -54,6 +54,22 @@
     try { v.out.gain.cancelScheduledValues(t); v.out.gain.setValueAtTime(Math.max(0.0008, v.out.gain.value), t); v.out.gain.exponentialRampToValueAtTime(0.0008, t + len); v.oscs.forEach((o) => { try { o.stop(t + len + 0.05); } catch {} }); } catch {}
   }
 
+  // 녹음된 음표 재생 (게시판 ▶ 버튼 / 들어보기). 건반이 화면에 있으면 눌리는 모습도 보여 줌
+  function playSeq(notes, keyEl, onEnd) {
+    ctx();
+    const timers = [], live = new Set();
+    let end = 0;
+    for (const [t0, m, d] of notes) {
+      end = Math.max(end, t0 + d);
+      timers.push(setTimeout(() => {
+        const v = strike(m, 0.85); live.add(v);
+        const el = keyEl && keyEl(m); if (el) el.classList.add("on");
+        timers.push(setTimeout(() => { release(v); live.delete(v); if (el) el.classList.remove("on"); }, d));
+      }, t0));
+    }
+    const fin = setTimeout(() => onEnd && onEnd(), end + 300); timers.push(fin);
+    return () => { timers.forEach(clearTimeout); live.forEach((v) => release(v, true)); live.clear(); if (keyEl) document.querySelectorAll(".pn-k.on").forEach((k) => k.classList.remove("on")); onEnd && onEnd(); };
+  }
   const WHITE = [0, 2, 4, 5, 7, 9, 11];
   const NAMES = { ko: ["도", "레", "미", "파", "솔", "라", "시"], en: ["C", "D", "E", "F", "G", "A", "B"], ja: ["ド", "レ", "ミ", "ファ", "ソ", "ラ", "シ"] };
   const KEY_WHITE = ["KeyA", "KeyS", "KeyD", "KeyF", "KeyG", "KeyH", "KeyJ", "KeyK", "KeyL", "Semicolon", "Quote"];
@@ -69,6 +85,10 @@
     root.innerHTML = `<div class="pn-wrap">
       <div class="pn-bar"><button class="btn sm" data-oct="-1">◀ ${esc(t("pianoOct"))}</button><span class="pn-oct"></span><button class="btn sm" data-oct="1">${esc(t("pianoOct"))} ▶</button>
       <button class="btn sm pn-sus">${esc(t("pianoSustain"))}</button></div>
+      ${opts.record ? `<div class="pn-rec"><button class="btn sm pink rc-start">${esc(t("recStart"))}</button><button class="btn sm rc-stop hidden">${esc(t("recStop"))}</button>
+        <span class="rc-time"></span><button class="btn sm rc-play hidden">${esc(t("recPlay"))}</button><button class="btn sm rc-retry hidden">${esc(t("recRetry"))}</button>
+        <div class="rc-post hidden"><input class="inp rc-title" maxlength="30" placeholder="${esc(t("recTitlePh"))}"><button class="btn sm grape rc-send">${esc(t("recPost"))}</button></div>
+        <span class="rc-left"></span><button class="btn sm rc-board">${esc(t("recOpenBoard"))}</button></div>` : ""}
       <div class="pn-keys"></div><p class="pn-hint">${esc(t("pianoHint"))}</p><p class="pn-hint">${esc(t("pianoBgm"))}</p></div>`;
     const keysEl = root.querySelector(".pn-keys");
     function build() {
@@ -90,10 +110,26 @@
     }
     build();
     const keyEl = (m) => keysEl.querySelector(`.pn-k[data-m="${m}"]`);
+    // ---- 녹음 (음표 [시작ms, 건반, 길이ms] 목록으로 저장 — 파일이 아주 작아요) ----
+    const REC_MS = 10000;
+    let rec = null, recNotes = null, recTimer = null, stopPlay = null;
+    const now = () => performance.now();
+    function recOn(m) {
+      if (!rec) return;
+      if (rec.t0 == null) { rec.t0 = now(); }
+      const tt = now() - rec.t0; if (tt > REC_MS) return;
+      rec.open.set(m, rec.notes.length); rec.notes.push([Math.round(tt), m, 0]);
+    }
+    function recOff(m) {
+      if (!rec || !rec.open.has(m)) return;
+      const i = rec.open.get(m); rec.open.delete(m);
+      rec.notes[i][2] = Math.max(30, Math.round(now() - rec.t0 - rec.notes[i][0]));
+    }
+    function rel(m, v, fast) { release(v, fast); recOff(m); }
     function down(id, m) {
       if (voices.has(id)) up(id);
-      const old = held.get(m); if (old) release(old, true);
-      const v = strike(m); voices.set(id, { m, v }); held.set(m, v);
+      const old = held.get(m); if (old) rel(m, old, true);
+      const v = strike(m); voices.set(id, { m, v }); held.set(m, v); recOn(m);
       const el = keyEl(m); if (el) el.classList.add("on");
       opts.onNote && opts.onNote(m);
     }
@@ -101,7 +137,7 @@
       const e = voices.get(id); if (!e) return; voices.delete(id);
       const stillDown = [...voices.values()].some((x) => x.m === e.m);
       if (!stillDown) { const el = keyEl(e.m); if (el) el.classList.remove("on"); }
-      if (!sustain && !stillDown) { release(e.v); held.delete(e.m); }
+      if (!sustain && !stillDown) { rel(e.m, e.v); held.delete(e.m); }
     }
     // 터치/마우스: 여러 손가락 + 미끄러지기
     const midiAt = (x, y) => { const el = document.elementFromPoint(x, y); return el && el.closest && el.closest(".pn-k") && keysEl.contains(el) ? +el.closest(".pn-k").dataset.m : null; };
@@ -115,7 +151,7 @@
     root.addEventListener("touchend", unlock, { passive: true }); root.addEventListener("click", unlock);
     function setSustain(on) {
       sustain = on; root.querySelector(".pn-sus").classList.toggle("on", on);
-      if (!on) for (const [m, v] of held) { if (![...voices.values()].some((x) => x.m === m)) { release(v); held.delete(m); } }
+      if (!on) for (const [m, v] of held) { if (![...voices.values()].some((x) => x.m === m)) { rel(m, v); held.delete(m); } }
     }
     root.querySelector(".pn-sus").addEventListener("click", () => setSustain(!sustain));
     root.querySelectorAll("[data-oct]").forEach((b) => b.addEventListener("click", () => { base = Math.max(24, Math.min(72, base + 12 * +b.dataset.oct)); build(); }));
@@ -130,14 +166,56 @@
     };
     const ku = (e) => { if (e.code === "Space") { setSustain(false); return; } if (kmap(e.code) != null || voices.has("k" + e.code)) up("k" + e.code); };
     window.addEventListener("keydown", kd, true); window.addEventListener("keyup", ku, true);
+    if (opts.record) {
+      const $r = (c) => root.querySelector(c);
+      const show = (c, on) => $r(c).classList.toggle("hidden", !on);
+      const setLeft = (n) => { if (n != null) $r(".rc-left").textContent = t("recLeft", { n }); };
+      setLeft(opts.recLeft);
+      const tick = () => {
+        if (!rec) return;
+        const el = rec.t0 == null ? 0 : now() - rec.t0;
+        $r(".rc-time").textContent = rec.t0 == null ? t("recWait") : `⏺ ${(Math.max(0, REC_MS - el) / 1000).toFixed(1)}s`;
+        if (el >= REC_MS) stopRec();
+      };
+      function startRec() {
+        if (stopPlay) { stopPlay(); stopPlay = null; }
+        rec = { t0: null, notes: [], open: new Map() }; recNotes = null;
+        show(".rc-start", false); show(".rc-stop", true); show(".rc-play", false); show(".rc-retry", false); show(".rc-post", false);
+        $r(".pn-rec").classList.add("recording"); tick(); recTimer = setInterval(tick, 100);
+      }
+      function stopRec() {
+        if (!rec) return;
+        clearInterval(recTimer);
+        const end = rec.t0 == null ? 0 : Math.min(REC_MS, now() - rec.t0);
+        for (const [m, i] of rec.open) rec.notes[i][2] = Math.max(30, Math.round(end - rec.notes[i][0]));
+        recNotes = rec.notes.filter((n) => n[0] <= REC_MS); rec = null;
+        $r(".pn-rec").classList.remove("recording");
+        show(".rc-stop", false);
+        const has = recNotes.length > 0;
+        $r(".rc-time").textContent = has ? `📼 ${(Math.min(REC_MS, Math.max(...recNotes.map((n) => n[0] + Math.min(n[2], 1500)))) / 1000).toFixed(1)}s` : "";
+        show(".rc-start", !has); show(".rc-play", has); show(".rc-retry", has); show(".rc-post", has);
+      }
+      $r(".rc-start").addEventListener("click", () => { ctx(); startRec(); });
+      $r(".rc-stop").addEventListener("click", stopRec);
+      $r(".rc-retry").addEventListener("click", startRec);
+      $r(".rc-play").addEventListener("click", () => { if (stopPlay) stopPlay(); stopPlay = playSeq(recNotes, keyEl); });
+      $r(".rc-board").addEventListener("click", () => opts.onBoard && opts.onBoard());
+      $r(".rc-send").addEventListener("click", async (e) => {
+        if (!recNotes || !recNotes.length) return;
+        e.target.disabled = true;
+        try { const r = await opts.onPost(recNotes, $r(".rc-title").value.trim()); setLeft(r && r.left); recNotes = null; $r(".rc-title").value = ""; show(".rc-post", false); show(".rc-play", false); show(".rc-retry", false); show(".rc-start", true); $r(".rc-time").textContent = ""; }
+        catch {} finally { e.target.disabled = false; }
+      });
+    }
     ctx();
     return {
       destroy() {
+        if (stopPlay) stopPlay(); rec = null; clearInterval(recTimer);
         window.removeEventListener("keydown", kd, true); window.removeEventListener("keyup", ku, true);
         for (const v of held.values()) release(v, true); held.clear(); voices.clear();
       },
     };
   }
   function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
-  window.Piano = { mount, strike };
+  window.Piano = { mount, strike, playSeq };
 })();

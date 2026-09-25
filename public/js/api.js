@@ -95,6 +95,20 @@
       top = top.filter((e) => e.m > 0).sort((a, c) => c.m - a.m).slice(0, 10); ls.set("jl_demo_top", top);
       return { user: pub(me), coins, best: me.best | 0, rank: top.findIndex((e) => e.id === me.id) + 1, top, dayLeft: 600 - me.gameCoins };
     }
+    if (route === "rec") {
+      const all = ls.get("jl_demo_rec", []), m = opts.method || "GET";
+      const left = () => (me.recDay === kstDay() ? Math.max(0, 3 - (me.recCount | 0)) : 3);
+      if (m === "GET") { const page = +q.get("page") || 0; return { entries: all.slice().reverse().slice(page * 15, page * 15 + 15), total: all.length, left: left() }; }
+      if (m === "POST") {
+        if (me.recDay !== kstDay()) { me.recDay = kstDay(); me.recCount = 0; }
+        if ((me.recCount | 0) >= 3) fail("recDaily", 429);
+        if (!b.notes || !b.notes.length) fail("recEmpty");
+        const e = { id: me.id, name: me.nickname, role: me.role || "fan", avatar: me.avatar, title: String(b.title || "").slice(0, 30), notes: b.notes, len: Math.max(...b.notes.map((n) => n[0])), ts: Date.now(), key: "r" + Date.now() };
+        all.push(e); ls.set("jl_demo_rec", all); me.recCount = (me.recCount | 0) + 1; save();
+        return { entry: e, left: left() };
+      }
+      if (m === "DELETE") { ls.set("jl_demo_rec", all.filter((e) => e.key !== q.get("key"))); return { ok: true }; }
+    }
     if (route === "mail") {
       const box = ls.get("jl_demo_mail_" + me.id, []);
       if ((opts.method || "GET") === "DELETE") { const nb = box.filter((m) => m.ts !== +q.get("ts")); ls.set("jl_demo_mail_" + me.id, nb); return { box: nb, unread: nb.filter((m) => !m.read).length }; }
@@ -200,6 +214,9 @@
     gameStart: () => call("game/start", { method: "POST", body: {} }),
     gameTop: () => call("game/top"),
     mail: () => call("mail"),
+    recList: (page) => call("rec?page=" + (page || 0)),
+    recPost: (notes, title) => call("rec", { method: "POST", body: { notes, title } }),
+    recDelete: (key) => call("rec?key=" + encodeURIComponent(key), { method: "DELETE" }),
     mailRead: () => call("mail/read", { method: "POST", body: {} }),
     mailDelete: (ts) => call("mail?ts=" + ts, { method: "DELETE" }),
     adminUsers: () => call("admin/users"),
