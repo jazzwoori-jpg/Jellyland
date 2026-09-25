@@ -1,6 +1,6 @@
 /* 🎰 럭키젤리! — 젤리게임월드의 룰렛(슬롯) 게임
-   - 참가비 100코인, 버튼을 누르면 3개의 룰렛이 모두 돌고 4초 뒤에 결과
-   - 결과(확률)는 서버에서 정해짐: Jelly!×3 = 20배(1/300) · Jelly!×2 = 5배(1/100) · 사과×3 = 3배(1/30) · 하트×3 = 3배(1/30) · 별 40%
+   - 참가비 20코인, 버튼을 누르면 3개의 룰렛이 모두 돌고 4초 뒤에 결과
+   - 결과(확률)는 서버에서 정해짐: Jelly!×3 = 100배(1/300) · Jelly!×2 = 10배(1/100) · 사과×3 = 3배(1/25) · 하트×3 = 3배(1/25) · 별 30%
      · 별이 하나라도 있으면 참가비 그대로 · 그 외엔 참가비를 잃음 */
 (function () {
   const W = 360, H = 250, R = 2, OUT = "#3a2530";
@@ -33,7 +33,7 @@
     const t = opts.t;
     root.innerHTML = `<div class="sl-wrap"><canvas class="sl" width="${W * R}" height="${H * R}"></canvas>
       <div class="sl-bar"><span class="sl-coins"></span><button class="btn pink sl-spin">🎰 ${esc(t("slSpin"))}</button></div>
-      <div class="sl-pay">${[["jelly", "jelly", "jelly", "×20"], ["jelly", "jelly", "any", "×5"], ["apple", "apple", "apple", "×3"], ["heart", "heart", "heart", "×3"], ["star", "any", "any", t("slRefund")]]
+      <div class="sl-pay">${[["jelly", "jelly", "jelly", "×100"], ["jelly", "jelly", "any", "×10"], ["apple", "apple", "apple", "×3"], ["heart", "heart", "heart", "×3"], ["star", "any", "any", t("slRefund")]]
         .map((r) => `<div class="sl-row">${r.slice(0, 3).map((s) => (s === "any" ? `<i class="any">?</i>` : `<canvas data-s="${s}" width="44" height="44"></canvas>`)).join("")}<b>${esc(r[3])}</b></div>`).join("")}</div>
       <p class="sl-note">${esc(t("slNote"))}</p></div>`;
     root.querySelectorAll(".sl-pay canvas").forEach((c) => c.getContext("2d").drawImage(IMG[c.dataset.s], 0, 0));
@@ -49,7 +49,7 @@
 
     async function spin() {
       if (state === "spin") return;
-      if ((opts.coins() | 0) < 100) { opts.toast(t("e_coins")); return; }
+      if ((opts.coins() | 0) < 20) { opts.toast(t("e_coins")); return; }
       state = "spin"; msg = null; result = null; btn.disabled = true;
       spinStart = performance.now();
       reels.forEach((r, i) => { r.done = false; r.speed = 18 + i * 2; r.target = null; r.stopAt = spinStart + 2600 + i * 700; });
