@@ -100,11 +100,11 @@
       if ((me.coins | 0) < 100) fail("coins");
       const r = Math.floor(Math.random() * 100000), O = ["grape", "bell", "note", "candy", "clover", "lemon"], pk = (a) => a[Math.floor(Math.random() * a.length)];
       let reels, outcome, mult;
-      if (r < 100) { outcome = "jackpot"; mult = 20; reels = ["jelly", "jelly", "jelly"]; }
-      else if (r < 300) { outcome = "jelly2"; mult = 5; reels = ["jelly", "jelly", pk(O)].sort(() => Math.random() - 0.5); }
-      else if (r < 1300) { outcome = "apple"; mult = 3; reels = ["apple", "apple", "apple"]; }
-      else if (r < 2300) { outcome = "heart"; mult = 3; reels = ["heart", "heart", "heart"]; }
-      else if (r < 20300) { outcome = "star"; mult = 1; reels = ["star", pk(O), pk(["apple", "heart", ...O])].sort(() => Math.random() - 0.5); }
+      if (r < 333) { outcome = "jackpot"; mult = 20; reels = ["jelly", "jelly", "jelly"]; }
+      else if (r < 1333) { outcome = "jelly2"; mult = 5; reels = ["jelly", "jelly", pk(O)].sort(() => Math.random() - 0.5); }
+      else if (r < 4666) { outcome = "apple"; mult = 3; reels = ["apple", "apple", "apple"]; }
+      else if (r < 8000) { outcome = "heart"; mult = 3; reels = ["heart", "heart", "heart"]; }
+      else if (r < 48000) { outcome = "star"; mult = 1; reels = ["star", pk(O), pk(["apple", "heart", ...O])].sort(() => Math.random() - 0.5); }
       else { outcome = "lose"; mult = 0; do { reels = [0, 1, 2].map(() => pk(["jelly", "apple", "heart", ...O])); } while (reels.filter((x) => x === "jelly").length >= 2 || (reels[0] === reels[1] && reels[1] === reels[2])); }
       me.coins = (me.coins | 0) - 100 + 100 * mult; save();
       return { reels, outcome, payout: 100 * mult, bet: 100, user: pub(me) };

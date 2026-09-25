@@ -398,8 +398,8 @@ export default async (req) => {
     }
 
     // ---------- 🎰 럭키젤리! ----------
-    // 확률 (10만 분율): Jelly! 3개 1/1000 → 20배 · Jelly! 2개 1/500 → 5배 · 사과 3개 1/100 → 3배 · 하트 3개 1/100 → 3배
-    //                  별 1개 이상 18% → 참가비 돌려받음 · 나머지 → 참가비 잃음
+    // 확률 (10만 분율): Jelly! 3개 1/300 → 20배 · Jelly! 2개 1/100 → 5배 · 사과 3개 1/30 → 3배 · 하트 3개 1/30 → 3배
+    //                  별 1개 이상 40% → 참가비 돌려받음 · 나머지(약 52%) → 참가비 잃음
     if (route === "slot/spin" && method === "POST") {
       const BET = 100;
       if ((user.coins | 0) < BET) return err("coins", 400);
@@ -409,11 +409,11 @@ export default async (req) => {
       const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
       const r = crypto.randomInt(100000);
       let outcome, reels, mult;
-      if (r < 100) { outcome = "jackpot"; mult = 20; reels = [J, J, J]; }
-      else if (r < 300) { outcome = "jelly2"; mult = 5; reels = shuffle([J, J, pick([A, Hh, ...OTHERS])]); }
-      else if (r < 1300) { outcome = "apple"; mult = 3; reels = [A, A, A]; }
-      else if (r < 2300) { outcome = "heart"; mult = 3; reels = [Hh, Hh, Hh]; }
-      else if (r < 20300) { // 별: 1~2개 + 나머지 (Jelly! 는 최대 1개, 같은 그림 3개는 안 나오게)
+      if (r < 333) { outcome = "jackpot"; mult = 20; reels = [J, J, J]; }
+      else if (r < 1333) { outcome = "jelly2"; mult = 5; reels = shuffle([J, J, pick([A, Hh, ...OTHERS])]); }
+      else if (r < 4666) { outcome = "apple"; mult = 3; reels = [A, A, A]; }
+      else if (r < 8000) { outcome = "heart"; mult = 3; reels = [Hh, Hh, Hh]; }
+      else if (r < 48000) { // 별: 1~2개 + 나머지 (Jelly! 는 최대 1개, 같은 그림 3개는 안 나오게)
         outcome = "star"; mult = 1;
         const stars = crypto.randomInt(10) < 8 ? 1 : 2;
         const rest = []; while (rest.length < 3 - stars) { const c = pick([J, A, Hh, ...OTHERS]); if (c === J && rest.includes(J)) continue; rest.push(c); }
