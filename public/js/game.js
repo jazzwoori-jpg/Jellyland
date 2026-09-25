@@ -272,6 +272,14 @@
 
     // ---- 화면 해상도 오버레이 (이름표, 말풍선, 아이콘) ----
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // 입체감용 화면 조명: 왼쪽 위는 밝게, 가장자리는 살짝 어둡게
+    if (!G.vig || G.vigW !== VW || G.vigH !== VH) {
+      G.vigW = VW; G.vigH = VH;
+      const v = ctx.createRadialGradient(VW * 0.42, VH * 0.4, Math.min(VW, VH) * 0.25, VW * 0.5, VH * 0.5, Math.max(VW, VH) * 0.75);
+      v.addColorStop(0, "rgba(255,245,225,0.06)"); v.addColorStop(0.6, "rgba(0,0,0,0)"); v.addColorStop(1, "rgba(35,15,50,0.30)");
+      G.vig = v;
+    }
+    ctx.fillStyle = G.vig; ctx.fillRect(0, 0, VW, VH);
     const sx = (x) => (x - G.cam.x) * S, sy = (y) => (y - G.cam.y) * S;
     for (const ic of w.icons) {
       const X = sx(ic.x), Y = sy(ic.y) - 16 - Math.sin(G.t / 300) * 4;

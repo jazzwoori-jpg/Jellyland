@@ -56,18 +56,33 @@
     };
     return { px, P, R, E };
   }
-  function toCanvas(px, flip) {
+  // 입체감(2.5D): 빛은 왼쪽 위에서 — 테두리 반사광 + 오른쪽/아래 음영 + 앞머리 그림자
+  const RGB = new Map();
+  const rgb = (h) => { let v = RGB.get(h); if (!v) { v = [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; RGB.set(h, v); } return v; };
+  function toCanvas(src, flip, skinSet) {
+    const px = flip ? src.map((_, k) => src[Math.floor(k / W) * W + (W - 1 - (k % W))]) : src;
     const c = document.createElement("canvas"); c.width = W; c.height = H;
     const x = c.getContext("2d");
     const img = x.createImageData(W, H);
-    const has = (i, j) => i >= 0 && j >= 0 && i < W && j < H && px[j * W + i];
+    const at = (i, j) => (i >= 0 && j >= 0 && i < W && j < H ? px[j * W + i] : null);
     for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
-      let col = px[j * W + i];
-      // 자동 외곽선: 비어 있는 칸 옆에 색이 있으면 외곽선
-      if (!col && (has(i - 1, j) || has(i + 1, j) || has(i, j - 1) || has(i, j + 1))) col = OUTLINE;
-      if (!col) continue;
-      const k = ((j * W) + (flip ? W - 1 - i : i)) * 4;
-      img.data[k] = parseInt(col.slice(1, 3), 16); img.data[k + 1] = parseInt(col.slice(3, 5), 16); img.data[k + 2] = parseInt(col.slice(5, 7), 16); img.data[k + 3] = 255;
+      const col = px[j * W + i];
+      const k = (j * W + i) * 4;
+      if (!col) {
+        // 자동 외곽선
+        if (at(i - 1, j) || at(i + 1, j) || at(i, j - 1) || at(i, j + 1)) { const o = rgb(OUTLINE); img.data[k] = o[0]; img.data[k + 1] = o[1]; img.data[k + 2] = o[2]; img.data[k + 3] = 255; }
+        continue;
+      }
+      let [r, g, b] = rgb(col);
+      let f = (i - CX) / CX * 0.16 + (j / H) * 0.08;         // 오른쪽·아래로 갈수록 살짝 어둡게 (둥근 몸통 느낌)
+      const eR = !at(i + 1, j), eB = !at(i, j + 1), eL = !at(i - 1, j), eT = !at(i, j - 1);
+      if ((eL || eT) && !(eR || eB)) f -= 0.28;               // 빛 받는 테두리 = 반사광
+      else if (eR || eB) f += 0.26;                           // 반대쪽 테두리 = 음영
+      const up = at(i, j - 1);
+      if (skinSet.has(col) && up && !skinSet.has(up)) f += 0.16; // 앞머리·옷깃이 얼굴에 드리우는 그림자
+      if (f > 0) { r *= 1 - f; g *= 1 - f; b *= 1 - f * 0.85; }
+      else { r += (255 - r) * -f; g += (255 - g) * -f; b += (255 - b) * -f; }
+      img.data[k] = r; img.data[k + 1] = g; img.data[k + 2] = b; img.data[k + 3] = 255;
     }
     x.putImageData(img, 0, 0);
     return c;
@@ -231,17 +246,21 @@
     let c = cache.get(key);
     if (!c) {
       const d = dir === "left" ? "right" : dir;
-      c = toCanvas(build(av, d, frame, opts), dir === "left");
+      const sk = SKINS[av.skin] || SKINS[0];
+      c = toCanvas(build(av, d, frame, opts), dir === "left", new Set([sk.c, sk.s]));
       if (cache.size > 600) cache.clear();
       cache.set(key, c);
     }
     return c;
   }
   function draw(ctx, av, x, y, dir = "down", frame = 0, opts = {}) {
-    // 그림자
-    ctx.fillStyle = "rgba(43,29,42,.28)";
-    ctx.fillRect(Math.round(x) - 6, Math.round(y) - 1, 12, 2);
-    ctx.fillRect(Math.round(x) - 4, Math.round(y) - 2, 8, 1);
+    // 부드러운 바닥 그림자 (빛이 왼쪽 위라 오른쪽 아래로)
+    ctx.save();
+    ctx.fillStyle = "rgba(30,15,40,.30)";
+    ctx.beginPath(); ctx.ellipse(Math.round(x) + 2, Math.round(y) - 0.5, 9, 3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "rgba(30,15,40,.18)";
+    ctx.beginPath(); ctx.ellipse(Math.round(x) + 3, Math.round(y), 12, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
     ctx.drawImage(sprite(av, dir, frame, opts), Math.round(x) - CX, Math.round(y) - FOOT);
   }
 

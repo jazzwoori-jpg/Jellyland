@@ -11,7 +11,7 @@
   function treeSprite(variant) {
     const [c, x] = cv(34, 44);
     const greens = [["#2f6e3a", "#3f8f45", "#5cb152", "#8fd36a"], ["#2c6440", "#3b8452", "#57a862", "#86cf7c"], ["#3a6b2e", "#4f8f3a", "#6fb04b", "#a6d86a"]][variant % 3];
-    x.fillStyle = "rgba(40,30,20,.28)"; x.fillRect(5, 38, 24, 5);
+    x.fillStyle = "rgba(25,12,35,.26)"; x.beginPath(); x.ellipse(21, 40, 13, 4, 0, 0, Math.PI * 2); x.fill();
     x.fillStyle = OUT; x.fillRect(14, 26, 7, 14);
     x.fillStyle = "#8a5a3a"; x.fillRect(15, 27, 5, 12); x.fillStyle = "#6c4429"; x.fillRect(18, 27, 2, 12);
     const blob = (cx, cy, r, col) => { x.fillStyle = col; for (let yy = -r; yy <= r; yy++) { const w = Math.round(Math.sqrt(r * r - yy * yy)); x.fillRect(cx - w, cy + yy, w * 2, 1); } };
@@ -110,6 +110,41 @@
     x.fillStyle = "#fff8ea"; x.fillRect(sx, sy, tw, 15);
     x.fillStyle = b.roof; x.fillRect(sx, sy + 13, tw, 2);
     x.fillStyle = OUT; x.fillText(b.name, sx + 7, sy + 7);
+    return c;
+  }
+
+  // 2.5D 건물: 정면 그림 + 오른쪽 옆면(깊이) + 오른쪽 아래로 드리운 그림자
+  function building3D(b) {
+    const front = buildingSprite(b);
+    const W = b.w, H = b.h, D = 22, rise = 0.5;
+    const wallTop = Math.round(H * 0.42), rt = 6;
+    const [c, x] = cv(front.width + D + 18, front.height + 14);
+    // 바닥 그림자
+    x.fillStyle = "rgba(25,12,35,.22)";
+    for (let i = 0; i < W + D + 14; i++) { const h = Math.max(0, 14 - Math.max(0, i - W) * 0.7); x.fillRect(8 + i, H - 2, 1, h); }
+    x.fillStyle = "rgba(25,12,35,.12)";
+    for (let i = 0; i < D + 14; i++) x.fillRect(W + 2 + i, wallTop + 6 - i * rise, 1, H - wallTop - 4);
+    // 옆면 벽 + 지붕 옆면
+    const sideWall = Avatar.mix(b.wall, "#3a2a50", 0.30), sideTrim = Avatar.mix(b.trim, "#000000", 0.35);
+    const sideRoof = Avatar.mix(b.roof, "#1a0f2a", 0.38), sideRoof2 = Avatar.mix(b.roof, "#1a0f2a", 0.25);
+    for (let i = 0; i < D; i++) {
+      const X = W + 2 + i, off = Math.round(i * rise);
+      x.fillStyle = OUT; x.fillRect(X, wallTop - off - 1, 1, H - wallTop + 1);
+      x.fillStyle = i % 8 === 7 ? sideTrim : sideWall; x.fillRect(X, wallTop - off, 1, H - wallTop - 1 - (i === D - 1 ? 0 : 0));
+      if (i > 3 && i < D - 3 && (i % 8 === 2 || i % 8 === 3)) { x.fillStyle = "#6f9fb8"; x.fillRect(X, wallTop - off + 14, 1, 14); } // 옆 창문
+      x.fillStyle = OUT; x.fillRect(X, rt - off - 1, 1, wallTop - rt + 6);
+      for (let yy = rt - off; yy < wallTop - off + 4; yy++) { x.fillStyle = (Math.floor((yy + off - rt) / 6) % 2) ? sideRoof : sideRoof2; x.fillRect(X, yy, 1, 1); }
+      x.fillStyle = OUT; x.fillRect(X, H - off - 1, 1, 1);
+    }
+    x.fillStyle = OUT; x.fillRect(W + 2 + D, rt - Math.round(D * rise) - 1, 1, H - rt + 1); // 뒤 모서리
+    // 정면
+    x.drawImage(front, 0, 0);
+    // 정면 벽에 위→아래 명암 (빛은 왼쪽 위)
+    const g = x.createLinearGradient(0, wallTop, W, H);
+    g.addColorStop(0, "rgba(255,255,255,.10)"); g.addColorStop(0.6, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(30,10,40,.14)");
+    x.fillStyle = g; x.fillRect(3, wallTop + 1, W - 2, H - wallTop - 2);
+    // 지붕 앞면 반사광
+    x.fillStyle = "rgba(255,255,255,.18)"; x.fillRect(2, rt + 1, W, 2);
     return c;
   }
 
@@ -216,10 +251,10 @@
 
     // 건물
     for (const b of buildings) {
-      b.sprite = buildingSprite(b);
+      b.sprite = building3D(b);
       objects.push({ y: b.y + b.h, x: b.x, draw: (c) => c.drawImage(b.sprite, b.x - 2, b.y) });
       const wt = Math.round(b.h * 0.42);
-      colliders.push([b.x, b.y + wt - 10, b.w, b.h - wt + 8]);
+      colliders.push([b.x, b.y + wt - 10, b.w + 20, b.h - wt + 8]);
       b.door = { x: b.x + b.w / 2, y: b.y + b.h + 4 };
     }
 
