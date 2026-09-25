@@ -14,6 +14,8 @@
 //   POST /api/game/start            ← 점프점프 젤리월드 시작
 //   POST /api/game/finish {run, m}  ← 결과 제출 (100m 마다 5코인, 한 판 최대 200코인)
 //   GET  /api/game/top              ← 점프점프 젤리월드 랭킹 TOP 10
+//   GET  /api/mail  · POST /api/mail/read · DELETE /api/mail?ts=  ← 내 쪽지함
+//   GET  /api/admin/users · POST /api/admin/mail {to, text} · POST /api/admin/delete {id}  ← 관리자 전용 회원관리
 import { getStore } from "@netlify/blobs";
 import crypto from "node:crypto";
 
@@ -48,10 +50,11 @@ const SHOP = {
   o_fairy: { kind: "outfit", idx: 14, price: 9000 },
   w_piano: { kind: "wand", idx: 4, price: 12000 },
   o_aurora: { kind: "outfit", idx: 15, price: 15000 },
-  o_royal: { kind: "outfit", idx: 16, price: 20000 },
+  o_royal: { kind: "outfit", idx: 16, price: 30000 },
 };
-const WELCOME_COINS = 100, DAILY_COINS = 100, GB_COINS = 50, GB_REWARDS_PER_DAY = 3;
-const GAME_MAX = 200, GAME_STEP_M = 100, GAME_STEP_COINS = 5;
+const WELCOME_COINS = 100, DAILY_COINS = 100, GB_COINS = 50;
+const GAME_MAX = 200, GAME_DAY_MAX = 600, GAME_STEP_M = 100, GAME_STEP_COINS = 5; // 한 판 최대 200 · 하루 최대 600
+const MAIL_MAX = 60;
 // 미니게임 속도 공식 (public/js/minigame.js 와 같음): 속도 = min(400, 150 + 4·t) px/s, 10px = 1m
 function maxMeters(sec) {
   const tc = (400 - 150) / 4;
@@ -102,6 +105,11 @@ function checkPassword(pw, salt, hash) {
 
 const artistEmails = () =>
   (process.env.ARTIST_EMAILS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+// 관리자: 호스트(ARTIST_EMAILS) + ADMIN_EMAILS (환경변수, 쉼표로 여러 개)
+const adminEmails = () =>
+  (process.env.ADMIN_EMAILS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+const roleOf = (email) => (artistEmails().includes(email) ? "artist" : adminEmails().includes(email) ? "admin" : "fan");
+const isStaff = (role) => role === "artist" || role === "admin";
 const userKey = (email) => "u/" + crypto.createHash("sha256").update(email).digest("hex");
 const publicUser = (u) => ({
   id: u.id,
@@ -109,10 +117,12 @@ const publicUser = (u) => ({
   nickname: u.nickname || "",
   avatar: u.avatar || null,
   lang: LANGS.includes(u.lang) ? u.lang : "ko",
-  role: artistEmails().includes(u.email) ? "artist" : "fan",
+  role: roleOf(u.email),
   coins: u.coins | 0,
   inv: Array.isArray(u.inv) ? u.inv : [],
   daily: u.lastDaily || null,
+  gameLeft: u.gameDay === kstDay() ? Math.max(0, GAME_DAY_MAX - (u.gameCoins | 0)) : GAME_DAY_MAX,
+  gbToday: u.gbLastDay === kstDay(),
 });
 
 // 토큰에 닉네임/아바타를 담아 두면 /sync 때 회원 정보를 읽지 않아도 돼서 빠르고 저렴해요
@@ -124,6 +134,14 @@ async function auth(req) {
   const p = await verifyToken((req.headers.get("authorization") || "").replace(/^Bearer\s+/i, ""));
   if (!p) return null;
   return (await store("jl-users").get(userKey(p.email), { type: "json" })) || null;
+}
+// 탈퇴 처리된 회원 id 목록 (sync 는 토큰만 보므로 따로 확인) — 30초 캐시
+let delCache = { at: 0, set: new Set() };
+async function deletedIds(force) {
+  if (!force && Date.now() - delCache.at < 30000) return delCache.set;
+  const arr = (await store("jl-config").get("deleted", { type: "json" })) || [];
+  delCache = { at: Date.now(), set: new Set(arr) };
+  return delCache.set;
 }
 const clean = (s, n) => String(s ?? "").replace(/[\u0000-\u001f]/g, "").trim().slice(0, n);
 
@@ -215,7 +233,8 @@ export default async (req) => {
       const tp = await tokenPayload(req);
       if (!tp) return err("auth", 401);
       if (tp.n === undefined) return err("auth", 401); // 예전 토큰 → 다시 로그인
-      const role = artistEmails().includes(tp.email) ? "artist" : "fan";
+      const role = roleOf(tp.email);
+      if ((await deletedIds()).has(tp.id)) return err("gone", 401); // 탈퇴 처리된 회원
       const scene = ROOMS.includes(body.scene) ? body.scene : "plaza";
       const other = scene === "plaza" ? "lounge" : "plaza";
       const ps = store("jl-presence");
@@ -312,21 +331,25 @@ export default async (req) => {
     }
 
     // ---------- 미니게임: 점프점프 젤리월드 ----------
+    const gameLeft = () => (user.gameDay === kstDay() ? Math.max(0, GAME_DAY_MAX - (user.gameCoins | 0)) : GAME_DAY_MAX);
     if (route === "game/start" && method === "POST") {
       const t0 = Date.now();
       const sig = crypto.createHmac("sha256", await getSecret()).update(`run.${user.id}.${t0}`).digest("base64url").slice(0, 22);
-      return json({ run: `${t0}.${sig}` });
+      return json({ run: `${t0}.${sig}`, dayLeft: gameLeft() });
     }
     if (route === "game/finish" && method === "POST") {
       const [t0s, sig] = String(body.run || "").split(".");
       const t0 = +t0s;
       const expect = crypto.createHmac("sha256", await getSecret()).update(`run.${user.id}.${t0}`).digest("base64url").slice(0, 22);
       if (!t0 || sig !== expect) return err("forbidden", 400);
-      if ((user.lastRun || 0) >= t0) return json({ user: publicUser(user), coins: 0, dup: true }); // 같은 판 중복 제출
+      if ((user.lastRun || 0) >= t0) return json({ user: publicUser(user), coins: 0, dup: true, dayLeft: gameLeft() }); // 같은 판 중복 제출
       const sec = (Date.now() - t0) / 1000;
       if (sec > 3600) return err("forbidden", 400);
       const m = Math.max(0, Math.min(+body.m || 0, maxMeters(sec) * 1.1 + 20)); // 시간에 비해 너무 먼 거리는 인정 안 함
-      const coins = Math.min(GAME_MAX, Math.floor(m / GAME_STEP_M) * GAME_STEP_COINS);
+      const left = gameLeft();
+      const coins = Math.min(GAME_MAX, left, Math.floor(m / GAME_STEP_M) * GAME_STEP_COINS);
+      if (user.gameDay !== kstDay()) { user.gameDay = kstDay(); user.gameCoins = 0; }
+      user.gameCoins = (user.gameCoins | 0) + coins;
       user.lastRun = t0;
       user.coins = (user.coins | 0) + coins;
       if (m > (user.best | 0)) user.best = Math.floor(m);
@@ -346,11 +369,73 @@ export default async (req) => {
         await gs.setJSON("top", top);
         rank = top.findIndex((e) => e.id === user.id) + 1;
       }
-      return json({ user: publicUser(user), coins, best: user.best | 0, rank, top });
+      return json({ user: publicUser(user), coins, best: user.best | 0, rank, top, dayLeft: gameLeft() });
     }
     if (route === "game/top" && method === "GET") {
       const top = (await store("jl-game").get("top", { type: "json" })) || [];
       return json({ top, best: user.best | 0 });
+    }
+
+    // ---------- ✉️ 쪽지함 ----------
+    if (route === "mail" || route === "mail/read") {
+      const ms = store("jl-mail");
+      const boxKey = "box/" + user.id;
+      let box = (await ms.get(boxKey, { type: "json" })) || [];
+      if (route === "mail" && method === "GET") return json({ box, unread: box.filter((m) => !m.read).length });
+      if (route === "mail/read" && method === "POST") { if (box.some((m) => !m.read)) { box = box.map((m) => ({ ...m, read: true })); await ms.setJSON(boxKey, box); } return json({ ok: true, unread: 0 }); }
+      if (route === "mail" && method === "DELETE") { const ts = +url.searchParams.get("ts"); box = box.filter((m) => m.ts !== ts); await ms.setJSON(boxKey, box); return json({ box, unread: box.filter((m) => !m.read).length }); }
+    }
+
+    // ---------- 🛠 관리자: 회원관리 ----------
+    if (route.startsWith("admin/")) {
+      if (!isStaff(me.role)) return err("forbidden", 403);
+      const us = store("jl-users");
+      const allUsers = async () => {
+        const { blobs } = await us.list({ prefix: "u/" });
+        return (await Promise.all(blobs.map((b) => us.get(b.key, { type: "json" }).then((u) => u && { ...u, _key: b.key })))).filter(Boolean);
+      };
+      const ms = store("jl-mail");
+      const sendMail = async (id, m) => { const k = "box/" + id; const box = (await ms.get(k, { type: "json" })) || []; box.unshift(m); await ms.setJSON(k, box.slice(0, MAIL_MAX)); };
+      if (route === "admin/users" && method === "GET") {
+        const list = (await allUsers()).map((u) => ({ id: u.id, email: u.email, nickname: u.nickname || "", avatar: u.avatar || null, role: roleOf(u.email), coins: u.coins | 0, createdAt: u.createdAt || 0, best: u.best | 0 }));
+        list.sort((a, b) => b.createdAt - a.createdAt);
+        return json({ users: list });
+      }
+      if (route === "admin/mail" && method === "POST") {
+        const text = String(body.text || "").replace(/\r/g, "").replace(/[\u0000-\u0009\u000b-\u001f]/g, "").trim().slice(0, 500);
+        if (!text) return err("msg");
+        const m = { ts: Date.now(), from: me.nickname || "관리자", fromRole: me.role, text, read: false, all: body.to === "all" };
+        if (body.to === "all") {
+          const list = await allUsers();
+          for (let i = 0; i < list.length; i += 20) await Promise.all(list.slice(i, i + 20).map((u) => sendMail(u.id, m)));
+          return json({ ok: true, sent: list.length });
+        }
+        const target = (await allUsers()).find((u) => u.id === body.to);
+        if (!target) return err("notfound", 404);
+        await sendMail(target.id, m);
+        return json({ ok: true, sent: 1 });
+      }
+      if (route === "admin/delete" && method === "POST") {
+        const target = (await allUsers()).find((u) => u.id === body.id);
+        if (!target) return err("notfound", 404);
+        if (isStaff(roleOf(target.email))) return err("forbidden", 403); // 관리자 계정은 탈퇴시킬 수 없음
+        await us.delete(target._key);
+        const cfg = store("jl-config");
+        const del = (await cfg.get("deleted", { type: "json" })) || [];
+        if (!del.includes(target.id)) { del.push(target.id); await cfg.setJSON("deleted", del.slice(-2000)); }
+        await deletedIds(true);
+        try { await ms.delete("box/" + target.id); } catch {}
+        try {
+          const gs2 = store("jl-game"); const top = (await gs2.get("top", { type: "json" })) || [];
+          if (top.some((e) => e.id === target.id)) await gs2.setJSON("top", top.filter((e) => e.id !== target.id));
+        } catch {}
+        // 접속 중이면 광장/라운지에서 바로 사라지게
+        try {
+          const ps = store("jl-presence");
+          for (const r of ROOMS) { const cur = (await ps.get("room/" + r, { type: "json" })) || {}; if (cur[target.id]) { delete cur[target.id]; await ps.setJSON("room/" + r, cur); } }
+        } catch {}
+        return json({ ok: true });
+      }
     }
 
     // ---------- 접속자 위치 공유 ----------
@@ -389,17 +474,17 @@ export default async (req) => {
         const text = String(body.text || "").replace(/\r/g, "").replace(/[\u0000-\u0009\u000b-\u001f]/g, "").trim().slice(0, 300).replace(/\n{3,}/g, "\n\n");
         if (!text) return err("msg");
         const lastKey = "u/" + user.id;
-        const last = +(await gs.get(lastKey)) || 0;
-        if (Date.now() - last < 30000) return err("slow", 429); // 30초에 한 번
         const ts = Date.now();
+        const today = kstDay(ts);
+        if (!isStaff(me.role) && user.gbLastDay === today) return err("gbDaily", 429); // 하루에 1개만
+        const last = +(await gs.get(lastKey)) || 0;
+        if (ts - last < 30000) return err("slow", 429); // 관리자도 30초에 한 번
         const key = `g/${String(ts).padStart(15, "0")}-${crypto.randomBytes(3).toString("hex")}`;
         const e = { id: user.id, name: me.nickname || "?", role: me.role, avatar: me.avatar, text, ts };
-        // 방명록 작성 보상: 50코인 (하루 3번까지)
+        // 방명록 작성 보상: 50코인 (하루 1번)
         let coins = 0;
-        const today = kstDay(ts);
-        if (user.gbDay !== today) { user.gbDay = today; user.gbCount = 0; }
-        if ((user.gbCount | 0) < GB_REWARDS_PER_DAY) { user.gbCount = (user.gbCount | 0) + 1; user.coins = (user.coins | 0) + GB_COINS; coins = GB_COINS; }
-        await Promise.all([gs.setJSON(key, e), gs.set(lastKey, String(ts)), coins ? saveUser() : null]);
+        if (user.gbLastDay !== today) { user.gbLastDay = today; user.coins = (user.coins | 0) + GB_COINS; coins = GB_COINS; }
+        await Promise.all([gs.setJSON(key, e), gs.set(lastKey, String(ts)), saveUser()]);
         return json({ entry: { ...e, key }, coins, user: publicUser(user) });
       }
       if (method === "DELETE") {
@@ -407,7 +492,7 @@ export default async (req) => {
         if (!key.startsWith("g/")) return err("forbidden", 400);
         const e = await gs.get(key, { type: "json" });
         if (!e) return json({ ok: true });
-        if (me.role !== "artist" && e.id !== user.id) return err("forbidden", 403); // 본인 글 또는 호스트만 삭제
+        if (!isStaff(me.role) && e.id !== user.id) return err("forbidden", 403); // 본인 글 또는 관리자만 삭제
         await gs.delete(key);
         return json({ ok: true });
       }
@@ -432,7 +517,7 @@ export default async (req) => {
         if (!text) return err("msg");
         const { lang, tr } = await translateAll(text);
         if (body.notice) {
-          if (me.role !== "artist") return err("notice", 403);
+          if (!isStaff(me.role)) return err("notice", 403);
           const n = { text, lang, tr, ts: Date.now(), name: me.nickname };
           await cs.setJSON(`notice/${room}`, n);
           const lst = (await cs.get("last/" + room, { type: "json" })) || {};
@@ -454,7 +539,7 @@ export default async (req) => {
         return json({ message: { ...m, key } });
       }
       if (method === "DELETE") {
-        if (me.role !== "artist") return err("forbidden", 403);
+        if (!isStaff(me.role)) return err("forbidden", 403);
         const key = url.searchParams.get("key") || "";
         if (key.startsWith("notice/")) {
           await cs.delete(key);

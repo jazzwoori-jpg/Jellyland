@@ -399,3 +399,44 @@ body.touch .gb-form textarea { font-size: 16px; }
 .rk-row b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .rk-m { font-weight: bold; color: #7a3fc0; font-size: 13px; }
 .rk-empty { text-align: center; opacity: .7; margin: 6px 0; font-size: 13px; }
+/* ---------- v12: 쪽지함 · 회원관리 · 새 버전 알림 · 앱 설치 · 관리자 ---------- */
+.mail-hud { position: relative; }
+.mail-hud .badge { position: absolute; top: -8px; right: -8px; background: #e0304e; color: #fff; text-shadow: none; border: 2px solid var(--ink); border-radius: 10px; padding: 0 5px; font-size: 10px; line-height: 14px; }
+.admin-hud { background: #ffe9a8 !important; }
+.msg.admin b { color: #c98a00; }
+.msg.admin b::before { content: "★ "; }
+.gb-once { font-size: 12px; color: #c03c50; font-weight: bold; margin-top: -4px; }
+.mail-list { display: flex; flex-direction: column; gap: 8px; }
+.mail-item { border: 2px solid var(--ink); border-radius: 8px; background: #fff; padding: 8px 10px; }
+.mail-item.unread { background: #fff8d8; border-color: #f2c14e; }
+.mail-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.mail-head b.host { color: #2882e6; }
+.mail-head b.adm { color: #c98a00; }
+.mail-head .role { font-size: 11px; background: var(--pink2); border-radius: 8px; padding: 0 6px; }
+.mail-head .when { margin-left: auto; font-size: 11px; opacity: .7; }
+.mail-text { margin-top: 6px; font-size: 14px; line-height: 1.5; white-space: normal; -webkit-user-select: text; user-select: text; }
+.adm-top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.adm-top .inp { flex: 1; min-width: 160px; }
+.adm-top #adm-count { font-size: 12px; opacity: .75; }
+.adm-compose { display: flex; gap: 6px; align-items: flex-end; margin: 6px 0; width: 100%; }
+.adm-compose textarea { flex: 1; border: 2px solid var(--ink); border-radius: 6px; padding: 6px; font: inherit; font-size: 13px; resize: vertical; -webkit-user-select: text; user-select: text; }
+.adm-list { display: flex; flex-direction: column; gap: 6px; }
+.adm-row { display: grid; grid-template-columns: 36px 1fr auto; gap: 8px; align-items: center; border: 2px solid var(--ink); border-radius: 8px; padding: 6px 8px; background: #fff; }
+.adm-row .adm-compose { grid-column: 1 / -1; }
+.adm-row canvas { width: 32px; height: 26px; image-rendering: pixelated; background: var(--pink2); border-radius: 4px; }
+.adm-info { min-width: 0; font-size: 13px; }
+.adm-info small { opacity: .7; word-break: break-all; }
+.adm-role { font-size: 10px; border-radius: 8px; padding: 0 6px; background: #eee; }
+.adm-role.r-artist { background: #cfe6ff; color: #1d5fb0; }
+.adm-role.r-admin { background: #fff0b0; color: #8a6000; }
+.adm-act { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.adm-act .kick { background: #ffe1e4; }
+.adm-act .kick.sure { background: #d8434e; color: #fff; }
+@media (max-width: 560px) { .adm-row { grid-template-columns: 36px 1fr; } .adm-act { grid-column: 1 / -1; justify-content: flex-start; } }
+#update-bar { position: fixed; z-index: 60; left: 50%; top: max(10px, env(safe-area-inset-top)); transform: translateX(-50%); display: flex; gap: 10px; align-items: center; padding: 8px 12px; background: #fff3a8; font-size: 13px; max-width: calc(100vw - 24px); box-shadow: 0 4px 0 var(--ink); }
+.install { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.inst-icon { width: 72px; height: 72px; border-radius: 16px; border: 3px solid var(--ink); image-rendering: pixelated; }
+.inst-steps { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.inst-card { text-align: left; border: 2px solid var(--ink); border-radius: 8px; background: #fff; padding: 10px 12px; font-size: 14px; line-height: 1.7; }
+.inst-card .ico { display: inline-block; border: 1px solid var(--ink); border-radius: 4px; padding: 0 4px; font-size: 12px; }
+#jg-root .jg-rank { margin: 10px auto 0; }

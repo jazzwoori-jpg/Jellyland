@@ -9,6 +9,8 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
+  const APP_VERSION = "12"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
   if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) document.body.classList.add("ios");
@@ -294,17 +296,17 @@
     for (const o of G.others.values()) {
       const st = o.seat && seatMap[o.seat];
       if (st) { o.rx = o.x = st.x; o.ry = o.y = st.y; }
-      chars.push({ x: o.rx, y: o.ry, name: o.name, av: o.avatar, dir: st ? st.dir : o.dir || "down", frame: frameOf(o.walking, o.t || 0), crown: o.role === "artist", id: o.id, artist: o.role === "artist", sit: !!st });
+      chars.push({ x: o.rx, y: o.ry, name: o.name, av: o.avatar, dir: st ? st.dir : o.dir || "down", frame: frameOf(o.walking, o.t || 0), crown: o.role === "artist", id: o.id, artist: o.role === "artist", admin: o.role === "admin", sit: !!st });
     }
-    if (G.mode === "world") chars.push({ x: G.player.x, y: G.player.y, name: G.user.nickname, av: G.user.avatar, dir: G.player.dir, frame: frameOf(G.player.moving, G.player.t), crown: G.user.role === "artist", me: true, id: G.user.id, artist: G.user.role === "artist", sit: !!G.seat });
+    if (G.mode === "world") chars.push({ x: G.player.x, y: G.player.y, name: G.user.nickname, av: G.user.avatar, dir: G.player.dir, frame: frameOf(G.player.moving, G.player.t), crown: G.user.role === "artist", me: true, id: G.user.id, artist: G.user.role === "artist", admin: G.user.role === "admin", sit: !!G.seat });
     for (const c of chars) list.push({ y: c.y, char: c });
     list.sort((a, b) => a.y - b.y);
     for (const o of list) {
       if (o.char) {
         const c = o.char;
-        if (c.artist) drawAura(c.x, c.y, G.t);
+        if (c.artist || c.admin) drawAura(c.x, c.y, G.t, c.admin);
         Avatar.draw(ctx, c.av, c.x, c.y, c.dir, c.bobby ? (Math.floor(G.t / 500) % 2 ? 1 : 0) : c.frame, { keytar: c.keytar, sit: c.sit });
-        if (c.artist) drawSparkles(c.x, c.y, G.t);
+        if (c.artist || c.admin) drawSparkles(c.x, c.y, G.t, c.admin);
       } else o.draw(ctx, G.t);
     }
     if (G.target) { ctx.fillStyle = "rgba(255,127,174,.8)"; const r = 3 + (Math.floor(G.t / 150) % 2); ctx.fillRect(G.target.x - r, G.target.y - 1, r * 2, 2); ctx.fillRect(G.target.x - 1, G.target.y - r, 2, r * 2); }
@@ -332,10 +334,12 @@
     for (const c of chars) {
       const X = sx(c.x), Y = sy(c.y - (c.sit ? 33 : 42));
       ctx.font = `${c.me || c.artist ? "bold " : ""}12px ${FONT}`;
-      const tw = ctx.measureText(c.artist ? "✦ " + c.name : c.name).width + 10;
-      ctx.fillStyle = c.artist ? "rgba(40,130,230,.95)" : c.me ? "rgba(58,37,48,.85)" : c.npc ? "rgba(79,195,176,.85)" : "rgba(58,37,48,.6)";
+      const label = c.artist ? "✦ " + c.name : c.admin ? "★ " + c.name : c.name;
+      if (c.admin) ctx.font = `bold 12px ${FONT}`;
+      const tw = ctx.measureText(label).width + 10;
+      ctx.fillStyle = c.artist ? "rgba(40,130,230,.95)" : c.admin ? "rgba(214,150,10,.95)" : c.me ? "rgba(58,37,48,.85)" : c.npc ? "rgba(79,195,176,.85)" : "rgba(58,37,48,.6)";
       ctx.fillRect(X - tw / 2, Y - 9, tw, 17);
-      ctx.fillStyle = "#fff"; ctx.fillText(c.artist ? "✦ " + c.name : c.name, X, Y);
+      ctx.fillStyle = "#fff"; ctx.fillText(label, X, Y);
       const b = c.id && G.bubbles.get(c.id);
       if (b && b.until > now) drawBubble(X, Y - 14, msgText(b.m));
       if (c.artist && !c.id && G.scene === "plaza" && Math.floor(G.t / 4000) % 3 === 0) drawBubble(X, Y - 14, t("artistHello"));
@@ -344,35 +348,41 @@
     if (G.mode === "world" && G.t - (G.mmT || 0) > 120) { G.mmT = G.t; drawMinimapFrame(); } // 지도는 초당 8번만 (폰 부담 줄이기)
   }
   // 아티스트(조젤리) 전용: 영롱한 푸른 빛 오라 + 반짝이
-  function drawAura(x, y, tt) {
+  // 관리자: 노란(황금빛) 오라
+  const AURA = {
+    blue: ["rgba(120,215,255,.75)", "rgba(60,150,255,.38)", "rgba(40,110,255,0)", "140,225,255", "80,190,255"],
+    gold: ["rgba(255,236,120,.8)", "rgba(255,196,40,.42)", "rgba(255,170,0,0)", "255,230,120", "255,200,40"],
+  };
+  function drawAura(x, y, tt, gold) {
+    const A = gold ? AURA.gold : AURA.blue;
     const pulse = 0.75 + Math.sin(tt / 380) * 0.25;
     ctx.save();
     // 푸른 후광 (밝은 바닥에서도 잘 보이도록 진한 파랑 → 투명)
     const R = 34 * pulse + 8;
     const g = ctx.createRadialGradient(x, y - 18, 3, x, y - 18, R);
-    g.addColorStop(0, "rgba(120,215,255,.75)");
-    g.addColorStop(0.5, "rgba(60,150,255,.38)");
-    g.addColorStop(1, "rgba(40,110,255,0)");
+    g.addColorStop(0, A[0]);
+    g.addColorStop(0.5, A[1]);
+    g.addColorStop(1, A[2]);
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.ellipse(x, y - 18, R * 0.8, R * 1.05, 0, 0, Math.PI * 2); ctx.fill();
     // 위로 올라가는 빛기둥
     const g2 = ctx.createLinearGradient(0, y - 66, 0, y);
-    g2.addColorStop(0, "rgba(140,225,255,0)");
-    g2.addColorStop(1, `rgba(140,225,255,${0.35 * pulse})`);
+    g2.addColorStop(0, `rgba(${A[3]},0)`);
+    g2.addColorStop(1, `rgba(${A[3]},${0.35 * pulse})`);
     ctx.fillStyle = g2; ctx.fillRect(x - 8, y - 66, 16, 66);
     // 발밑 빛 고리
-    ctx.fillStyle = `rgba(80,190,255,${0.55 + 0.35 * pulse})`;
+    ctx.fillStyle = `rgba(${A[4]},${0.55 + 0.35 * pulse})`;
     for (let i = -11; i <= 11; i++) { const h = Math.round(Math.sqrt(121 - i * i) / 3); ctx.fillRect(x + i, y - h + 1, 1, 1); ctx.fillRect(x + i, y + h + 1, 1, 1); }
     ctx.restore();
   }
-  function drawSparkles(x, y, tt) {
+  function drawSparkles(x, y, tt, gold) {
     ctx.save();
     for (let i = 0; i < 6; i++) {
       const a = tt / 700 + (i * Math.PI) / 3;
       const r = 15 + Math.sin(tt / 300 + i) * 2;
       const sx = Math.round(x + Math.cos(a) * r), sy = Math.round(y - 18 + Math.sin(a) * r * 1.1 - ((tt / 25 + i * 9) % 18) * 0.3);
       const on = (Math.floor(tt / 160) + i) % 3;
-      ctx.fillStyle = on === 0 ? "#ffffff" : on === 1 ? "#9fe8ff" : "#5fb8ff";
+      ctx.fillStyle = on === 0 ? "#ffffff" : gold ? (on === 1 ? "#fff3a8" : "#ffc83d") : on === 1 ? "#9fe8ff" : "#5fb8ff";
       ctx.fillRect(sx, sy, 1, 1);
       if (on === 0) { ctx.fillRect(sx - 1, sy, 3, 1); ctx.fillRect(sx, sy - 1, 1, 3); }
     }
@@ -650,7 +660,7 @@
     BGM.play("minigame");
     openModal("🎮 " + t("gameTitle"), `<div id="jg-root"></div>`, (el) => {
       const g = JumpGame.mount(el.querySelector("#jg-root"), {
-        t, avatar: () => G.user.avatar,
+        t, avatar: () => G.user.avatar, dayLeft: G.user.gameLeft,
         onStart: () => API.gameStart(),
         onFinish: async (run, m) => {
           const r = await API.gameFinish(run, m);
@@ -680,10 +690,141 @@
     list.querySelectorAll("canvas[data-av]").forEach((c) => { try { Avatar.face(c.getContext("2d"), JSON.parse(c.dataset.av), 32, 26); } catch {} });
   }
 
+  // ---------------- ✉️ 쪽지함 ----------------
+  let mailUnread = 0, mailBox = [];
+  async function loadMail(first) {
+    if (!G.user || G.mode !== "world") return;
+    try {
+      const r = await API.mail();
+      mailBox = r.box || [];
+      const n = r.unread | 0;
+      if (n > mailUnread && !first) toast(t("mailNew"));
+      else if (n > 0 && first) setTimeout(() => toast(t("mailNew")), 8000);
+      mailUnread = n; renderMailBadge();
+      if (document.querySelector("#mail-list")) renderMailList();
+    } catch {}
+  }
+  setInterval(() => { if (!document.hidden) loadMail(); }, 60000);
+  function renderMailBadge() { const b = $("#mail-badge"); b.textContent = mailUnread > 9 ? "9+" : mailUnread; b.classList.toggle("hidden", !mailUnread); }
+  function openMail() {
+    openModal(t("mailTitle"), `<div id="mail-list" class="mail-list"></div>`, () => {
+      renderMailList();
+      if (mailUnread) { API.mailRead().catch(() => {}); mailUnread = 0; renderMailBadge(); }
+      loadMail();
+    }, true);
+  }
+  function renderMailList() {
+    const el = $("#mail-list"); if (!el) return;
+    if (!mailBox.length) { el.innerHTML = `<p class="gb-empty">${esc(t("mailEmpty"))}</p>`; return; }
+    el.innerHTML = mailBox.map((m) => `<div class="mail-item${m.read ? "" : " unread"}" data-ts="${m.ts}">
+      <div class="mail-head"><b class="${m.fromRole === "artist" ? "host" : "adm"}">${m.fromRole === "artist" ? "✦" : "★"} ${esc(m.from)}</b>
+      <span class="role">${esc(t(m.fromRole === "artist" ? "roleArtist" : "roleAdmin"))}${m.all ? " · " + esc(t("mailAll")) : ""}</span>
+      <span class="when">${fmtTime(m.ts)}</span><button class="gb-del" title="${esc(t("del"))}">✕</button></div>
+      <div class="mail-text">${esc(m.text).replace(/\n/g, "<br>")}</div></div>`).join("");
+    el.querySelectorAll(".mail-item .gb-del").forEach((b) => b.addEventListener("click", async () => {
+      const ts = +b.closest(".mail-item").dataset.ts;
+      try { const r = await API.mailDelete(ts); mailBox = r.box || []; renderMailList(); } catch (e) { toast(e.message); }
+    }));
+  }
+  $("#btn-mail").addEventListener("click", openMail);
+
+  // ---------------- 🛠 관리자: 회원관리 ----------------
+  let adminUsers = [];
+  function openAdmin() {
+    if (!G.user || !staff(G.user.role)) return;
+    openModal(t("adminTitle"), `<div class="adm-top"><input class="inp" id="adm-q" placeholder="${esc(t("adminSearch"))}"><span id="adm-count"></span>
+      <button class="btn sm grape" id="adm-all">${esc(t("adminAll"))}</button></div>
+      <div class="adm-compose hidden" id="adm-compose-all"><textarea id="adm-all-text" maxlength="500" rows="3" placeholder="${esc(t("adminMsgPh"))}"></textarea><button class="btn sm pink" id="adm-all-send">${esc(t("adminSend"))}</button></div>
+      <div class="adm-list" id="adm-list"><p class="gb-empty">…</p></div>`, (el) => {
+      el.querySelector("#adm-q").addEventListener("input", renderAdmin);
+      el.querySelector("#adm-all").addEventListener("click", () => el.querySelector("#adm-compose-all").classList.toggle("hidden"));
+      el.querySelector("#adm-all-send").addEventListener("click", async (e) => {
+        const ta = el.querySelector("#adm-all-text"), text = ta.value.trim(); if (!text) return;
+        e.target.disabled = true;
+        try { const r = await API.adminMail("all", text); ta.value = ""; el.querySelector("#adm-compose-all").classList.add("hidden"); toast(t("adminSent", { n: r.sent })); loadMail(); }
+        catch (x) { toast(x.message); } finally { e.target.disabled = false; }
+      });
+      API.adminUsers().then((r) => { adminUsers = r.users || []; renderAdmin(); }).catch((x) => { el.querySelector("#adm-list").innerHTML = `<p class="gb-empty">${esc(x.message)}</p>`; });
+    }, true);
+  }
+  function renderAdmin() {
+    const el = $("#adm-list"); if (!el) return;
+    const q = ($("#adm-q").value || "").trim().toLowerCase();
+    const list = adminUsers.filter((u) => !q || (u.nickname || "").toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q));
+    $("#adm-count").textContent = t("adminCount", { n: adminUsers.length });
+    const roleName = (r) => t(r === "artist" ? "roleArtist" : r === "admin" ? "roleAdmin" : "roleFan");
+    el.innerHTML = list.map((u) => `<div class="adm-row" data-id="${esc(u.id)}">
+      <canvas width="32" height="26" data-av='${esc(JSON.stringify(u.avatar || null))}'></canvas>
+      <div class="adm-info"><b>${esc(u.nickname || "—")}</b> <span class="adm-role r-${u.role}">${esc(roleName(u.role))}</span><br>
+        <small>${esc(u.email)} · ${esc(t("adminJoined"))} ${u.createdAt ? fmtTime(u.createdAt).slice(0, 10) : "-"} · 🪙 ${(u.coins | 0).toLocaleString()}</small></div>
+      <div class="adm-act"><button class="btn sm" data-act="msg">${esc(t("adminMsg"))}</button>${staff(u.role) ? "" : `<button class="btn sm kick" data-act="kick">${esc(t("adminKick"))}</button>`}</div>
+      <div class="adm-compose hidden"><textarea maxlength="500" rows="3" placeholder="${esc(t("adminMsgPh"))}"></textarea><button class="btn sm pink" data-act="send">${esc(t("adminSend"))}</button></div></div>`).join("");
+    el.querySelectorAll("canvas[data-av]").forEach((c) => { try { const av = JSON.parse(c.dataset.av); if (av) Avatar.face(c.getContext("2d"), av, 32, 26); } catch {} });
+    el.querySelectorAll(".adm-row").forEach((row) => {
+      const u = adminUsers.find((x) => x.id === row.dataset.id);
+      row.querySelector("[data-act=msg]").addEventListener("click", () => row.querySelector(".adm-compose").classList.toggle("hidden"));
+      row.querySelector("[data-act=send]").addEventListener("click", async (e) => {
+        const ta = row.querySelector("textarea"), text = ta.value.trim(); if (!text) return;
+        e.target.disabled = true;
+        try { await API.adminMail(u.id, text); ta.value = ""; row.querySelector(".adm-compose").classList.add("hidden"); toast(t("adminSent", { n: 1 })); }
+        catch (x) { toast(x.message); } finally { e.target.disabled = false; }
+      });
+      const kb = row.querySelector("[data-act=kick]");
+      if (kb) kb.addEventListener("click", async () => {
+        if (!kb.classList.contains("sure")) { kb.classList.add("sure"); kb.textContent = t("adminKickSure"); setTimeout(() => { if (kb.isConnected) { kb.classList.remove("sure"); kb.textContent = t("adminKick"); } }, 4000); return; }
+        kb.disabled = true;
+        try { await API.adminDelete(u.id); adminUsers = adminUsers.filter((x) => x.id !== u.id); toast(t("adminKicked", { name: u.nickname || u.email })); renderAdmin(); }
+        catch (x) { toast(x.message); kb.disabled = false; }
+      });
+    });
+  }
+  $("#btn-admin").addEventListener("click", openAdmin);
+
+  // ---------------- ✨ 새 버전 알림 ----------------
+  async function checkVersion() {
+    try {
+      const r = await fetch("version.json?" + Date.now(), { cache: "no-store" });
+      const d = await r.json();
+      if (d && d.v && String(d.v) !== APP_VERSION) showUpdateBar();
+    } catch {}
+  }
+  function showUpdateBar() {
+    if ($("#update-bar")) return;
+    const b = document.createElement("div"); b.id = "update-bar"; b.className = "win";
+    b.innerHTML = `<span>${esc(t("newVersion"))}</span><button class="btn sm pink">${esc(t("reload"))}</button>`;
+    b.querySelector("button").addEventListener("click", () => location.reload());
+    document.body.appendChild(b);
+  }
+  setInterval(() => { if (!document.hidden) checkVersion(); }, 120000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) checkVersion(); });
+
+  // ---------------- 📲 홈 화면에 앱 추가 ----------------
+  let installEvt = null;
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvt = e; });
+  const isStandalone = () => window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  function maybeInstallPopup() {
+    if (!IS_TOUCH || isStandalone() || G.modalOpen || G.mode !== "world") return;
+    try { if (localStorage.getItem("jl_install_shown")) return; localStorage.setItem("jl_install_shown", "1"); } catch {}
+    openInstall();
+  }
+  function openInstall() {
+    const ios = document.body.classList.contains("ios");
+    const html = `<div class="install"><img src="img/icon-180.png" alt="" class="inst-icon"><p>${esc(t("installIntro"))}</p>
+      ${installEvt ? `<button class="btn pink" id="inst-go">${esc(t("installBtn"))}</button>` : ""}
+      <div class="inst-steps">${ios ? `<div class="inst-card">${t("installIOS")}</div>` : `<div class="inst-card">${t("installAndroid")}</div><div class="inst-card">${t("installIOS")}</div>`}</div>
+      <button class="btn sm" id="inst-later">${esc(t("installLater"))}</button></div>`;
+    openModal(t("installTitle"), html, (el) => {
+      const go = el.querySelector("#inst-go");
+      if (go) go.addEventListener("click", async () => { try { installEvt.prompt(); await installEvt.userChoice; toast(t("installDone")); } catch {} installEvt = null; closeModal(); });
+      el.querySelector("#inst-later").addEventListener("click", closeModal);
+    });
+  }
+  if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+
   // ---------------- 방명록 ----------------
   const fmtTime = (ts) => { const d = new Date(ts), z = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}.${z(d.getMonth() + 1)}.${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`; };
   async function openGuestbook(page = 0) {
-    openModal("📖 " + t("gbTitle"), `<div class="gb-write"><h3>${esc(t("gbWriteTitle"))}</h3><p>${esc(t("gbIntro"))}</p>
+    openModal("📖 " + t("gbTitle"), `<div class="gb-write"><h3>${esc(t("gbWriteTitle"))}</h3><p>${esc(t("gbIntro"))}</p><p class="gb-once">${esc(t("gbOnce"))}</p>
       <form class="gb-form" id="gb-form"><textarea id="gb-text" maxlength="300" rows="4" placeholder="${esc(t("gbPh"))}"></textarea>
       <div class="gb-row"><span id="gb-count">0/300</span><button class="btn pink" type="submit">${esc(t("gbWrite"))}</button></div><div class="err" id="gb-err"></div></form></div>
       <h3 class="gb-list-title">${esc(t("gbListTitle"))}</h3>
@@ -712,7 +853,7 @@
           <span class="no">${r.total - page * 20 - i}</span>
           <span class="who"><canvas width="32" height="26" data-av='${esc(JSON.stringify(e.avatar || null))}'></canvas><b>${e.role === "artist" ? "✦ " : ""}${esc(e.name)}</b></span>
           <span class="txt">${esc(e.text).replace(/\n/g, "<br>")}</span>
-          <span class="when">${fmtTime(e.ts)}${G.user && (G.user.role === "artist" || G.user.id === e.id) ? ` <button class="gb-del" title="${esc(t("del"))}">✕</button>` : ""}</span></div>`).join("");
+          <span class="when">${fmtTime(e.ts)}${G.user && (staff(G.user.role) || G.user.id === e.id) ? ` <button class="gb-del" title="${esc(t("del"))}">✕</button>` : ""}</span></div>`).join("");
       list.querySelectorAll("canvas[data-av]").forEach((c) => { try { const av = JSON.parse(c.dataset.av); const x = c.getContext("2d"); x.imageSmoothingEnabled = false; Avatar.face(x, av, 32, 26); } catch {} });
       list.querySelectorAll(".gb-del").forEach((b) => b.addEventListener("click", async () => {
         const key = b.closest(".gb-item").dataset.key;
@@ -725,7 +866,8 @@
   }
 
   function openGuide() {
-    openModal(t("guideTitle"), `<ul class="guide">${t("guide").map((g) => `<li>${g}</li>`).join("")}</ul>`);
+    openModal(t("guideTitle"), `<ul class="guide">${t("guide").map((g) => `<li>${g}</li>`).join("")}</ul><p style="text-align:center"><button class="btn sm pink" id="guide-install">${esc(t("installHelp"))}</button></p>`,
+      (el) => el.querySelector("#guide-install").addEventListener("click", openInstall));
   }
   $("#btn-help").addEventListener("click", openGuide);
   function bgmBtn() { $("#btn-bgm").textContent = BGM.on ? "🔊" : "🔇"; $("#btn-bgm").title = t("bgm"); }
@@ -802,6 +944,7 @@
       if (!API.demo) { G.online = r.online || 1; $("#online").textContent = t("online", { n: G.online }); }
       applyChat(r.messages || [], r.notice);
     } catch (e) {
+      if (e.status === 401 && e.code === "gone") { toast(t("e_gone")); return logout(); }
       if (e.status === 401) {
         try { G.user = await API.me(); } catch { return logout(); } // 예전 토큰이면 새 토큰으로 교체
       }
@@ -865,7 +1008,7 @@
   function renderNotice() {
     const n = $("#notice"), no = G.chat.notice;
     if (!no) return n.classList.add("hidden");
-    n.innerHTML = `📢 <b>${esc(t("noticeLabel"))}</b> ${esc(msgText(no))}${G.user.role === "artist" ? ` <span class="del" id="notice-del">✕</span>` : ""}`;
+    n.innerHTML = `📢 <b>${esc(t("noticeLabel"))}</b> ${esc(msgText(no))}${staff(G.user.role) ? ` <span class="del" id="notice-del">✕</span>` : ""}`;
     n.classList.remove("hidden");
     const d = $("#notice-del");
     if (d) d.addEventListener("click", async () => { try { await API.chatDelete("notice/" + G.scene); G.chat.notice = null; renderNotice(); } catch (e) { toast(e.message); } });
@@ -874,11 +1017,11 @@
   function makeChatLine(m) {
     const d = document.createElement("div");
     m.el = d;
-    d.className = "msg" + (m.role === "artist" ? " artist" : "") + (m.id === G.user.id ? " mine" : "");
+    d.className = "msg" + (m.role === "artist" ? " artist" : m.role === "admin" ? " admin" : "") + (m.id === G.user.id ? " mine" : "");
     const time = new Date(m.ts).toLocaleTimeString(I.lang === "en" ? "en-US" : I.lang === "ja" ? "ja-JP" : "ko-KR", { hour: "2-digit", minute: "2-digit" });
     const shown = msgText(m);
     const isTr = shown !== m.text;
-    d.innerHTML = `<b>${esc(m.name)}</b> <span class="txt">${esc(shown)}</span>${isTr ? `<span class="tr" title="${esc(m.text)}">🌐</span>` : ""}<span class="t">${time}</span>${G.user.role === "artist" ? `<span class="del">✕</span>` : ""}`;
+    d.innerHTML = `<b>${esc(m.name)}</b> <span class="txt">${esc(shown)}</span>${isTr ? `<span class="tr" title="${esc(m.text)}">🌐</span>` : ""}<span class="t">${time}</span>${staff(G.user.role) ? `<span class="del">✕</span>` : ""}`;
     if (isTr) {
       let orig = false;
       d.querySelector(".tr").addEventListener("click", () => { orig = !orig; d.querySelector(".txt").textContent = orig ? m.text : shown; d.querySelector(".tr").classList.toggle("on", orig); });
@@ -1047,11 +1190,12 @@
   function showAuthForms() { $("#auth-forms").classList.remove("hidden"); $("#auth-continue").classList.add("hidden"); }
 
   function refreshMe() {
-    $("#me-name").textContent = G.user.nickname + (G.user.role === "artist" ? " 👑" : "");
+    $("#me-name").textContent = G.user.nickname + (G.user.role === "artist" ? " 👑" : G.user.role === "admin" ? " ★" : "");
     const c = $("#me-face"), x = c.getContext("2d");
     x.clearRect(0, 0, c.width, c.height); x.imageSmoothingEnabled = false;
     Avatar.face(x, G.user.avatar, c.width, c.height);
-    $("#chat-opts").classList.toggle("hidden", G.user.role !== "artist");
+    $("#chat-opts").classList.toggle("hidden", !staff(G.user.role));
+    $("#btn-admin").classList.toggle("hidden", !staff(G.user.role));
     renderCoins();
     $("#online").textContent = API.demo ? t("demoSolo") : G.online > 1 ? t("online", { n: G.online }) : t("onlineShort");
   }
@@ -1070,6 +1214,8 @@
     toast(t("welcome", { name: G.user.nickname }));
     BGM.play(G.scene);
     checkDaily();
+    loadMail(true);
+    setTimeout(maybeInstallPopup, 5500);
   }
   function logout() {
     API.logout(); G.user = null; G.mode = "title"; G.others.clear(); BGM.play("title");
