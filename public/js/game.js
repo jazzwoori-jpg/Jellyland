@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "23"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "24"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -905,8 +905,8 @@
           root.innerHTML = backBtn() + `<div id="gw-play"></div>`;
           root.querySelector("#gw-back").addEventListener("click", menu);
           cur = LuckyJelly.mount(root.querySelector("#gw-play"), {
-            t, toast, coins: () => G.user.coins | 0,
-            onSpin: async () => { const r = await API.slotSpin(); G.user.coins = (r.user.coins | 0) - (r.payout | 0); renderCoins(); G._slotUser = r.user; return r; },
+            t, toast, coins: () => G.user.coins | 0, left: () => (G.user.slotLeft ?? 20),
+            onSpin: async () => { const r = await API.slotSpin(); G.user.coins = (r.user.coins | 0) - (r.payout | 0); G.user.slotLeft = r.user.slotLeft; renderCoins(); G._slotUser = r.user; return r; },
             onResult: () => { if (G._slotUser) { setUser(G._slotUser); G._slotUser = null; } },
           });
           return;
