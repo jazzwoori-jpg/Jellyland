@@ -8,7 +8,7 @@
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
-  const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 6 }; // 긴 웨이브 흑발 + 블랙 재킷
+  const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
   if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) document.body.classList.add("ios");
@@ -85,16 +85,18 @@
     const w = scene();
     const p = pos || w.spawn;
     G.player.x = p.x; G.player.y = p.y; G.player.dir = pos && pos.dir ? pos.dir : "up";
-    G.target = null; G.pendingZone = null; G.others.clear(); G.zone = null;
+    G.target = null; G.pendingZone = null; G.others.clear(); G.zone = null; G.seat = null; G.seatObj = null;
     $("#prompt").classList.add("hidden");
     buildMinimap();
     updateSceneLabels();
     resetChat();
+    if (G.mode === "world" && !G.gameOpen) BGM.play(id);
   }
   function updateSceneLabels() {
     if (!G.scene) return;
     $("#mm-label").textContent = G.scene === "plaza" ? t("mapPlaza") : t("mapLounge");
     $("#chat-title").textContent = G.scene === "plaza" ? t("chatPlaza") : t("chatLounge");
+    $("#btn-gb").classList.toggle("hidden", G.scene !== "lounge");
   }
 
   function blocked(x, y) {
@@ -107,12 +109,20 @@
 
   // 주민 NPC (분위기용)
   function makeNPCs() {
-    G.npcs = [0, 1, 2].map((i) => ({ i, av: Avatar.random(), x: 560 + i * 60, y: 640 + (i % 2) * 40, tx: 0, ty: 0, dir: "down", moving: false, wait: 1 + i, t: 0 }));
+    G.npcs = [0, 1, 2].map((i) => ({ i, av: Avatar.random(), x: 560 + i * 60, y: 640 + (i % 2) * 40, tx: 0, ty: 0, dir: "down", moving: false, wait: 1 + i, t: 0, line: 0 }));
   }
   function updateNPCs(dt) {
     if (G.scene !== "plaza") return;
     for (const n of G.npcs) {
       n.t += dt;
+      // 대사: 1번부터 10번까지 순서대로, 말풍선 4.5초 → 쉬고 → 다음 대사
+      if (n.nextTalk === undefined) { n.nextTalk = G.t + 1500 + n.i * 2500; n.line = 0; }
+      if (G.t >= n.nextTalk) {
+        const lines = t("npcLines")[n.i] || [];
+        n.say = lines[n.line % Math.max(1, lines.length)]; n.sayUntil = G.t + 4500;
+        n.line = (n.line + 1) % Math.max(1, lines.length);
+        n.nextTalk = G.t + 7500;
+      }
       if (n.wait > 0) { n.wait -= dt; n.moving = false; if (n.wait <= 0) { n.tx = n.x + (Math.random() - 0.5) * 220; n.ty = n.y + (Math.random() - 0.5) * 160; } continue; }
       const dx = n.tx - n.x, dy = n.ty - n.y, d = Math.hypot(dx, dy);
       if (d < 3) { n.wait = 1.5 + Math.random() * 3; continue; }
@@ -144,7 +154,7 @@
     const w = scene();
     // 건물 클릭 → 문 앞으로 이동 후 입장
     if (w.buildings) for (const b of w.buildings) if (p.x > b.x && p.x < b.x + b.w && p.y > b.y && p.y < b.y + b.h + 6) { G.target = { x: b.door.x, y: b.door.y + 6 }; G.pendingZone = b.id; return; }
-    if (w.artist && Math.hypot(p.x - w.artist.x, p.y - 12 - w.artist.y) < 18) { G.target = { x: w.artist.x + 10, y: w.artist.y + 26 }; G.pendingZone = "profile"; return; }
+    if (w.artist && Math.hypot(p.x - w.artist.x, p.y - 18 - w.artist.y) < 22) { G.target = { x: w.artist.x + 10, y: w.artist.y + 26 }; G.pendingZone = "profile"; return; }
     G.target = p; G.pendingZone = null;
   });
 
@@ -174,6 +184,7 @@
     if (G.mode === "world" && !G.modalOpen) {
       if (G.keys.has("u")) vy -= 1; if (G.keys.has("d")) vy += 1; if (G.keys.has("l")) vx -= 1; if (G.keys.has("r")) vx += 1;
       if (G.joy.x || G.joy.y) { vx = G.joy.x; vy = G.joy.y; }
+      if (G.seat && (vx || vy || G.target)) standUp();
       if (!vx && !vy && G.target) {
         const dx = G.target.x - p.x, dy = G.target.y - p.y, d = Math.hypot(dx, dy);
         if (d < 3) { G.target = null; if (G.pendingZone) { const z = G.pendingZone; G.pendingZone = null; runZone(z); } }
@@ -182,8 +193,10 @@
     }
     const len = Math.hypot(vx, vy);
     const wasMoving = p.moving;
+    if (p.vx === undefined) { p.vx = 0; p.vy = 0; }
     p.moving = len > 0.05;
     if (p.moving) G.lastInput = Date.now();
+    if (!p.moving) { p.vx = 0; p.vy = 0; }
     if (p.moving !== wasMoving && G.mode === "world") kickSync(); // 출발·정지 순간 바로 알림
     if (p.moving) {
       if (len > 1) { vx /= len; vy /= len; }
@@ -194,31 +207,52 @@
       if (!blockedFeet(p.x, ny)) p.y = ny;
       p.dir = Math.abs(vx) > Math.abs(vy) ? (vx > 0 ? "right" : "left") : vy > 0 ? "down" : "up";
       p.t += dt;
+      // 실제 이동 속도 (다른 사람 화면에서 미리 예측해 움직이도록 함께 보냄)
+      p.vx = p.vx * 0.5 + ((p.x - ox) / dt) * 0.5; p.vy = p.vy * 0.5 + ((p.y - oy) / dt) * 0.5;
       if (G.target && Math.hypot(p.x - ox, p.y - oy) < 0.01) { p.stuck = (p.stuck || 0) + dt; if (p.stuck > 0.35) { G.target = null; G.pendingZone = null; p.stuck = 0; } } else p.stuck = 0;
     }
-    // 다른 플레이어: 받은 위치까지 실제 걷는 속도로 부드럽게 이동 (뚝뚝 끊김 방지)
+    // 다른 플레이어: 마지막 위치 + 이동 속도로 "지금 있을 곳"을 예측해서 따라감 → 지연이 거의 안 느껴짐
+    const nowMs = Date.now();
     for (const o of G.others.values()) {
-      const dx = o.x - o.rx, dy = o.y - o.ry, d = Math.hypot(dx, dy);
-      if (d > 160) { o.rx = o.x; o.ry = o.y; o.walking = false; continue; }
-      const sp = Math.max(92, d * 2.2) * dt;
-      if (d <= sp) { o.rx = o.x; o.ry = o.y; } else { o.rx += (dx / d) * sp; o.ry += (dy / d) * sp; }
-      o.walking = d > 0.8;
-      if (o.walking) { o.t = (o.t || 0) + dt; o.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up"; }
+      let tx = o.x, ty = o.y;
+      const moving = !o.seat && (o.vx || o.vy);
+      if (moving) {
+        const el = Math.min(800, (o.age || 0) + (nowMs - (o.recv || nowMs))) / 1000;
+        const px = o.x + o.vx * el, py = o.y + o.vy * el;
+        if (!blockedFeet(px, py)) { tx = px; ty = py; }
+      }
+      const dx = tx - o.rx, dy = ty - o.ry, d = Math.hypot(dx, dy);
+      if (d > 160) { o.rx = tx; o.ry = ty; o.walking = false; continue; }
+      const sp = Math.max(moving ? Math.hypot(o.vx, o.vy) : 80, d * 5) * dt;
+      if (d <= sp) { o.rx = tx; o.ry = ty; } else { o.rx += (dx / d) * sp; o.ry += (dy / d) * sp; }
+      o.walking = moving || d > 1.2;
+      if (o.walking) {
+        o.t = (o.t || 0) + dt;
+        const hx = moving ? o.vx : dx, hy = moving ? o.vy : dy;
+        o.dir = Math.abs(hx) > Math.abs(hy) ? (hx > 0 ? "right" : "left") : hy > 0 ? "down" : "up";
+      }
     }
     updateNPCs(dt);
     const w = scene();
     let zone = null;
     if (G.mode === "world") for (const z of w.zones) if (p.x > z.x && p.x < z.x + z.w && p.y > z.y && p.y < z.y + z.h) { zone = z; break; }
+    // 벤치 · 테이블 좌석: 가까운 빈자리가 있으면 "앉기"
+    if (G.mode === "world" && G.seat) zone = G.standZone || (G.standZone = { id: "stand", label: t("actStand") });
+    else if (G.mode === "world" && !zone && w.seats) {
+      let best = null, bd = 26;
+      for (const st of w.seats) { const d = Math.hypot(p.x - st.ax, p.y - st.ay); if (d < bd && !seatTaken(st.id)) { bd = d; best = st; } }
+      if (best) zone = best.zone || (best.zone = { id: "seat", seat: best, label: t("actSit") });
+    }
     if (zone !== G.zone) { G.zone = zone; renderPrompt(); }
     // 카메라
     const vw = VW / S, vh = VH / S;
-    let cx = p.x - vw / 2, cy = p.y - 12 - vh / 2;
+    let cx = p.x - vw / 2, cy = p.y - 18 - vh / 2;
     // 모바일에서 채팅창이 열려 있으면 캐릭터가 가려지지 않게 카메라를 옮김
     if (IS_TOUCH && G.mode === "world") {
       if (!G.chatRectT || G.t - G.chatRectT > 400) { G.chatRectT = G.t; const c = $("#chat"); G.chatRect = c.classList.contains("collapsed") ? null : c.getBoundingClientRect(); G.hudBottom = $(".hud-top").getBoundingClientRect().bottom; }
       const r = G.chatRect;
       if (r) {
-        if (r.width > VW * 0.6) cy = p.y - 12 - (G.hudBottom + r.top) / 2 / S; // 세로 화면: 상단 메뉴와 채팅창 사이 가운데
+        if (r.width > VW * 0.6) cy = p.y - 18 - (G.hudBottom + r.top) / 2 / S; // 세로 화면: 상단 메뉴와 채팅창 사이 가운데
         else if (r.left > VW * 0.3) cx = p.x - r.left / 2 / S; // 가로 화면: 채팅창 왼쪽 공간 가운데
       }
     }
@@ -232,7 +266,7 @@
   function renderPrompt() {
     const pr = $("#prompt"), z = G.zone;
     if (!z) return pr.classList.add("hidden");
-    const act = z.id === "exit" ? "" : z.id === "profile" || z.id === "guide" ? t("actView") : t("actEnter");
+    const act = z.id === "exit" || z.id === "seat" || z.id === "stand" ? "" : z.id === "profile" || z.id === "guide" || z.id === "guestbook" ? t("actView") : t("actEnter");
     pr.innerHTML = `<kbd>E</kbd>${esc(z.label)} ${esc(act)}`;
     pr.classList.remove("hidden");
   }
@@ -254,17 +288,22 @@
     const list = [];
     for (const o of w.objects) if (o.y > vy0 && o.y < vy1 + 120 && o.x > vx0 - 200 && o.x < vx1) list.push(o);
     const chars = [];
-    if (w.artist) chars.push({ y: w.artist.y, x: w.artist.x, name: L(CFG.artist.name) + " ♪", av: ARTIST_LOOK, dir: "down", frame: 0, crown: true, artist: true, bobby: true });
-    if (G.scene === "plaza") for (const n of G.npcs) chars.push({ x: n.x, y: n.y, name: t("npc")[n.i], av: n.av, dir: n.dir, frame: frameOf(n.moving, n.t), npc: true });
-    for (const o of G.others.values()) chars.push({ x: o.rx, y: o.ry, name: o.name, av: o.avatar, dir: o.dir || "down", frame: frameOf(o.walking, o.t || 0), crown: o.role === "artist", id: o.id, artist: o.role === "artist" });
-    if (G.mode === "world") chars.push({ x: G.player.x, y: G.player.y, name: G.user.nickname, av: G.user.avatar, dir: G.player.dir, frame: frameOf(G.player.moving, G.player.t), crown: G.user.role === "artist", me: true, id: G.user.id, artist: G.user.role === "artist" });
+    if (w.artist) chars.push({ y: w.artist.y, x: w.artist.x, name: L(CFG.artist.name) + " ♪", av: ARTIST_LOOK, dir: "down", frame: 0, crown: true, artist: true, bobby: true, keytar: true });
+    if (G.scene === "plaza") for (const n of G.npcs) chars.push({ x: n.x, y: n.y, name: t("npc")[n.i], av: n.av, dir: n.dir, frame: frameOf(n.moving, n.t), npc: n });
+    const seatMap = w.seats ? Object.fromEntries(w.seats.map((st) => [st.id, st])) : {};
+    for (const o of G.others.values()) {
+      const st = o.seat && seatMap[o.seat];
+      if (st) { o.rx = o.x = st.x; o.ry = o.y = st.y; }
+      chars.push({ x: o.rx, y: o.ry, name: o.name, av: o.avatar, dir: st ? st.dir : o.dir || "down", frame: frameOf(o.walking, o.t || 0), crown: o.role === "artist", id: o.id, artist: o.role === "artist", sit: !!st });
+    }
+    if (G.mode === "world") chars.push({ x: G.player.x, y: G.player.y, name: G.user.nickname, av: G.user.avatar, dir: G.player.dir, frame: frameOf(G.player.moving, G.player.t), crown: G.user.role === "artist", me: true, id: G.user.id, artist: G.user.role === "artist", sit: !!G.seat });
     for (const c of chars) list.push({ y: c.y, char: c });
     list.sort((a, b) => a.y - b.y);
     for (const o of list) {
       if (o.char) {
         const c = o.char;
         if (c.artist) drawAura(c.x, c.y, G.t);
-        Avatar.draw(ctx, c.av, c.x, c.y, c.dir, c.bobby ? Math.floor(G.t / 500) % 2 : c.frame, { crown: false });
+        Avatar.draw(ctx, c.av, c.x, c.y, c.dir, c.bobby ? (Math.floor(G.t / 500) % 2 ? 1 : 0) : c.frame, { keytar: c.keytar, sit: c.sit });
         if (c.artist) drawSparkles(c.x, c.y, G.t);
       } else o.draw(ctx, G.t);
     }
@@ -272,6 +311,14 @@
 
     // ---- 화면 해상도 오버레이 (이름표, 말풍선, 아이콘) ----
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // 입체감용 화면 조명: 왼쪽 위는 밝게, 가장자리는 살짝 어둡게
+    if (!G.vig || G.vigW !== VW || G.vigH !== VH) {
+      G.vigW = VW; G.vigH = VH;
+      const v = ctx.createRadialGradient(VW * 0.42, VH * 0.4, Math.min(VW, VH) * 0.25, VW * 0.5, VH * 0.5, Math.max(VW, VH) * 0.75);
+      v.addColorStop(0, "rgba(255,245,225,0.06)"); v.addColorStop(0.6, "rgba(0,0,0,0)"); v.addColorStop(1, "rgba(35,15,50,0.30)");
+      G.vig = v;
+    }
+    ctx.fillStyle = G.vig; ctx.fillRect(0, 0, VW, VH);
     const sx = (x) => (x - G.cam.x) * S, sy = (y) => (y - G.cam.y) * S;
     for (const ic of w.icons) {
       const X = sx(ic.x), Y = sy(ic.y) - 16 - Math.sin(G.t / 300) * 4;
@@ -280,9 +327,10 @@
       ctx.font = `16px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(ic.icon, X, Y + 1);
     }
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    for (const sg of w.signs || []) drawBubble(sx(sg.x), sy(sg.y) - 22 - Math.sin(G.t / 280) * 3, t(sg.key), "#fff3a8");
     const now = Date.now();
     for (const c of chars) {
-      const X = sx(c.x), Y = sy(c.y - 29);
+      const X = sx(c.x), Y = sy(c.y - (c.sit ? 33 : 42));
       ctx.font = `${c.me || c.artist ? "bold " : ""}12px ${FONT}`;
       const tw = ctx.measureText(c.artist ? "✦ " + c.name : c.name).width + 10;
       ctx.fillStyle = c.artist ? "rgba(40,130,230,.95)" : c.me ? "rgba(58,37,48,.85)" : c.npc ? "rgba(79,195,176,.85)" : "rgba(58,37,48,.6)";
@@ -291,6 +339,7 @@
       const b = c.id && G.bubbles.get(c.id);
       if (b && b.until > now) drawBubble(X, Y - 14, msgText(b.m));
       if (c.artist && !c.id && G.scene === "plaza" && Math.floor(G.t / 4000) % 3 === 0) drawBubble(X, Y - 14, t("artistHello"));
+      if (c.npc && c.npc.say && c.npc.sayUntil > G.t) drawBubble(X, Y - 14, c.npc.say);
     }
     if (G.mode === "world" && G.t - (G.mmT || 0) > 120) { G.mmT = G.t; drawMinimapFrame(); } // 지도는 초당 8번만 (폰 부담 줄이기)
   }
@@ -299,18 +348,18 @@
     const pulse = 0.75 + Math.sin(tt / 380) * 0.25;
     ctx.save();
     // 푸른 후광 (밝은 바닥에서도 잘 보이도록 진한 파랑 → 투명)
-    const R = 30 * pulse + 6;
-    const g = ctx.createRadialGradient(x, y - 12, 3, x, y - 12, R);
+    const R = 34 * pulse + 8;
+    const g = ctx.createRadialGradient(x, y - 18, 3, x, y - 18, R);
     g.addColorStop(0, "rgba(120,215,255,.75)");
     g.addColorStop(0.5, "rgba(60,150,255,.38)");
     g.addColorStop(1, "rgba(40,110,255,0)");
     ctx.fillStyle = g;
-    ctx.beginPath(); ctx.ellipse(x, y - 12, R * 0.8, R, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x, y - 18, R * 0.8, R * 1.05, 0, 0, Math.PI * 2); ctx.fill();
     // 위로 올라가는 빛기둥
-    const g2 = ctx.createLinearGradient(0, y - 56, 0, y);
+    const g2 = ctx.createLinearGradient(0, y - 66, 0, y);
     g2.addColorStop(0, "rgba(140,225,255,0)");
     g2.addColorStop(1, `rgba(140,225,255,${0.35 * pulse})`);
-    ctx.fillStyle = g2; ctx.fillRect(x - 7, y - 56, 14, 56);
+    ctx.fillStyle = g2; ctx.fillRect(x - 8, y - 66, 16, 66);
     // 발밑 빛 고리
     ctx.fillStyle = `rgba(80,190,255,${0.55 + 0.35 * pulse})`;
     for (let i = -11; i <= 11; i++) { const h = Math.round(Math.sqrt(121 - i * i) / 3); ctx.fillRect(x + i, y - h + 1, 1, 1); ctx.fillRect(x + i, y + h + 1, 1, 1); }
@@ -320,8 +369,8 @@
     ctx.save();
     for (let i = 0; i < 6; i++) {
       const a = tt / 700 + (i * Math.PI) / 3;
-      const r = 13 + Math.sin(tt / 300 + i) * 2;
-      const sx = Math.round(x + Math.cos(a) * r), sy = Math.round(y - 12 + Math.sin(a) * r * 0.8 - ((tt / 25 + i * 9) % 18) * 0.3);
+      const r = 15 + Math.sin(tt / 300 + i) * 2;
+      const sx = Math.round(x + Math.cos(a) * r), sy = Math.round(y - 18 + Math.sin(a) * r * 1.1 - ((tt / 25 + i * 9) % 18) * 0.3);
       const on = (Math.floor(tt / 160) + i) % 3;
       ctx.fillStyle = on === 0 ? "#ffffff" : on === 1 ? "#9fe8ff" : "#5fb8ff";
       ctx.fillRect(sx, sy, 1, 1);
@@ -330,14 +379,14 @@
     ctx.restore();
   }
   const wrapCache = new Map();
-  function drawBubble(X, Y, text) {
+  function drawBubble(X, Y, text, bg) {
     ctx.font = `12px ${FONT}`;
     let lines = wrapCache.get(text);
     if (!lines) { lines = wrapPx(text, 150).slice(0, 3); if (wrapCache.size > 200) wrapCache.clear(); wrapCache.set(text, lines); }
     const w = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 16, h = lines.length * 16 + 8;
     const x = X - w / 2, y = Y - h;
     ctx.fillStyle = "#3a2530"; ctx.fillRect(x - 2, y - 2, w + 4, h + 4); ctx.fillRect(X - 4, Y, 8, 6);
-    ctx.fillStyle = "#fff"; ctx.fillRect(x, y, w, h); ctx.fillRect(X - 2, Y, 4, 4);
+    ctx.fillStyle = bg || "#fff"; ctx.fillRect(x, y, w, h); ctx.fillRect(X - 2, Y, 4, 4);
     ctx.fillStyle = "#3a2530"; lines.forEach((l, i) => ctx.fillText(l, X, y + 12 + i * 16));
   }
   // 말풍선 줄바꿈 (영어는 단어 단위, 한/일은 글자 단위)
@@ -391,18 +440,38 @@
     if (G.mode !== "world" || G.modalOpen) return;
     if (G.zone) runZone(G.zone.id);
   }
+  function seatTaken(id) { for (const o of G.others.values()) if (o.seat === id) return true; return false; }
+  function sitDown(st) {
+    if (seatTaken(st.id)) return;
+    G.seat = st.id; G.seatObj = st; G.target = null; G.pendingZone = null;
+    G.player.x = st.x; G.player.y = st.y; G.player.dir = st.dir; G.player.moving = false;
+    G.zone = null; kickSync();
+  }
+  function standUp() {
+    const st = G.seatObj; G.seat = null; G.seatObj = null;
+    if (st) { G.player.x = st.ax; G.player.y = st.ay; }
+    G.zone = null; kickSync();
+  }
   async function runZone(id) {
+    if (id === "seat" && G.zone && G.zone.seat) return sitDown(G.zone.seat);
+    if (id === "stand") return standUp();
+    if (id === "guestbook") return openGuestbook();
     if (id === "gallery") return openGallery();
     if (id === "albums") return openAlbums();
     if (id === "cinema") return openCinema();
     if (id === "profile") return openProfile();
     if (id === "guide") return openGuide();
+    if (id === "shop") return openShop();
+    if (id === "game") return openGame();
     if (id === "lounge") { await fade(true); setScene("lounge"); await fade(false); toast(t("enteredLounge")); return; }
     if (id === "exit") { const b = G.worlds.plaza.buildings.find((x) => x.id === "lounge"); await fade(true); setScene("plaza", { x: b.door.x, y: b.door.y + 22, dir: "down" }); await fade(false); }
   }
 
   // ---------------- 모달 콘텐츠 ----------------
-  function openModal(title, html, onMount) {
+  function openModal(title, html, onMount, wide) {
+    if (G.modalCleanup) { const f = G.modalCleanup; G.modalCleanup = null; try { f(); } catch {} }
+    document.querySelector("#modal .modal").classList.toggle("wide", !!wide);
+    document.querySelector("#modal .modal").classList.remove("game");
     $("#modal-close-big").textContent = t("close");
     $("#modal-title").textContent = title;
     $("#modal-body").innerHTML = html;
@@ -411,7 +480,10 @@
     G.modalOpen = true; G.keys.clear(); G.joy.x = G.joy.y = 0;
     onMount && onMount($("#modal-body"));
   }
-  function closeModal() { $("#modal").classList.add("hidden"); $("#modal-body").innerHTML = ""; G.modalOpen = false; }
+  function closeModal() {
+    if (G.modalCleanup) { const f = G.modalCleanup; G.modalCleanup = null; try { f(); } catch {} }
+    $("#modal").classList.add("hidden"); $("#modal-body").innerHTML = ""; G.modalOpen = false;
+  }
   $("#modal-close").addEventListener("click", closeModal);
   $("#modal-close-big").addEventListener("click", closeModal);
   $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
@@ -432,13 +504,23 @@
   }
   function openGalleryAt(i) { openGallery(); $("#modal-body").querySelector(`.polaroid[data-i="${i}"]`).click(); }
   function openAlbums() {
-    const html = `<p style="margin-top:0">${esc(t("albumsIntro"))}</p>` + CFG.albums.map((a) => `
-      <div class="album"><img src="${esc(a.cover)}" alt=""><div>
-        <span class="tag">${esc(L(a.type))}</span>
-        <h3>${esc(L(a.title))}</h3><p style="margin:0;line-height:1.6">${esc(L(a.desc))}</p>
-        ${a.tracks && a.tracks.length ? `<ol>${a.tracks.map((tr) => `<li>${esc(L(tr))}</li>`).join("")}</ol>` : ""}
-        ${a.link ? `<p><a class="btn sm pink" href="${esc(a.link)}" target="_blank" rel="noopener">${esc(t("listen"))}</a></p>` : ""}
-      </div><div class="yr">${esc(a.year)}</div></div>`).join("");
+    const meta = (k, v) => (v ? `<div><span>${esc(t(k))}</span><b>${esc(L(v))}</b></div>` : "");
+    const html = `<p style="margin-top:0">${esc(t("albumsIntro"))}</p>` + CFG.albums.map((a, i) => `
+      <div class="album">
+        <div class="album-top">
+          <img src="${esc(a.cover)}" alt="" class="cover">
+          <div class="album-info">
+            <span class="tag">${esc(L(a.type))}</span>
+            <h3>${esc(L(a.title))}</h3>
+            <div class="artist-line">Jo Jelly</div>
+            <div class="meta">${meta("albRelease", a.date || a.year)}${meta("albGenre", a.genre)}${meta("albLabel", a.label)}${meta("albAgency", a.agency)}</div>
+            ${a.link ? `<a class="btn sm pink" href="${esc(a.link)}" target="_blank" rel="noopener">${esc(t("listen"))}</a>` : ""}
+          </div>
+        </div>
+        ${a.tracks && a.tracks.length ? `<h4>${esc(t("albTracks"))}</h4><ol class="tracks">${a.tracks.map((tr) => `<li>${esc(L(tr))}</li>`).join("")}</ol>` : ""}
+        ${a.desc ? `<h4>${esc(t("albAbout"))}</h4><p class="desc">${esc(L(a.desc)).replace(/\n/g, "<br>")}</p>` : ""}
+        ${a.credits && a.credits.length ? `<details class="credits"${i === 0 ? "" : ""}><summary>${esc(t("albCredits"))}</summary><dl>${a.credits.map(([r, n]) => `<dt>${esc(r)}</dt><dd>${esc(n)}</dd>`).join("")}</dl></details>` : ""}
+      </div>`).join("");
     openModal("💿 " + t("bAlbums"), html);
   }
   function openCinema(idx = 0) {
@@ -462,10 +544,173 @@
     </div></div>`;
     openModal("🎹 " + t("zProfile"), html, (el) => el.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => runZone(b.dataset.go))));
   }
+  // ---------------- 젤리코인 ----------------
+  const SHOP = window.JELLY_SHOP || [];
+  const isHost = () => !!(G.user && G.user.role === "artist");
+  const owns = (it) => isHost() || !!(G.user && (G.user.inv || []).includes(it.id));
+  const shopItem = (kind, idx) => SHOP.find((x) => x.kind === kind && x.idx === idx);
+  const kstDay = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  function setUser(u) { if (!u) return; G.user = { ...G.user, ...u }; refreshMe(); }
+  function renderCoins() {
+    const el = $("#coin-pill"); if (!el || !G.user) return;
+    const n = G.user.coins | 0, old = +el.dataset.n || 0;
+    el.textContent = "🪙 " + n.toLocaleString();
+    if (n > old && el.dataset.n !== undefined) { el.classList.remove("bump"); void el.offsetWidth; el.classList.add("bump"); }
+    el.dataset.n = n;
+    const sc = $("#shop-coins"); if (sc) sc.textContent = n.toLocaleString();
+  }
+  let dailyBusy = false;
+  async function checkDaily() {
+    if (!G.user || G.mode !== "world" || dailyBusy) return;
+    if (G.user.daily === kstDay() && G.user.welcomedChecked) return;
+    dailyBusy = true;
+    try {
+      const r = await API.daily();
+      setUser(r.user); G.user.welcomedChecked = true;
+      const msgs = [];
+      if (r.gained && r.gained.welcome) msgs.push(t("coinWelcome", { n: r.gained.welcome }));
+      if (r.gained && r.gained.daily) msgs.push(t("coinDaily", { n: r.gained.daily }));
+      msgs.forEach((m, i) => setTimeout(() => toast(m), 2600 + i * 2500));
+    } catch {} finally { dailyBusy = false; }
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && G.user && G.user.daily !== kstDay()) checkDaily(); });
+  $("#coin-pill").addEventListener("click", () => toast(`🪙 ${t("myCoins")}: ${(G.user.coins | 0).toLocaleString()}`));
+
+  // ---------------- 🛍️ 젤리젤리샵 ----------------
+  let shopTab = "all";
+  function previewAv(it) {
+    const av = { ...(G.user.avatar || Avatar.random()) };
+    av[it.kind] = it.idx;
+    if (it.kind === "outfit" && av.wand) av.wand = av.wand; // 마법봉은 그대로
+    return av;
+  }
+  function openShop() {
+    const html = `<div class="shop-top"><div class="coin-big">🪙 <b id="shop-coins">${(G.user.coins | 0).toLocaleString()}</b> <small>${esc(t("coinName"))}</small></div>
+      <p>${esc(t("shopIntro"))}</p><p class="shop-how">${esc(t("shopHow"))}</p></div>
+      <div class="chips shop-tabs">${["all", "hair", "outfit", "wand"].map((k) => `<button class="chip ${k === shopTab ? "on" : ""}" data-k="${k}">${esc(t({ all: "kAll", hair: "kHair", outfit: "kOutfit", wand: "kWand" }[k]))}</button>`).join("")}</div>
+      <div class="shop-grid" id="shop-grid"></div>`;
+    openModal("🛍️ " + t("bShop"), html, (el) => {
+      el.querySelectorAll(".shop-tabs .chip").forEach((b) => b.addEventListener("click", () => { shopTab = b.dataset.k; el.querySelectorAll(".shop-tabs .chip").forEach((x) => x.classList.toggle("on", x === b)); renderShop(); }));
+      renderShop();
+    }, true);
+  }
+  function renderShop() {
+    const grid = $("#shop-grid"); if (!grid) return;
+    const av = G.user.avatar || {};
+    const list = SHOP.filter((it) => shopTab === "all" || it.kind === shopTab);
+    grid.innerHTML = list.map((it) => {
+      const own = owns(it), on = (av[it.kind] | 0) === it.idx;
+      const tier = it.price >= 12000 ? "t4" : it.price >= 5000 ? "t3" : it.price >= 1200 ? "t2" : "t1";
+      const btn = !own ? `<button class="btn sm pink buy ${(G.user.coins | 0) < it.price ? "poor" : ""}" data-act="buy">🪙 ${it.price.toLocaleString()} ${esc(t("buy"))}</button>`
+        : on ? (it.kind === "wand" ? `<button class="btn sm" data-act="off">${esc(t("unequip"))}</button>` : `<button class="btn sm on" disabled>${esc(t("equipped"))}</button>`)
+        : `<button class="btn sm grape" data-act="wear">${esc(t("equip"))}</button>`;
+      return `<div class="shop-item ${tier}${own ? " own" : ""}" data-id="${it.id}">
+        <span class="kind">${esc(t({ hair: "kHair", outfit: "kOutfit", wand: "kWand" }[it.kind]))}</span>${own ? `<span class="owned">${esc(t("owned"))}</span>` : ""}
+        <canvas width="96" height="96"></canvas><b>${esc(L(it.name))}</b><span class="price">🪙 ${it.price.toLocaleString()}</span>${btn}</div>`;
+    }).join("");
+    grid.querySelectorAll(".shop-item").forEach((card) => {
+      const it = SHOP.find((x) => x.id === card.dataset.id);
+      const c = card.querySelector("canvas"), x = c.getContext("2d");
+      x.imageSmoothingEnabled = false;
+      const pv = previewAv(it);
+      let dirI = 0;
+      const drawPv = () => { x.clearRect(0, 0, 96, 96); x.drawImage(Avatar.sprite(pv, ["down", "right", "up", "left"][dirI % 4], 0), 0, 0, 96, 96); };
+      drawPv();
+      c.addEventListener("click", () => { dirI++; drawPv(); });
+      const b = card.querySelector("[data-act]");
+      if (!b) return;
+      b.addEventListener("click", async () => {
+        const act = b.dataset.act;
+        if (act === "buy") {
+          if ((G.user.coins | 0) < it.price) return toast(t("e_coins"));
+          if (!b.classList.contains("sure")) { b.classList.add("sure"); b.textContent = t("buySure") + " 🪙" + it.price.toLocaleString(); setTimeout(() => { if (b.isConnected && b.classList.contains("sure")) { b.classList.remove("sure"); b.textContent = `🪙 ${it.price.toLocaleString()} ${t("buy")}`; } }, 3500); return; }
+          b.disabled = true;
+          try { const r = await API.buy(it.id); setUser(r.user); toast(t("bought", { name: L(it.name) })); await wear(it); }
+          catch (e) { toast(e.message); }
+          renderShop();
+          return;
+        }
+        b.disabled = true;
+        try { await wear(it, act === "off"); } catch (e) { toast(e.message); }
+        renderShop();
+      });
+    });
+  }
+  async function wear(it, off) {
+    const av = { ...(G.user.avatar || Avatar.random()) };
+    av[it.kind] = off ? 0 : it.idx;
+    const u = await API.saveAvatar(G.user.nickname, av);
+    setUser(u); kickSync();
+    if (!off) toast(t("wearing", { name: L(it.name) }));
+  }
+
+  // ---------------- 🎮 젤리게임월드: 점프점프 젤리월드 ----------------
+  function openGame() {
+    G.gameOpen = true;
+    BGM.play("minigame");
+    openModal("🎮 " + t("gameTitle"), `<div id="jg-root"></div>`, (el) => {
+      const g = JumpGame.mount(el.querySelector("#jg-root"), {
+        t, avatar: () => G.user.avatar,
+        onStart: () => API.gameStart(),
+        onFinish: async (run, m) => { const r = await API.gameFinish(run, m); if (r.user) setUser(r.user); return r; },
+      });
+      G.modalCleanup = () => { g.destroy(); G.gameOpen = false; BGM.play(G.scene); };
+    }, true);
+    document.querySelector("#modal .modal").classList.add("game");
+  }
+
+  // ---------------- 방명록 ----------------
+  const fmtTime = (ts) => { const d = new Date(ts), z = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}.${z(d.getMonth() + 1)}.${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`; };
+  async function openGuestbook(page = 0) {
+    openModal("📖 " + t("gbTitle"), `<div class="gb-write"><h3>${esc(t("gbWriteTitle"))}</h3><p>${esc(t("gbIntro"))}</p>
+      <form class="gb-form" id="gb-form"><textarea id="gb-text" maxlength="300" rows="4" placeholder="${esc(t("gbPh"))}"></textarea>
+      <div class="gb-row"><span id="gb-count">0/300</span><button class="btn pink" type="submit">${esc(t("gbWrite"))}</button></div><div class="err" id="gb-err"></div></form></div>
+      <h3 class="gb-list-title">${esc(t("gbListTitle"))}</h3>
+      <div class="gb-list" id="gb-list"><p class="gb-empty">…</p></div><div class="gb-pager" id="gb-pager"></div>`, (el) => {
+      const ta = el.querySelector("#gb-text");
+      ta.addEventListener("input", () => (el.querySelector("#gb-count").textContent = ta.value.length + "/300"));
+      el.querySelector("#gb-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const text = ta.value.trim(); if (!text) return;
+        const btn = e.target.querySelector("button"); btn.disabled = true;
+        try { const r = await API.gbWrite(text); if (r.user) setUser(r.user); if (r.coins) setTimeout(() => toast(t("coinGb", { n: r.coins })), 900); ta.value = ""; el.querySelector("#gb-count").textContent = "0/300"; toast(t("gbDone")); loadGb(0); }
+        catch (err) { el.querySelector("#gb-err").textContent = err.message; }
+        finally { btn.disabled = false; }
+      });
+      loadGb(page);
+    }, true);
+  }
+  async function loadGb(page) {
+    const list = $("#gb-list"), pager = $("#gb-pager");
+    if (!list) return;
+    try {
+      const r = await API.gbList(page);
+      if (!r.entries.length) { list.innerHTML = `<p class="gb-empty">${esc(t("gbEmpty"))}</p>`; pager.innerHTML = ""; return; }
+      list.innerHTML = `<div class="gb-head"><span>${esc(t("gbNo"))}</span><span>${esc(t("gbWriter"))}</span><span>${esc(t("gbContent"))}</span><span>${esc(t("gbDate"))}</span></div>` +
+        r.entries.map((e, i) => `<div class="gb-item${e.role === "artist" ? " host" : ""}" data-key="${esc(e.key)}">
+          <span class="no">${r.total - page * 20 - i}</span>
+          <span class="who"><canvas width="32" height="26" data-av='${esc(JSON.stringify(e.avatar || null))}'></canvas><b>${e.role === "artist" ? "✦ " : ""}${esc(e.name)}</b></span>
+          <span class="txt">${esc(e.text).replace(/\n/g, "<br>")}</span>
+          <span class="when">${fmtTime(e.ts)}${G.user && (G.user.role === "artist" || G.user.id === e.id) ? ` <button class="gb-del" title="${esc(t("del"))}">✕</button>` : ""}</span></div>`).join("");
+      list.querySelectorAll("canvas[data-av]").forEach((c) => { try { const av = JSON.parse(c.dataset.av); const x = c.getContext("2d"); x.imageSmoothingEnabled = false; Avatar.face(x, av, 32, 26); } catch {} });
+      list.querySelectorAll(".gb-del").forEach((b) => b.addEventListener("click", async () => {
+        const key = b.closest(".gb-item").dataset.key;
+        try { await API.gbDelete(key); loadGb(page); } catch (e) { toast(e.message); }
+      }));
+      const pages = Math.ceil(r.total / 20);
+      pager.innerHTML = pages > 1 ? Array.from({ length: pages }, (_, i) => `<button class="chip ${i === page ? "on" : ""}" data-p="${i}">${i + 1}</button>`).join("") : "";
+      pager.querySelectorAll("[data-p]").forEach((b) => b.addEventListener("click", () => loadGb(+b.dataset.p)));
+    } catch (e) { list.innerHTML = `<p class="gb-empty">${esc(e.message)}</p>`; }
+  }
+
   function openGuide() {
     openModal(t("guideTitle"), `<ul class="guide">${t("guide").map((g) => `<li>${g}</li>`).join("")}</ul>`);
   }
   $("#btn-help").addEventListener("click", openGuide);
+  function bgmBtn() { $("#btn-bgm").textContent = BGM.on ? "🔊" : "🔇"; $("#btn-bgm").title = t("bgm"); }
+  $("#btn-bgm").addEventListener("click", () => { BGM.toggle(); bgmBtn(); });
+  bgmBtn();
+  $("#btn-gb").addEventListener("click", () => openGuestbook());
 
   // ---------------- 언어 ----------------
   function langButtons(el, current, onPick) {
@@ -494,6 +739,11 @@
   let signupLang = I.lang;
   function renderTitleLang() {
     langButtons($("#lang-top"), I.lang, (l) => { signupLang = l; applyLang(l); });
+    // 로그인 화면 배경음악 켜기/끄기
+    const tb = document.createElement("button");
+    tb.type = "button"; tb.className = "chip bgm-title"; tb.textContent = BGM.on ? "🔊" : "🔇"; tb.title = t("bgm");
+    tb.addEventListener("click", () => { BGM.toggle(); tb.textContent = BGM.on ? "🔊" : "🔇"; bgmBtn(); });
+    $("#lang-top").appendChild(tb);
     langButtons($("#lang-pick"), signupLang, (l) => { signupLang = l; applyLang(l); });
   }
   $("#btn-lang").addEventListener("click", () => {
@@ -512,8 +762,11 @@
   let syncBusy = false, syncTimer = null, lastSync = 0, lastSent = "";
   function nextSyncDelay() {
     if (document.hidden) return 15000;
-    const active = G.player.moving || G.others.size > 0 || Date.now() - G.lastInput < 4000;
-    return active ? 900 : 5000;
+    let othersMoving = false;
+    for (const o of G.others.values()) if (o.vx || o.vy) { othersMoving = true; break; }
+    if (G.player.moving || othersMoving) return 450;              // 누군가 움직이는 중: 빠르게
+    if (G.others.size > 0 || Date.now() - G.lastInput < 4000) return 1200; // 주변에 사람만 있을 때
+    return 5000;                                                   // 혼자 가만히: 드물게
   }
   function scheduleSync(ms) { clearTimeout(syncTimer); syncTimer = setTimeout(doSync, ms ?? nextSyncDelay()); }
   function kickSync() { if (Date.now() - lastSync > 250) scheduleSync(0); }
@@ -522,9 +775,9 @@
     syncBusy = true; lastSync = Date.now();
     const room = G.scene;
     try {
-      const r = await API.sync({ scene: room, x: Math.round(G.player.x), y: Math.round(G.player.y), dir: G.player.dir, since: G.chat.since });
+      const r = await API.sync({ scene: room, x: Math.round(G.player.x), y: Math.round(G.player.y), dir: G.player.dir, seat: G.seat, vx: Math.round(G.player.vx || 0), vy: Math.round(G.player.vy || 0), since: G.chat.since });
       if (room !== G.scene) return;
-      applyOthers(r.others || []);
+      applyOthers(r.others || [], r.now);
       if (!API.demo) { G.online = r.online || 1; $("#online").textContent = t("online", { n: G.online }); }
       applyChat(r.messages || [], r.notice);
     } catch (e) {
@@ -533,17 +786,27 @@
       }
     } finally { syncBusy = false; scheduleSync(); }
   }
-  function applyOthers(list) {
+  function applyOthers(list, serverNow) {
     const now = Date.now();
     for (const o of list) {
       const ex = G.others.get(o.id);
-      if (ex) Object.assign(ex, { x: o.x, y: o.y, dir: o.dir, name: o.name, avatar: o.avatar, role: o.role, seen: now });
-      else G.others.set(o.id, { ...o, rx: o.x, ry: o.y, seen: now });
+      const upd = { x: o.x, y: o.y, dir: o.dir, name: o.name, avatar: o.avatar, role: o.role, seat: o.seat || null,
+        vx: o.vx || 0, vy: o.vy || 0, age: serverNow ? Math.max(0, serverNow - o.ts) : 0, recv: now, seen: now };
+      if (ex) Object.assign(ex, upd);
+      else G.others.set(o.id, { ...upd, id: o.id, rx: o.x, ry: o.y });
     }
     // 잠깐 응답에서 빠져도 바로 사라지지 않게 8초 유지 (깜빡임 방지)
     for (const [id, o] of G.others) if (now - o.seen > 8000) G.others.delete(id);
   }
   document.addEventListener("visibilitychange", () => { if (!document.hidden) kickSync(); });
+  // 채팅은 5분이 지나면 화면에서 사라짐
+  const CHAT_TTL = 5 * 60 * 1000;
+  setInterval(() => {
+    const cut = Date.now() - CHAT_TTL;
+    const keep = [];
+    for (const m of G.chat.msgs) { if (m.ts < cut && !m.pending) { m.el && m.el.remove(); } else keep.push(m); }
+    G.chat.msgs = keep;
+  }, 10000);
 
   // ---------------- 채팅 (광장 / 팬 라운지, 자동 번역) ----------------
   function resetChat() {
@@ -559,6 +822,7 @@
     const first = G.chat.since === 0;
     for (const m of messages) {
       G.chat.since = Math.max(G.chat.since, m.ts);
+      if (m.ts < Date.now() - CHAT_TTL) continue;
       if (G.chat.seen.has(m.key)) continue;
       G.chat.seen.add(m.key);
       // 내가 보낸 메시지(이미 화면에 먼저 표시됨)면 번역본으로 교체만
@@ -665,17 +929,39 @@
   }
   function renderCreator() {
     chipRow("gender", [{ v: "f", name: t("female") }, { v: "m", name: t("male") }], "gender");
-    chipRow("hair", t("hairs").map((n) => ({ name: n })), "hair");
+    const shopName = (kind, i) => { const it = shopItem(kind, i); return it ? L(it.name) : ""; };
+    chipRow("hair", Avatar.HAIRS.map((_, i) => ({ name: t("hairs")[i] || shopName("hair", i) })), "hair");
+    if (draft.avatar.wand === undefined) draft.avatar.wand = 0;
+    chipRow("wand", Avatar.WANDS.map((_, i) => ({ name: i ? shopName("wand", i) : t("wandNone") })), "wand");
+    chipRow("eye", Avatar.EYES.map((c, i) => ({ c, name: t("eyes")[i] })), "eye", "sw");
     chipRow("hairColor", Avatar.HAIR_COLORS.map((c, i) => ({ ...c, name: t("hairColors")[i] })), "hairColor", "sw");
     chipRow("skin", Avatar.SKINS.map((c, i) => ({ ...c, name: t("skins")[i] })), "skin", "sw");
-    chipRow("outfit", Avatar.OUTFITS.map((o, i) => ({ name: t("outfits")[i] || o.name, col: o.top === "#f7f4ff" || o.top === "#fff3f6" ? o.bot : o.top })), "outfit");
+    const isHost = G.user && G.user.role === "artist";
+    const outs = Avatar.OUTFITS.map((o, i) => ({ i, name: t("outfits")[i] || shopName("outfit", i) || o.id, col: o.overall || (o.top === "#f7f5ff" ? o.skirt : o.top), host: !!o.host }));
+    chipRow("outfit", outs, "outfit");
+    // 호스트 전용 의상: 호스트가 아니면 잠금 표시
+    $("#o-outfit").querySelectorAll(".chip").forEach((el, idx) => {
+      if (!outs[idx].host) return;
+      el.classList.add("host-only"); el.insertAdjacentHTML("beforeend", `<small>${isHost ? "✦" : "🔒"} ${esc(t("hostOnly"))}</small>`);
+      if (!isHost) { el.disabled = true; el.title = t("hostOnly"); }
+    });
+    if (!isHost && outs[draft.avatar.outfit] && outs[draft.avatar.outfit].host) draft.avatar.outfit = 0;
+    // 젤리젤리샵 아이템: 산 것만 고를 수 있음
+    [["hair", "#o-hair"], ["outfit", "#o-outfit"], ["wand", "#o-wand"]].forEach(([kind, sel]) => {
+      $(sel).querySelectorAll(".chip").forEach((el, idx) => {
+        const it = shopItem(kind, idx); if (!it) return;
+        el.classList.add("shop-only");
+        if (!owns(it)) { el.disabled = true; el.title = t("shopLock"); el.insertAdjacentHTML("beforeend", `<small>🛍️ ${esc(t("shopLock"))}</small>`); if ((draft.avatar[kind] | 0) === idx) draft.avatar[kind] = 0; }
+        else el.insertAdjacentHTML("beforeend", "<small>✦</small>");
+      });
+    });
   }
   const DIRS = ["down", "right", "up", "left"];
   function drawPreview() {
     const c = $("#preview"), x = c.getContext("2d");
-    x.clearRect(0, 0, 32, 40);
+    x.clearRect(0, 0, 48, 50);
     const now = performance.now();
-    Avatar.draw(x, draft.avatar, 16, 34, DIRS[Math.floor(now / 1400) % 4], [1, 0, 3, 0][Math.floor(now / 160) % 4]);
+    Avatar.draw(x, draft.avatar, 24, 47, DIRS[Math.floor(now / 1400) % 4], [1, 0, 3, 0][Math.floor(now / 160) % 4]);
   }
   function openCreator(editing) {
     if (G.mode !== "world") G.mode = "creator";
@@ -742,9 +1028,10 @@
   function refreshMe() {
     $("#me-name").textContent = G.user.nickname + (G.user.role === "artist" ? " 👑" : "");
     const c = $("#me-face"), x = c.getContext("2d");
-    x.clearRect(0, 0, 16, 20);
-    Avatar.draw(x, G.user.avatar, 8, 22, "down", 0);
+    x.clearRect(0, 0, c.width, c.height); x.imageSmoothingEnabled = false;
+    Avatar.face(x, G.user.avatar, c.width, c.height);
     $("#chat-opts").classList.toggle("hidden", G.user.role !== "artist");
+    renderCoins();
     $("#online").textContent = API.demo ? t("demoSolo") : G.online > 1 ? t("online", { n: G.online }) : t("onlineShort");
   }
 
@@ -760,9 +1047,11 @@
     setScene("plaza");
     await fade(false);
     toast(t("welcome", { name: G.user.nickname }));
+    BGM.play(G.scene);
+    checkDaily();
   }
   function logout() {
-    API.logout(); G.user = null; G.mode = "title"; G.others.clear();
+    API.logout(); G.user = null; G.mode = "title"; G.others.clear(); BGM.play("title");
     closeModal();
     $("#hud").classList.add("hidden"); $("#creator").classList.add("hidden");
     $("#title").classList.remove("hidden");
@@ -780,7 +1069,7 @@
     requestAnimationFrame(loop);
   }
 
-  window.__jelly = { G, runZone: (z) => runZone(z) };
+  window.__jelly = { G, runZone: (z) => runZone(z), closeModal: () => closeModal() };
   // ---------------- 시작 ----------------
   (async function boot() {
     I.apply();
@@ -789,6 +1078,7 @@
     buildWorlds();
     makeNPCs();
     G.scene = "plaza"; buildMinimap();
+    BGM.play("title"); // 로그인 화면 배경음악 (첫 터치 후 재생)
     requestAnimationFrame(loop);
     const demo = await API.init();
     if (demo) $("#demo").classList.remove("hidden");

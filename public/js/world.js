@@ -11,7 +11,7 @@
   function treeSprite(variant) {
     const [c, x] = cv(34, 44);
     const greens = [["#2f6e3a", "#3f8f45", "#5cb152", "#8fd36a"], ["#2c6440", "#3b8452", "#57a862", "#86cf7c"], ["#3a6b2e", "#4f8f3a", "#6fb04b", "#a6d86a"]][variant % 3];
-    x.fillStyle = "rgba(40,30,20,.28)"; x.fillRect(5, 38, 24, 5);
+    x.fillStyle = "rgba(25,12,35,.26)"; x.beginPath(); x.ellipse(21, 40, 13, 4, 0, 0, Math.PI * 2); x.fill();
     x.fillStyle = OUT; x.fillRect(14, 26, 7, 14);
     x.fillStyle = "#8a5a3a"; x.fillRect(15, 27, 5, 12); x.fillStyle = "#6c4429"; x.fillRect(18, 27, 2, 12);
     const blob = (cx, cy, r, col) => { x.fillStyle = col; for (let yy = -r; yy <= r; yy++) { const w = Math.round(Math.sqrt(r * r - yy * yy)); x.fillRect(cx - w, cy + yy, w * 2, 1); } };
@@ -54,6 +54,62 @@
     return c;
   }
   const BENCH = benchSprite();
+
+  // ---- 앉을 수 있는 벤치 / 테이블 세트 ----
+  const WOOD = "#b8784a", WOOD2 = "#8f5a34", WOOD3 = "#d4955f";
+  function benchBack(w, withBack) { // 뒤쪽(등받이 + 앉는 판 윗면) — 캐릭터보다 먼저 그림
+    const [c, x] = cv(w, 24);
+    if (withBack) {
+      x.fillStyle = OUT; x.fillRect(3, 0, 3, 14); x.fillRect(w - 6, 0, 3, 14); x.fillRect(1, 1, w - 2, 11);
+      x.fillStyle = WOOD; x.fillRect(2, 2, w - 4, 4); x.fillRect(2, 7, w - 4, 4);
+      x.fillStyle = WOOD3; x.fillRect(2, 2, w - 4, 1); x.fillRect(2, 7, w - 4, 1);
+    }
+    x.fillStyle = OUT; x.fillRect(0, 13, w, 8);
+    x.fillStyle = WOOD; x.fillRect(1, 14, w - 2, 6); x.fillStyle = WOOD3; x.fillRect(1, 14, w - 2, 1);
+    x.fillStyle = WOOD2; x.fillRect(1, 17, w - 2, 1);
+    return c;
+  }
+  function benchFront(w) { // 앞쪽(앉는 판 앞면 + 다리) — 캐릭터 뒤에 그려서 무릎 앞을 가림
+    const [c, x] = cv(w, 12);
+    x.fillStyle = "rgba(40,30,20,.22)"; x.fillRect(2, 8, w - 2, 4);
+    x.fillStyle = OUT; x.fillRect(0, 0, w, 4); x.fillRect(3, 3, 3, 8); x.fillRect(w - 6, 3, 3, 8);
+    x.fillStyle = WOOD2; x.fillRect(1, 1, w - 2, 2);
+    x.fillStyle = "#6c4429"; x.fillRect(4, 4, 1, 6); x.fillRect(w - 5, 4, 1, 6);
+    return c;
+  }
+  function tableTop(w, h) {
+    const [c, x] = cv(w + 4, h + 10);
+    x.fillStyle = "rgba(40,30,20,.25)"; x.fillRect(4, h + 2, w, 7);
+    x.fillStyle = OUT; x.fillRect(6, h - 2, 4, 10); x.fillRect(w - 6, h - 2, 4, 10); x.fillRect(0, 0, w + 2, h + 2);
+    x.fillStyle = WOOD; x.fillRect(1, 1, w, h);
+    x.fillStyle = WOOD3; x.fillRect(1, 1, w, 2);
+    x.fillStyle = WOOD2; for (let i = 8; i < h; i += 7) x.fillRect(1, i, w, 1); x.fillRect(1, h - 1, w, 2);
+    x.fillStyle = "#fff8ea"; x.fillRect(w / 2 - 6, 5, 12, 8); x.fillStyle = "#ff8fb8"; x.fillRect(w / 2 - 3, 7, 3, 3); x.fillStyle = "#f2c14e"; x.fillRect(w / 2 + 1, 8, 3, 3);
+    return c;
+  }
+  // 2인용 벤치 (앞을 보고 앉음)
+  function addBench(objects, colliders, seats, id, bx, by) {
+    const W2 = 46, back = benchBack(W2, true), front = benchFront(W2);
+    objects.push({ y: by - 8, x: bx, draw: (c) => c.drawImage(back, bx - W2 / 2, by - 20) });
+    objects.push({ y: by + 6, x: bx, draw: (c) => c.drawImage(front, bx - W2 / 2, by) });
+    colliders.push([bx - W2 / 2, by - 12, W2, 18]);
+    seats.push({ id: id + "a", x: bx - 11, y: by + 1, dir: "down", ax: bx - 11, ay: by + 16 }, { id: id + "b", x: bx + 11, y: by + 1, dir: "down", ax: bx + 11, ay: by + 16 });
+  }
+  // 4인용 테이블 세트 (위쪽 2명은 앞을 보고, 아래쪽 2명은 뒤를 보고 앉음)
+  function addTableSet(objects, colliders, seats, id, tx, ty) {
+    const TW = 50, TH = 22, tt = tableTop(TW, TH), upB = benchBack(TW, false), upF = benchFront(TW), lowB = benchBack(TW, false);
+    objects.push({ y: ty - 26, x: tx, draw: (c) => c.drawImage(upB, tx - TW / 2, ty - 38) });
+    objects.push({ y: ty - 19, x: tx, draw: (c) => c.drawImage(upF, tx - TW / 2, ty - 20) });
+    objects.push({ y: ty + 12, x: tx, draw: (c) => c.drawImage(tt, tx - TW / 2 - 1, ty - 10) });
+    objects.push({ y: ty + 18, x: tx, draw: (c) => c.drawImage(lowB, tx - TW / 2, ty + 5) });
+    colliders.push([tx - TW / 2, ty - 30, TW, 58]);
+    seats.push(
+      { id: id + "a", x: tx - 12, y: ty - 19, dir: "down", ax: tx - 12, ay: ty - 36 },
+      { id: id + "b", x: tx + 12, y: ty - 19, dir: "down", ax: tx + 12, ay: ty - 36 },
+      { id: id + "c", x: tx - 12, y: ty + 23, dir: "up", ax: tx - 12, ay: ty + 36 },
+      { id: id + "d", x: tx + 12, y: ty + 23, dir: "up", ax: tx + 12, ay: ty + 36 },
+    );
+  }
 
   function flowerPot(col) {
     const [c, x] = cv(14, 16);
@@ -102,6 +158,15 @@
     for (let i = 0; i < W; i += 12) { x.fillStyle = OUT; x.fillRect(i + 1, wallTop + 4, 12, 4); x.fillStyle = b.roof; x.fillRect(i + 2, wallTop + 4, 10, 3); }
     x.fillStyle = OUT; x.fillRect(W / 2 - 8, 0, 20, rt + 2); x.fillStyle = b.roof; x.fillRect(W / 2 - 7, 1, 18, rt);
     x.fillStyle = "#fff"; x.fillRect(W / 2 - 4, 2, 4, 2);
+    // 가게별 장식
+    if (b.deco === "shop") { // 줄무늬 차양 + 진열창 속 옷
+      for (let i = 0; i < W - 4; i += 8) { x.fillStyle = OUT; x.fillRect(4 + i, winY - 8, 8, 8); x.fillStyle = (i / 8) % 2 ? "#ffffff" : "#ff7fae"; x.fillRect(5 + i, winY - 7, 7, 6); }
+      [[14, "#a77ce0"], [W - 32, "#ffd34d"]].forEach(([wx, col]) => { x.fillStyle = col; x.fillRect(wx + 5, winY + 6, 8, 10); x.fillStyle = "#ffffff"; x.fillRect(wx + 7, winY + 6, 4, 2); });
+    }
+    if (b.deco === "game") { // 네온 조이스틱 + 별
+      x.fillStyle = OUT; x.fillRect(W - 30, winY - 10, 22, 8); x.fillStyle = "#ff7fae"; x.fillRect(W - 29, winY - 9, 20, 6); x.fillStyle = "#fff3a8"; x.fillRect(W - 26, winY - 8, 3, 3); x.fillRect(W - 18, winY - 8, 3, 3);
+      [[16, winY - 8], [30, winY - 11], [44, winY - 7]].forEach(([sx0, sy0], k) => { x.fillStyle = ["#fff3a8", "#9fe8ff", "#ff9fc8"][k]; x.fillRect(sx0, sy0 + 1, 5, 1); x.fillRect(sx0 + 2, sy0 - 1, 1, 5); });
+    }
     // 간판
     x.font = `11px ${FONT}`; x.textBaseline = "middle";
     const tw = Math.ceil(x.measureText(b.name).width) + 14;
@@ -119,10 +184,12 @@
     const CX = 640, CY = 500;
     const gardens = [[420, 380], [860, 380], [420, 650], [860, 650]];
     const buildings = [
-      { id: "gallery", name: T("bGallery"), x: 250, y: 118, w: 190, h: 130, roof: "#ff7fae", wall: "#fff4e2", trim: "#c98b5a", icon: "📷" },
-      { id: "albums", name: T("bAlbums"), x: 840, y: 118, w: 190, h: 130, roof: "#9d7cf0", wall: "#fff4e2", trim: "#a86d42", icon: "💿" },
-      { id: "cinema", name: T("bCinema"), x: 150, y: 420, w: 170, h: 130, roof: "#ff6b6b", wall: "#fff0da", trim: "#8f5a34", icon: "🎬" },
-      { id: "lounge", name: T("bLounge"), x: 960, y: 420, w: 176, h: 136, roof: "#4fc3b0", wall: "#fff4e2", trim: "#a86d42", icon: "💬" },
+      { id: "gallery", name: T("bGallery"), x: 250, y: 118, w: 190, h: 130, roof: "#d8434e", wall: "#fffaf2", trim: "#c98b5a", icon: "📷" },
+      { id: "albums", name: T("bAlbums"), x: 840, y: 118, w: 190, h: 130, roof: "#a77ce0", wall: "#fffaf2", trim: "#a86d42", icon: "💿" },
+      { id: "cinema", name: T("bCinema"), x: 150, y: 420, w: 170, h: 130, roof: "#f2a93b", wall: "#fff6e8", trim: "#8f5a34", icon: "🎬" },
+      { id: "lounge", name: T("bLounge"), x: 960, y: 420, w: 176, h: 136, roof: "#5fb8c9", wall: "#fffaf2", trim: "#a86d42", icon: "💬" },
+      { id: "shop", name: T("bShop"), x: 170, y: 640, w: 176, h: 130, roof: "#ff7fae", wall: "#fff4f8", trim: "#c98b5a", icon: "🛍️", deco: "shop" },
+      { id: "game", name: T("bGame"), x: 934, y: 640, w: 176, h: 130, roof: "#4fc3b0", wall: "#f4fffb", trim: "#8f5a34", icon: "🎮", deco: "game" },
     ];
     const paving = (x, y) => {
       const dx = Math.abs(x - CX), dy = Math.abs(y - CY);
@@ -237,8 +304,6 @@
     const stalls = [
       [520, 300, "#ff8fb8", "#fff", ["#ffd34d", "#ff6b6b", "#8fe3cf"]],
       [720, 300, "#9d7cf0", "#fff", ["#ff8fb8", "#ffd34d", "#62c3cf"]],
-      [300, 720, "#4fc3b0", "#fff", ["#ff6b6b", "#fff3a8", "#9d7cf0"]],
-      [940, 720, "#ffb347", "#fff", ["#8fe3cf", "#ff8fb8", "#ffd34d"]],
     ];
     stalls.forEach(([sx, sy, a, s, goods]) => {
       const sp = stallSprite(a, s, goods);
@@ -252,8 +317,15 @@
       colliders.push([lx - 3, ly - 3, 6, 4]);
     });
     // 벤치 & 화분
-    [[470, 480], [790, 480], [470, 540], [790, 540]].forEach(([bx, by]) => { objects.push({ y: by + 12, x: bx, draw: (c) => c.drawImage(BENCH, bx - 14, by) }); colliders.push([bx - 14, by + 2, 28, 10]); });
-    [[560, 860, "#ff8fb8"], [720, 860, "#ffd34d"], [250, 600, "#b58cff"], [1030, 600, "#ff8fb8"], [480, 200, "#ffd34d"], [800, 200, "#b58cff"]].forEach(([px, py, col]) => {
+    const seats = [];
+    [[462, 470], [818, 470], [462, 560], [818, 560]].forEach(([bx, by], i) => addBench(objects, colliders, seats, "b" + i, bx, by));
+    // 테이블 세트 5개 (광장 바닥 위에 있는지 확인하고 배치)
+    const hitC = (x0, y0, w, h) => colliders.some(([a, b, cw, ch]) => x0 < a + cw && x0 + w > a && y0 < b + ch && y0 + h > b) || bRects.some(([a, b, cw, ch]) => x0 < a + cw && x0 + w > a && y0 < b + ch + 20 && y0 + h > b);
+    const okArea = (x0, y0, w, h) => { if (hitC(x0, y0, w, h)) return false; for (let yy = y0; yy <= y0 + h; yy += 6) for (let xx = x0; xx <= x0 + w; xx += 6) if (!isP(xx, yy)) return false; return true; };
+    const tableSpots = [[335, 330], [945, 330], [300, 640], [985, 640], [530, 700], [750, 700], [640, 360]];
+    let tCount = 0;
+    for (const [tx, ty] of tableSpots) { if (tCount >= 5) break; if (!okArea(tx - 30, ty - 44, 60, 94)) continue; addTableSet(objects, colliders, seats, "t" + tCount, tx, ty); tCount++; }
+    [[560, 860, "#ff8fb8"], [720, 860, "#ffd34d"], [150, 800, "#b58cff"], [1130, 800, "#ff8fb8"], [480, 200, "#ffd34d"], [800, 200, "#b58cff"]].forEach(([px, py, col]) => {
       const sp = flowerPot(col); objects.push({ y: py + 16, x: px, draw: (c) => c.drawImage(sp, px - 7, py) }); colliders.push([px - 6, py + 8, 12, 8]);
     });
 
@@ -274,7 +346,7 @@
     ];
 
     return {
-      id: "plaza", W, H, ground: g, objects, colliders, zones, buildings,
+      id: "plaza", W, H, ground: g, objects, colliders, zones, buildings, seats,
       walkable: (x, y) => isP(x | 0, y | 0),
       spawn: { x: 640, y: 840 },
       artist: { x: 604, y: 506, dir: "down" },
@@ -299,9 +371,9 @@
     const [c, x] = cv(160, 56);
     x.fillStyle = OUT; x.fillRect(18, 10, 22, 46); x.fillRect(120, 10, 22, 46);
     x.fillStyle = "#fff4e2"; x.fillRect(20, 12, 18, 42); x.fillRect(122, 12, 18, 42);
-    x.fillStyle = "#ff8fb8"; x.fillRect(20, 12, 18, 6); x.fillRect(122, 12, 18, 6);
+    x.fillStyle = "#d8434e"; x.fillRect(20, 12, 18, 6); x.fillRect(122, 12, 18, 6);
     x.fillStyle = OUT; x.fillRect(4, 0, 152, 24);
-    const grad = ["#ff7fae", "#ff9fc4"];
+    const grad = ["#a77ce0", "#c3a2f0"];
     for (let i = 0; i < 22; i++) { x.fillStyle = grad[Math.floor(i / 4) % 2]; x.fillRect(5, 1 + i, 150, 1); }
     x.font = `bold 13px ${FONT}`; x.textAlign = "center"; x.textBaseline = "middle";
     x.fillStyle = OUT; x.fillText("JELLY LAND", 81, 13); x.fillStyle = "#fff"; x.fillText("JELLY LAND", 80, 12);
@@ -344,7 +416,7 @@
     }
     // 벽
     x.fillStyle = OUT; x.fillRect(0, 0, W, 84);
-    for (let xx = 0; xx < W; xx += 16) { x.fillStyle = (xx / 16) % 2 ? "#ffe3ee" : "#fbd2e2"; x.fillRect(xx, 0, 16, 78); }
+    for (let xx = 0; xx < W; xx += 16) { x.fillStyle = (xx / 16) % 2 ? "#efe4f7" : "#e2d3f3"; x.fillRect(xx, 0, 16, 78); }
     x.fillStyle = "#c98b5a"; x.fillRect(0, 70, W, 10); x.fillStyle = "#a86d42"; x.fillRect(0, 78, W, 4);
     // 창문
     [[40, 16], [520, 16]].forEach(([wx, wy]) => {
@@ -373,19 +445,60 @@
     const piano = pianoSprite();
     objects.push({ y: 136, x: 300, draw: (c) => c.drawImage(piano, 300, 100) });
     colliders.push([300, 110, 44, 22], [0, 0, W, 90]);
-    // 소파
-    const sofa = (sx, sy, col) => { const [c, s] = cv(56, 26); s.fillStyle = OUT; s.fillRect(0, 0, 56, 24); s.fillStyle = col; s.fillRect(1, 1, 54, 10); s.fillStyle = Avatar.mix(col, "#ffffff", 0.25); s.fillRect(4, 11, 48, 10); s.fillStyle = col; s.fillRect(1, 8, 5, 15); s.fillRect(50, 8, 5, 15); objects.push({ y: sy + 24, x: sx, draw: (cc) => cc.drawImage(c, sx, sy) }); colliders.push([sx, sy + 6, 56, 18]); };
-    sofa(40, 120, "#9d7cf0"); sofa(544, 120, "#4fc3b0"); sofa(40, 360, "#ff7fae"); sofa(544, 360, "#ffb347");
-    // 테이블
-    const table = (tx, ty) => { const [c, s] = cv(30, 22); s.fillStyle = "rgba(40,30,20,.25)"; s.fillRect(3, 17, 26, 5); s.fillStyle = OUT; s.fillRect(0, 0, 30, 12); s.fillRect(13, 10, 4, 10); s.fillStyle = "#fff8ea"; s.fillRect(1, 1, 28, 9); s.fillStyle = "#ff8fb8"; s.fillRect(10, 3, 4, 4); s.fillStyle = "#ffd34d"; s.fillRect(17, 4, 3, 3); objects.push({ y: ty + 20, x: tx, draw: (cc) => cc.drawImage(c, tx, ty) }); colliders.push([tx, ty + 4, 30, 14]); };
-    table(80, 240); table(530, 240); table(120, 170); table(490, 170);
+    // 소파 (3인용: 등받이·쿠션은 캐릭터 뒤, 앞면·팔걸이는 캐릭터 앞에 그려서 실제로 앉은 느낌)
+    const seats = [];
+    const sofa = (sx, sy, col, id) => {
+      const SW = 78;
+      const light = Avatar.mix(col, "#ffffff", 0.28), dark = Avatar.mix(col, "#000000", 0.18);
+      const [bc, b] = cv(SW, 24);
+      b.fillStyle = "rgba(40,30,20,.25)"; b.fillRect(3, 20, SW - 2, 4);
+      b.fillStyle = OUT; b.fillRect(0, 0, SW, 22);
+      b.fillStyle = col; b.fillRect(1, 1, SW - 2, 11);
+      b.fillStyle = light; b.fillRect(1, 1, SW - 2, 2);
+      b.fillStyle = dark; for (let k = 1; k < 3; k++) b.fillRect(Math.round(k * SW / 3), 2, 1, 9); // 등받이 쿠션 3칸
+      b.fillStyle = light; b.fillRect(6, 12, SW - 12, 9);
+      b.fillStyle = col; for (let k = 1; k < 3; k++) b.fillRect(Math.round(k * SW / 3), 12, 1, 9);
+      const [fc, f] = cv(SW, 14);
+      f.fillStyle = OUT; f.fillRect(0, 0, 7, 12); f.fillRect(SW - 7, 0, 7, 12); f.fillRect(5, 5, SW - 10, 7);
+      f.fillStyle = col; f.fillRect(1, 0, 5, 11); f.fillRect(SW - 6, 0, 5, 11); f.fillRect(6, 6, SW - 12, 5);
+      f.fillStyle = light; f.fillRect(1, 0, 5, 2); f.fillRect(SW - 6, 0, 5, 2);
+      f.fillStyle = dark; f.fillRect(6, 10, SW - 12, 1);
+      f.fillStyle = OUT; f.fillRect(4, 12, 3, 2); f.fillRect(SW - 7, 12, 3, 2);
+      objects.push({ y: sy + 6, x: sx, draw: (cc) => cc.drawImage(bc, sx, sy) });
+      objects.push({ y: sy + 22, x: sx, draw: (cc) => cc.drawImage(fc, sx, sy + 10) });
+      colliders.push([sx, sy + 4, SW, 18]);
+      for (let k = 0; k < 3; k++) { const px = sx + 14 + k * 25; seats.push({ id: id + k, x: px, y: sy + 17, dir: "down", ax: px, ay: sy + 30 }); }
+    };
+    sofa(34, 118, "#9d7cf0", "sA"); sofa(528, 118, "#4fc3b0", "sB"); sofa(34, 352, "#ff7fae", "sC"); sofa(528, 352, "#ffb347", "sD");
+    // 방명록 게시판 (큰 보드) — 피아노 무대 왼편
+    const gbBoard = (() => {
+      const BW = 96, BH = 70;
+      const [c, s] = cv(BW, BH);
+      s.fillStyle = "rgba(40,30,20,.25)"; s.fillRect(8, BH - 6, BW - 12, 6);
+      s.fillStyle = OUT; s.fillRect(14, 44, 6, BH - 8); s.fillRect(BW - 20, 44, 6, BH - 8);
+      s.fillStyle = "#8f5a34"; s.fillRect(15, 45, 4, BH - 10); s.fillRect(BW - 19, 45, 4, BH - 10);
+      s.fillStyle = OUT; s.fillRect(0, 6, BW, 44);
+      s.fillStyle = "#a77ce0"; s.fillRect(2, 8, BW - 4, 40);
+      s.fillStyle = "#c3a2f0"; s.fillRect(2, 8, BW - 4, 3);
+      s.fillStyle = "#f2c14e"; s.fillRect(2, 45, BW - 4, 3);
+      s.fillStyle = "#fffaf2"; s.fillRect(6, 20, BW - 12, 24);
+      // 붙어 있는 쪽지들
+      [["#ff9fc8", 9, 23], ["#9fe8ff", 30, 25], ["#fff3a8", 51, 22], ["#c3f0c8", 72, 24]].forEach(([col, x0, y0]) => { s.fillStyle = OUT; s.fillRect(x0 - 1, y0 - 1, 17, 16); s.fillStyle = col; s.fillRect(x0, y0, 15, 14); s.fillStyle = "rgba(43,29,42,.35)"; for (let k = 0; k < 3; k++) s.fillRect(x0 + 2, y0 + 3 + k * 3, 11, 1); s.fillStyle = "#d8434e"; s.fillRect(x0 + 6, y0 - 2, 3, 3); });
+      // 제목판
+      s.fillStyle = OUT; s.fillRect(18, 0, BW - 36, 18); s.fillStyle = "#d8434e"; s.fillRect(19, 1, BW - 38, 16);
+      s.font = `bold 11px ${FONT}`; s.textAlign = "center"; s.textBaseline = "middle"; s.fillStyle = "#fff"; s.fillText("✎ " + T("gbBoard"), BW / 2, 10);
+      return c;
+    })();
+    const GBX = 124, GBY = 86;
+    objects.push({ y: GBY + 68, x: GBX + 48, draw: (c) => c.drawImage(gbBoard, GBX, GBY) });
+    colliders.push([GBX + 8, GBY + 44, 80, 24]);
     [[20, 100, "#ff8fb8"], [608, 100, "#b58cff"], [20, 390, "#ffd34d"], [608, 390, "#ff8fb8"]].forEach(([px, py, col]) => { const sp = flowerPot(col); objects.push({ y: py + 16, x: px, draw: (c) => c.drawImage(sp, px - 7, py) }); colliders.push([px - 7, py + 6, 14, 10]); });
 
     const collide = (px, py) => colliders.some(([a, b, w, h]) => px > a && px < a + w && py > b && py < b + h);
     return {
-      id: "lounge", W, H, ground: g, objects, colliders: [], zones: [{ id: "exit", x: 290, y: 388, w: 60, h: 32, label: T("zExit") }],
+      id: "lounge", W, H, ground: g, objects, colliders: [], zones: [{ id: "exit", x: 290, y: 388, w: 60, h: 32, label: T("zExit") }, { id: "guestbook", x: 118, y: 150, w: 108, h: 30, label: T("zGuestbook") }], seats,
       walkable: (px, py) => px > 10 && px < W - 10 && py > 92 && py < H - 4 && !collide(px, py),
-      spawn: { x: 320, y: 380 }, artist: null, icons: [],
+      spawn: { x: 320, y: 380 }, artist: null, icons: [{ x: 172, y: 84, icon: "✍️" }], signs: [{ x: 172, y: 76, key: "gbSign" }],
     };
   }
 

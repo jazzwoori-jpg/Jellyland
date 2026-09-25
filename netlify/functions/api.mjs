@@ -9,6 +9,10 @@
 //   GET  /api/chat?room=plaza|lounge&since=0
 //   POST /api/chat      {room, text, notice?}   ← 보낼 때 한/영/일 3개 언어로 자동 번역해 저장
 //   DELETE /api/chat?key=...        (아티스트 전용)
+//   POST /api/daily                 ← 첫 접속 환영 100코인 + 하루 한 번 출석 100코인 (한국 시간 기준)
+//   POST /api/shop/buy  {item}      ← 젤리젤리샵 구매
+//   POST /api/game/start            ← 점프점프 젤리월드 시작
+//   POST /api/game/finish {run, m}  ← 결과 제출 (100m 마다 5코인, 한 판 최대 200코인)
 import { getStore } from "@netlify/blobs";
 import crypto from "node:crypto";
 
@@ -24,6 +28,38 @@ const err = (code, status = 400) => json({ error: code, code }, status);
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const LANGS = ["ko", "en", "ja"];
 const ROOMS = ["plaza", "lounge"];
+const CHAT_TTL = 5 * 60 * 1000; // 채팅은 5분 뒤 사라짐
+const HOST_OUTFITS = [1, 7, 8, 9]; // 호스트(조젤리) 전용 의상 번호 — public/js/avatar.js 의 host: true 와 같아야 함
+// ---- 젤리코인 ----
+// 젤리젤리샵 상품 — public/js/shop.js 와 같아야 함 (가격은 10코인 단위)
+const SHOP = {
+  h_buns: { kind: "hair", idx: 6, price: 100 },
+  w_candy: { kind: "wand", idx: 1, price: 200 },
+  o_gingham: { kind: "outfit", idx: 10, price: 300 },
+  h_heart: { kind: "hair", idx: 7, price: 500 },
+  w_note: { kind: "wand", idx: 2, price: 800 },
+  o_cherry: { kind: "outfit", idx: 11, price: 1200 },
+  h_bigbow: { kind: "hair", idx: 8, price: 1800 },
+  o_moon: { kind: "outfit", idx: 12, price: 2500 },
+  w_rainbow: { kind: "wand", idx: 3, price: 3500 },
+  o_idol: { kind: "outfit", idx: 13, price: 5000 },
+  h_galaxy: { kind: "hair", idx: 9, price: 7000 },
+  o_fairy: { kind: "outfit", idx: 14, price: 9000 },
+  w_piano: { kind: "wand", idx: 4, price: 12000 },
+  o_aurora: { kind: "outfit", idx: 15, price: 15000 },
+  o_royal: { kind: "outfit", idx: 16, price: 20000 },
+};
+const WELCOME_COINS = 100, DAILY_COINS = 100, GB_COINS = 50, GB_REWARDS_PER_DAY = 3;
+const GAME_MAX = 200, GAME_STEP_M = 100, GAME_STEP_COINS = 5;
+// 미니게임 속도 공식 (public/js/minigame.js 와 같음): 속도 = min(400, 150 + 4·t) px/s, 10px = 1m
+function maxMeters(sec) {
+  const tc = (400 - 150) / 4;
+  const px = sec <= tc ? 150 * sec + 2 * sec * sec : 150 * tc + 2 * tc * tc + 400 * (sec - tc);
+  return px / 10;
+}
+const kstDay = (ts = Date.now()) => new Date(ts + 9 * 3600 * 1000).toISOString().slice(0, 10);
+const shopItemFor = (kind, idx) => Object.entries(SHOP).find(([, v]) => v.kind === kind && v.idx === idx);
+const keyTs = (k) => +k.split("/")[2].split("-")[0];
 const b64u = (buf) => Buffer.from(buf).toString("base64url");
 
 // ---- 서명 키: 환경변수 JWT_SECRET 우선, 없으면 Blobs에 자동 생성·저장 ----
@@ -73,6 +109,9 @@ const publicUser = (u) => ({
   avatar: u.avatar || null,
   lang: LANGS.includes(u.lang) ? u.lang : "ko",
   role: artistEmails().includes(u.email) ? "artist" : "fan",
+  coins: u.coins | 0,
+  inv: Array.isArray(u.inv) ? u.inv : [],
+  daily: u.lastDaily || null,
 });
 
 // 토큰에 닉네임/아바타를 담아 두면 /sync 때 회원 정보를 읽지 않아도 돼서 빠르고 저렴해요
@@ -157,7 +196,7 @@ export default async (req) => {
       const { salt, hash } = hashPassword(password);
       const user = {
         id: crypto.randomUUID(), email, salt, hash, nickname: "", avatar: null,
-        lang: LANGS.includes(body.lang) ? body.lang : "ko", createdAt: Date.now(),
+        lang: LANGS.includes(body.lang) ? body.lang : "ko", createdAt: Date.now(), coins: 0, inv: [],
       };
       await users.setJSON(key, user);
       return json({ token: await tokenFor(user), user: publicUser(user) });
@@ -190,10 +229,11 @@ export default async (req) => {
       const mine = cur[tp.id];
       const entry = {
         id: tp.id, name: tp.n, avatar: tp.a, role,
-        x: Math.round(+body.x || 0), y: Math.round(+body.y || 0), dir: clean(body.dir, 5), ts: now,
+        x: Math.round(+body.x || 0), y: Math.round(+body.y || 0), dir: clean(body.dir, 5), seat: clean(body.seat, 12) || null,
+        vx: Math.max(-200, Math.min(200, Math.round(+body.vx || 0))), vy: Math.max(-200, Math.min(200, Math.round(+body.vy || 0))), ts: now,
       };
       // 위치가 그대로이고 최근에 저장했다면 쓰기를 건너뜀 (비용 절약)
-      const unchanged = mine && mine.x === entry.x && mine.y === entry.y && mine.dir === entry.dir && mine.name === entry.name &&
+      const unchanged = mine && mine.x === entry.x && mine.y === entry.y && mine.dir === entry.dir && mine.seat === entry.seat && mine.vx === entry.vx && mine.vy === entry.vy && mine.name === entry.name &&
         JSON.stringify(mine.avatar) === JSON.stringify(entry.avatar) && now - mine.ts < 8000;
       const writes = [];
       for (const k of Object.keys(cur)) if (now - cur[k].ts > 15000) { delete cur[k]; }
@@ -202,7 +242,7 @@ export default async (req) => {
       let messages = [];
       if (last.ts > since) {
         const { blobs } = await cs.list({ prefix: `m/${scene}/` });
-        const fresh = blobs.map((b) => b.key).sort().slice(-50).filter((k) => +k.split("/")[2].split("-")[0] >= since);
+        const fresh = blobs.map((b) => b.key).sort().slice(-50).filter((k) => keyTs(k) >= since && keyTs(k) > now - CHAT_TTL);
         messages = (await Promise.all(fresh.map((k) => cs.get(k, { type: "json" }).then((m) => m && { ...m, key: k })))).filter(Boolean);
       }
       await Promise.all(writes);
@@ -226,9 +266,16 @@ export default async (req) => {
       const nickname = clean(body.nickname, 12);
       if (!nickname) return err("nick");
       const a = body.avatar || {};
-      const n = (v) => Math.max(0, Math.min(9, v | 0));
+      const n = (v, max = 9) => Math.max(0, Math.min(max, v | 0));
       user.nickname = nickname;
-      user.avatar = { gender: a.gender === "m" ? "m" : "f", hair: n(a.hair), hairColor: n(a.hairColor), skin: n(a.skin), outfit: n(a.outfit) };
+      const isHost = me.role === "artist";
+      const owns = (kind, idx) => { const it = shopItemFor(kind, idx); return !it || isHost || (user.inv || []).includes(it[0]); };
+      let outfit = n(a.outfit, 16), hair = n(a.hair), wand = n(a.wand, 4);
+      if (HOST_OUTFITS.includes(outfit) && !isHost) outfit = 0; // 호스트 전용 의상은 호스트만
+      if (!owns("outfit", outfit)) outfit = 0;                  // 샵 아이템은 산 사람만
+      if (!owns("hair", hair)) hair = 0;
+      if (!owns("wand", wand)) wand = 0;
+      user.avatar = { gender: a.gender === "m" ? "m" : "f", hair, hairColor: n(a.hairColor), skin: n(a.skin), outfit, eye: n(a.eye), ...(wand ? { wand } : {}) };
       await saveUser();
       return json({ user: publicUser(user), token: await tokenFor(user) });
     }
@@ -237,6 +284,53 @@ export default async (req) => {
       if (LANGS.includes(body.lang)) user.lang = body.lang;
       await saveUser();
       return json({ user: publicUser(user), token: await tokenFor(user) });
+    }
+
+    // ---------- 젤리코인: 환영 + 출석 ----------
+    if (route === "daily" && method === "POST") {
+      const gained = {};
+      if (!user.welcomed) { user.welcomed = true; user.coins = (user.coins | 0) + WELCOME_COINS; gained.welcome = WELCOME_COINS; }
+      const today = kstDay();
+      if (user.lastDaily !== today) { user.lastDaily = today; user.coins = (user.coins | 0) + DAILY_COINS; gained.daily = DAILY_COINS; }
+      if (gained.welcome || gained.daily) await saveUser();
+      return json({ user: publicUser(user), gained });
+    }
+
+    // ---------- 젤리젤리샵 ----------
+    if (route === "shop/buy" && method === "POST") {
+      const id = String(body.item || "");
+      const it = SHOP[id];
+      if (!it) return err("notfound", 404);
+      user.inv = Array.isArray(user.inv) ? user.inv : [];
+      if (user.inv.includes(id)) return json({ user: publicUser(user), owned: true });
+      if ((user.coins | 0) < it.price) return err("coins", 400);
+      user.coins = (user.coins | 0) - it.price;
+      user.inv.push(id);
+      await saveUser();
+      return json({ user: publicUser(user) });
+    }
+
+    // ---------- 미니게임: 점프점프 젤리월드 ----------
+    if (route === "game/start" && method === "POST") {
+      const t0 = Date.now();
+      const sig = crypto.createHmac("sha256", await getSecret()).update(`run.${user.id}.${t0}`).digest("base64url").slice(0, 22);
+      return json({ run: `${t0}.${sig}` });
+    }
+    if (route === "game/finish" && method === "POST") {
+      const [t0s, sig] = String(body.run || "").split(".");
+      const t0 = +t0s;
+      const expect = crypto.createHmac("sha256", await getSecret()).update(`run.${user.id}.${t0}`).digest("base64url").slice(0, 22);
+      if (!t0 || sig !== expect) return err("forbidden", 400);
+      if ((user.lastRun || 0) >= t0) return json({ user: publicUser(user), coins: 0, dup: true }); // 같은 판 중복 제출
+      const sec = (Date.now() - t0) / 1000;
+      if (sec > 3600) return err("forbidden", 400);
+      const m = Math.max(0, Math.min(+body.m || 0, maxMeters(sec) * 1.1 + 20)); // 시간에 비해 너무 먼 거리는 인정 안 함
+      const coins = Math.min(GAME_MAX, Math.floor(m / GAME_STEP_M) * GAME_STEP_COINS);
+      user.lastRun = t0;
+      user.coins = (user.coins | 0) + coins;
+      if (m > (user.best | 0)) user.best = Math.floor(m);
+      await saveUser();
+      return json({ user: publicUser(user), coins, best: user.best | 0 });
     }
 
     // ---------- 접속자 위치 공유 ----------
@@ -260,6 +354,45 @@ export default async (req) => {
       return json({ others, online });
     }
 
+    // ---------- 방명록 (팬 라운지) ----------
+    if (route === "guestbook") {
+      const gs = store("jl-guestbook");
+      if (method === "GET") {
+        const { blobs } = await gs.list({ prefix: "g/" });
+        const keys = blobs.map((b) => b.key).sort().reverse();
+        const page = Math.max(0, +url.searchParams.get("page") || 0);
+        const slice = keys.slice(page * 20, page * 20 + 20);
+        const entries = (await Promise.all(slice.map((k) => gs.get(k, { type: "json" }).then((e) => e && { ...e, key: k })))).filter(Boolean);
+        return json({ entries, total: keys.length });
+      }
+      if (method === "POST") {
+        const text = String(body.text || "").replace(/\r/g, "").replace(/[\u0000-\u0009\u000b-\u001f]/g, "").trim().slice(0, 300).replace(/\n{3,}/g, "\n\n");
+        if (!text) return err("msg");
+        const lastKey = "u/" + user.id;
+        const last = +(await gs.get(lastKey)) || 0;
+        if (Date.now() - last < 30000) return err("slow", 429); // 30초에 한 번
+        const ts = Date.now();
+        const key = `g/${String(ts).padStart(15, "0")}-${crypto.randomBytes(3).toString("hex")}`;
+        const e = { id: user.id, name: me.nickname || "?", role: me.role, avatar: me.avatar, text, ts };
+        // 방명록 작성 보상: 50코인 (하루 3번까지)
+        let coins = 0;
+        const today = kstDay(ts);
+        if (user.gbDay !== today) { user.gbDay = today; user.gbCount = 0; }
+        if ((user.gbCount | 0) < GB_REWARDS_PER_DAY) { user.gbCount = (user.gbCount | 0) + 1; user.coins = (user.coins | 0) + GB_COINS; coins = GB_COINS; }
+        await Promise.all([gs.setJSON(key, e), gs.set(lastKey, String(ts)), coins ? saveUser() : null]);
+        return json({ entry: { ...e, key }, coins, user: publicUser(user) });
+      }
+      if (method === "DELETE") {
+        const key = url.searchParams.get("key") || "";
+        if (!key.startsWith("g/")) return err("forbidden", 400);
+        const e = await gs.get(key, { type: "json" });
+        if (!e) return json({ ok: true });
+        if (me.role !== "artist" && e.id !== user.id) return err("forbidden", 403); // 본인 글 또는 호스트만 삭제
+        await gs.delete(key);
+        return json({ ok: true });
+      }
+    }
+
     // ---------- 채팅 (광장 / 팬 라운지) ----------
     if (route === "chat") {
       const cs = store("jl-chat");
@@ -269,7 +402,7 @@ export default async (req) => {
         const { blobs } = await cs.list({ prefix: `m/${room}/` });
         const keys = blobs.map((b) => b.key).sort().slice(-50);
         // since 이후 메시지만 가져옴 (키에 시간이 들어 있음)
-        const fresh = keys.filter((k) => +k.split("/")[2].split("-")[0] >= since); // 같은 ms 메시지 누락 방지 (중복은 화면에서 걸러냄)
+        const fresh = keys.filter((k) => keyTs(k) >= since && keyTs(k) > Date.now() - CHAT_TTL); // 5분 지난 메시지는 제외
         const msgs = (await Promise.all(fresh.map((k) => cs.get(k, { type: "json" }).then((m) => m && { ...m, key: k })))).filter(Boolean);
         const notice = await cs.get(`notice/${room}`, { type: "json" });
         return json({ messages: msgs, notice: notice || null });
@@ -290,6 +423,12 @@ export default async (req) => {
         const key = `m/${room}/${String(ts).padStart(15, "0")}-${crypto.randomBytes(3).toString("hex")}`;
         const m = { id: user.id, name: me.nickname || "?", role: me.role, text, lang, tr, ts };
         await cs.setJSON(key, m);
+        // 5분 지난 메시지 정리 (저장 공간 절약)
+        try {
+          const { blobs } = await cs.list({ prefix: `m/${room}/` });
+          const old = blobs.map((b) => b.key).filter((k) => keyTs(k) < ts - CHAT_TTL).slice(0, 30);
+          await Promise.all(old.map((k) => cs.delete(k)));
+        } catch {}
         const lst = (await cs.get("last/" + room, { type: "json" })) || {};
         await cs.setJSON("last/" + room, { ts, notice: lst.notice || null });
         return json({ message: { ...m, key } });

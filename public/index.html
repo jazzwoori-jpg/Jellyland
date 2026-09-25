@@ -65,7 +65,7 @@
     <div class="win-head" data-i18n="creatorTitle"></div>
     <div class="body">
       <div class="stage">
-        <canvas id="preview" width="32" height="40"></canvas>
+        <canvas id="preview" width="48" height="50"></canvas>
         <button class="btn sm" id="btn-rand" data-i18n="random"></button>
       </div>
       <div id="opts">
@@ -73,8 +73,10 @@
         <div class="opt"><h4 data-i18n="gender"></h4><div class="chips" id="o-gender"></div></div>
         <div class="opt"><h4 data-i18n="hair"></h4><div class="chips" id="o-hair"></div></div>
         <div class="opt"><h4 data-i18n="hairColor"></h4><div class="chips" id="o-hairColor"></div></div>
+        <div class="opt"><h4 data-i18n="eyeColor"></h4><div class="chips" id="o-eye"></div></div>
         <div class="opt"><h4 data-i18n="skin"></h4><div class="chips" id="o-skin"></div></div>
         <div class="opt"><h4 data-i18n="outfit"></h4><div class="chips" id="o-outfit"></div></div>
+        <div class="opt"><h4 data-i18n="wand"></h4><div class="chips" id="o-wand"></div></div>
         <div class="err" id="c-err"></div>
       </div>
     </div>
@@ -89,11 +91,14 @@
 <div id="hud" class="hidden">
   <div class="hud-top">
     <div class="mini-logo">JELLY LAND</div>
-    <div class="me-card win"><canvas id="me-face" width="16" height="20"></canvas><div><b id="me-name"></b><small id="online"></small></div></div>
+    <div class="me-card win"><canvas id="me-face" width="32" height="26"></canvas><div><b id="me-name"></b><small id="online"></small></div></div>
     <div class="hud-btns">
+      <button class="btn sm coin-pill" id="coin-pill">🪙 0</button>
+      <button class="btn sm hidden gb-hud" id="btn-gb" data-i18n="gbBtn"></button>
       <button class="btn sm" id="btn-edit" data-i18n="edit"></button>
       <button class="btn sm" id="btn-lang" data-i18n="langBtn"></button>
       <button class="btn sm" id="btn-help" data-i18n="help"></button>
+      <button class="btn sm" id="btn-bgm" aria-label="BGM">🔊</button>
       <button class="btn sm" id="btn-logout" data-i18n="logout"></button>
     </div>
   </div>
@@ -124,10 +129,13 @@
 <div id="demo" class="hidden">DEMO MODE</div>
 
 <script src="js/config.js"></script>
+<script src="js/shop.js"></script>
 <script src="js/i18n.js"></script>
 <script src="js/api.js"></script>
 <script src="js/avatar.js"></script>
 <script src="js/world.js"></script>
+<script src="js/bgm.js"></script>
+<script src="js/minigame.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>
