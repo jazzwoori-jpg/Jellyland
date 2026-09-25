@@ -511,3 +511,9 @@ body.touch .pn-hint:first-of-type { display: none; }
 .ug-help { display: flex; flex-direction: column; gap: 2px; font-size: 12px; text-align: center; opacity: .8; }
 .modal.game.up .jg-rank, #gw-root .jg-rank { margin: 10px auto 0; }
 .rk-tabs { margin-top: 0; }
+/* ---------- v19: 스크린샷 ---------- */
+#shot-flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 90; }
+#shot-flash.on { animation: shotflash .45s ease-out; }
+@keyframes shotflash { 0% { opacity: .85; } 100% { opacity: 0; } }
+.shot-view { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.shot-view img { max-width: 100%; max-height: 60vh; border: 3px solid var(--ink); border-radius: 8px; -webkit-touch-callout: default; -webkit-user-select: auto; user-select: auto; }
