@@ -15,4 +15,12 @@ window.JELLY_SHOP = [
   { id: "w_piano", kind: "wand", idx: 4, price: 12000, name: { ko: "그랜드 피아노 셉터", en: "Grand Piano Scepter", ja: "グランドピアノの笏" } },
   { id: "o_aurora", kind: "outfit", idx: 15, price: 15000, name: { ko: "오로라 프린세스 가운", en: "Aurora Princess Gown", ja: "オーロラプリンセス" } },
   { id: "o_royal", kind: "outfit", idx: 16, price: 30000, name: { ko: "젤리 퀸 로열 드레스", en: "Jelly Queen Royal Gown", ja: "ゼリークイーンドレス" } },
+  // 💬 말풍선 (호스트·관리자 전용 말풍선은 판매하지 않음)
+  { id: "b_yellow", kind: "bubble", idx: 1, price: 700, name: { ko: "노란 테두리 말풍선", en: "Yellow Frame Bubble", ja: "きいろフチの吹き出し" } },
+  { id: "b_blue", kind: "bubble", idx: 2, price: 700, name: { ko: "파란 테두리 말풍선", en: "Blue Frame Bubble", ja: "あおフチの吹き出し" } },
+  { id: "b_green", kind: "bubble", idx: 3, price: 700, name: { ko: "초록 테두리 말풍선", en: "Green Frame Bubble", ja: "みどりフチの吹き出し" } },
+  { id: "b_dots", kind: "bubble", idx: 4, price: 1000, name: { ko: "딸기우유 물방울 말풍선", en: "Strawberry Milk Polka Bubble", ja: "いちごミルク水玉の吹き出し" } },
+  { id: "b_rainbow", kind: "bubble", idx: 5, price: 1500, name: { ko: "무지개 테두리 말풍선", en: "Rainbow Frame Bubble", ja: "にじいろフチの吹き出し" } },
+  { id: "b_star", kind: "bubble", idx: 6, price: 2000, name: { ko: "반짝 별밤 말풍선", en: "Twinkling Night Bubble", ja: "きらめく星夜の吹き出し" } },
+  { id: "b_gold", kind: "bubble", idx: 7, price: 3000, name: { ko: "골드 크라운 말풍선", en: "Gold Crown Bubble", ja: "ゴールドクラウンの吹き出し" } },
 ];

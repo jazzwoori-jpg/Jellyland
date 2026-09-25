@@ -493,3 +493,21 @@ body.touch .pn-hint:first-of-type { display: none; }
 .rec-info small { opacity: .7; }
 .rec-title { color: #7a3fc0; }
 .rank-modal { margin: 0 auto; }
+/* ---------- v17: 젤리게임월드 메뉴 · 올라올라 ---------- */
+.gw-intro { text-align: center; margin-top: 0; }
+.gw-menu { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.gw-card { cursor: pointer; border: 3px solid var(--ink); border-radius: 14px; padding: 18px 12px; display: flex; flex-direction: column; align-items: center; gap: 6px; font: inherit; color: var(--ink); box-shadow: 0 4px 0 var(--ink); transition: transform .1s; }
+.gw-card:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+.gw-card .gw-ico { font-size: 40px; line-height: 1; }
+.gw-card b { font-size: 17px; }
+.gw-card small { font-size: 12px; opacity: .75; }
+.gw-card.jump { background: linear-gradient(#ffe1f0, #ffc2dc); }
+.gw-card.up { background: linear-gradient(#e0ffd8, #b5f0a8); }
+.gw-card.ft { background: linear-gradient(#efe6ff, #d7c2ff); }
+.gw-day { text-align: center; font-size: 13px; opacity: .8; }
+.gw-back { margin: 0 0 8px; }
+.ug-wrap { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.ug { height: min(62vh, 560px); max-width: 100%; aspect-ratio: 240 / 360; image-rendering: pixelated; border: 3px solid var(--ink); border-radius: 8px; touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; background: #bfe6ff; }
+.ug-help { display: flex; flex-direction: column; gap: 2px; font-size: 12px; text-align: center; opacity: .8; }
+.modal.game.up .jg-rank, #gw-root .jg-rank { margin: 10px auto 0; }
+.rk-tabs { margin-top: 0; }

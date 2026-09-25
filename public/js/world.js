@@ -198,9 +198,17 @@
       for (const [gx, gy] of gardens) if ((x - gx) ** 2 + (y - gy) ** 2 < 46 * 46) return false;
       return true;
     };
+    const inGarden = (x, y) => gardens.some(([gx0, gy0]) => (x - gx0) ** 2 + (y - gy0) ** 2 < 46 * 46);
     const mask = new Uint8Array(W * H);
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) mask[y * W + x] = paving(x, y) ? 1 : 0;
     const isP = (x, y) => x >= 0 && y >= 0 && x < W && y < H && mask[y * W + x] === 1;
+    // 성벽까지의 거리 (광장 바닥에서 얼마나 떨어졌는지) — 두 번 훑는 거리 변환
+    const dist = new Float32Array(W * H);
+    for (let i = 0; i < W * H; i++) { const x = i % W, y = (i / W) | 0; dist[i] = mask[i] || inGarden(x, y) ? 0 : 1e9; }
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; if (!dist[i]) continue; let v = dist[i];
+      if (x > 0) v = Math.min(v, dist[i - 1] + 1); if (y > 0) { v = Math.min(v, dist[i - W] + 1); if (x > 0) v = Math.min(v, dist[i - W - 1] + 1.414); if (x < W - 1) v = Math.min(v, dist[i - W + 1] + 1.414); } dist[i] = v; }
+    for (let y = H - 1; y >= 0; y--) for (let x = W - 1; x >= 0; x--) { const i = y * W + x; if (!dist[i]) continue; let v = dist[i];
+      if (x < W - 1) v = Math.min(v, dist[i + 1] + 1); if (y < H - 1) { v = Math.min(v, dist[i + W] + 1); if (x < W - 1) v = Math.min(v, dist[i + W + 1] + 1.414); if (x > 0) v = Math.min(v, dist[i + W - 1] + 1.414); } dist[i] = v; }
 
     const [g, gx] = cv(W, H);
     const img = gx.createImageData(W, H);
@@ -209,14 +217,35 @@
     const C = {
       grassA: hex("#5aa04a"), grassB: hex("#4c9041"), grassC: hex("#6db85a"),
       pA: hex("#f0e0bf"), pB: hex("#e6d1a6"), pL: hex("#d3b986"), edge: hex("#a8845a"), edge2: hex("#c7a574"),
+      wShadow: hex("#3d3448"), wA: hex("#b9b3c6"), wB: hex("#a7a0b6"), wMortar: hex("#7d7690"), wLight: hex("#d6d1e0"), wTop: hex("#c8c2d4"), wGap: hex("#5a5268"),
+      wPathA: hex("#8b8499"), wPathB: hex("#81798f"), wPathL: hex("#665f75"),
       brick: hex("#b8473c"), brick2: hex("#cf5f4c"), rim: hex("#7a2f2a"), gold: hex("#f2c14e"), carpet: hex("#c9384a"), center: hex("#f3dcae"), center2: hex("#e7c68d"),
     };
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
       const i = (y * W + x) * 4;
       let col;
-      if (!mask[y * W + x]) {
+      if (!mask[y * W + x] && inGarden(x, y)) {
         const n = r();
         col = n < 0.06 ? C.grassB : n < 0.1 ? C.grassC : C.grassA;
+      } else if (!mask[y * W + x]) {
+        // ===== 성벽 (광장을 둘러싼 돌벽 + 총안 + 성벽 위 길) =====
+        const dd = dist[y * W + x];
+        if (dd <= 3) col = C.wShadow;
+        else if (dd <= 26) { // 벽면: 벽돌
+          const row = Math.floor(y / 7), off = row % 2 ? 7 : 0;
+          const mortar = y % 7 === 0 || (x + off) % 14 === 0;
+          col = mortar ? C.wMortar : ((Math.floor((x + off) / 14) + row) % 3 === 0 ? C.wB : C.wA);
+          if (!mortar && dd < 7) col = C.wLight;
+        } else if (dd <= 36) { // 총안(凹凸)
+          const merlon = Math.floor((x + y) / 10) % 2 === 0;
+          col = merlon ? (dd < 29 ? C.wLight : C.wTop) : C.wGap;
+          if (merlon && dd > 34) col = C.wMortar;
+        } else { // 성벽 위 돌길 (멀어질수록 어둡게)
+          const mortar = x % 18 === 0 || y % 18 === 0;
+          const base = mortar ? C.wPathL : (Math.floor(x / 18) + Math.floor(y / 18)) % 2 ? C.wPathA : C.wPathB;
+          const k = Math.min(0.55, (dd - 36) / 260);
+          col = [base[0] * (1 - k) + 40 * k, base[1] * (1 - k) + 34 * k, base[2] * (1 - k) + 56 * k];
+        }
       } else {
         const near = !isP(x - 3, y) || !isP(x + 3, y) || !isP(x, y - 3) || !isP(x, y + 3);
         const near2 = !isP(x - 6, y) || !isP(x + 6, y) || !isP(x, y - 6) || !isP(x, y + 6);
@@ -251,7 +280,7 @@
     const rr = rng(21);
     for (let k = 0; k < 900; k++) {
       const x = (rr() * W) | 0, y = (rr() * H) | 0;
-      if (mask[y * W + x]) continue;
+      if (mask[y * W + x] || !inGarden(x, y)) continue;
       gx.fillStyle = ["#ffd1e1", "#fff3a8", "#ffffff", "#f58fb0"][k % 4];
       gx.fillRect(x, y, 2, 2);
     }
@@ -266,20 +295,14 @@
     const colliders = [];
     const bRects = buildings.map((b) => [b.x - 10, b.y - 10, b.w + 24, b.h + 20]);
     const inB = (x, y) => bRects.some(([bx, by, bw, bh]) => x > bx && x < bx + bw && y > by && y < by + bh);
-    const tr = rng(99);
-    const forest = [];
-    for (let y = -6; y < H + 30; y += 22) for (let x = -6; x < W + 10; x += 24) {
-      const px = x + ((tr() * 12) | 0) + ((y / 22) % 2 ? 12 : 0), py = y + ((tr() * 8) | 0);
-      if (px < 0 || py < 0 || px >= W || py >= H) { forest.push([px, py]); continue; }
-      let clear = true, nearP = false;
-      for (let a = -14; a <= 14 && clear; a += 7) for (let b = -6; b <= 4; b += 5) { if (isP(px + a, py + b)) clear = false; }
-      if (!clear || inB(px, py)) continue;
-      for (let a = -40; a <= 40 && !nearP; a += 10) for (let b = -40; b <= 10; b += 10) if (isP(px + a, py + b)) nearP = true;
-      if (nearP) objects.push({ y: py, x: px, draw: (c) => c.drawImage(TREES[(px + py) % 3], px - 17, py - 40) });
-      else forest.push([px, py]);
-    }
-    for (const [cx, cy] of gardens) objects.push({ y: cy + 6, x: cx, draw: (c) => c.drawImage(TREES[1], cx - 17, cy - 34) });
-    forest.sort((a, b) => a[1] - b[1]).forEach(([px, py]) => gx.drawImage(TREES[Math.abs(px * 7 + py) % 3], px - 17, py - 40));
+    // 성벽 모서리 망루 (분홍 뾰족 지붕 + 깃발)
+    const tower = towerSprite();
+    [[120, 240], [120, 760], [1160, 240], [1160, 760], [260, 100], [1020, 100], [260, 900], [1020, 900]].forEach(([tx0, ty0]) => {
+      const ang = Math.atan2(ty0 - CY, tx0 - CX), tx = Math.round(tx0 + Math.cos(ang) * 40), ty = Math.round(ty0 + Math.sin(ang) * 30);
+      objects.push({ y: ty, x: tx, draw: (c) => c.drawImage(tower, tx - 24, ty - 76) });
+    });
+    // 광장 안 화단: 나무 대신 영롱하게 빛나는 큰 다이아 원석
+    for (const [cx, cy] of gardens) objects.push({ y: cy + 12, x: cx, anim: true, draw: (c, t) => drawDiamond(c, cx, cy, t) });
 
     // 건물
     for (const b of buildings) {
@@ -375,6 +398,68 @@
     };
   }
 
+  // 성벽 망루
+  function towerSprite() {
+    const [c, x] = cv(48, 80);
+    x.fillStyle = "rgba(20,10,30,.35)"; x.beginPath(); x.ellipse(26, 76, 22, 5, 0, 0, Math.PI * 2); x.fill();
+    x.fillStyle = OUT; x.fillRect(5, 30, 38, 46);
+    for (let yy = 31; yy < 75; yy++) { const row = Math.floor(yy / 6); for (let xx = 6; xx < 42; xx++) {
+      const mortar = yy % 6 === 0 || (xx + (row % 2 ? 5 : 0)) % 10 === 0; const shade = xx > 32 ? 0.82 : xx < 12 ? 1.08 : 1;
+      const b = mortar ? [125, 118, 144] : (Math.floor((xx + (row % 2 ? 5 : 0)) / 10) + row) % 3 ? [192, 186, 207] : [170, 163, 186];
+      x.fillStyle = `rgb(${Math.min(255, b[0] * shade)},${Math.min(255, b[1] * shade)},${Math.min(255, b[2] * shade)})`; x.fillRect(xx, yy, 1, 1); } }
+    x.fillStyle = OUT; x.fillRect(20, 50, 8, 12); x.fillStyle = "#ffe8a3"; x.fillRect(21, 51, 6, 10); x.fillStyle = OUT; x.fillRect(23, 51, 2, 10); // 창문
+    x.fillStyle = OUT; x.fillRect(3, 26, 42, 6); x.fillStyle = "#d6d1e0"; x.fillRect(4, 27, 40, 4);
+    x.fillStyle = OUT; for (let k = 0; k < 5; k++) x.fillRect(4 + k * 9, 22, 6, 6); x.fillStyle = "#c8c2d4"; for (let k = 0; k < 5; k++) x.fillRect(5 + k * 9, 23, 4, 4);
+    // 뾰족 지붕
+    for (let yy = 0; yy < 22; yy++) { const w = Math.round(2 + yy * 1.05); x.fillStyle = OUT; x.fillRect(24 - w - 1, 4 + yy, w * 2 + 2, 1); x.fillStyle = yy % 5 === 4 ? "#d84a86" : "#ff7fae"; x.fillRect(24 - w, 4 + yy, w * 2, 1); x.fillStyle = "#ffb8d8"; x.fillRect(24 - w, 4 + yy, Math.max(1, Math.floor(w / 3)), 1); }
+    x.fillStyle = OUT; x.fillRect(23, 0, 2, 6); x.fillStyle = "#ffd34d"; x.fillRect(25, 0, 8, 4); x.fillStyle = "#a77ce0"; x.fillRect(25, 2, 8, 2); // 깃발
+    return c;
+  }
+  // 💎 영롱하게 빛나는 큰 다이아 원석 (반짝임 + 빛줄기 + 둥실둥실)
+  const DIA = (() => {
+    const [c, x] = cv(40, 46);
+    const poly = (pts, col) => { x.fillStyle = col; x.beginPath(); x.moveTo(pts[0][0], pts[0][1]); for (const p of pts.slice(1)) x.lineTo(p[0], p[1]); x.closePath(); x.fill(); };
+    poly([[8, 2], [32, 2], [40, 14], [20, 46], [0, 14]], OUT);
+    poly([[9, 4], [31, 4], [37, 14], [20, 42], [3, 14]], "#7fe3ff");
+    poly([[9, 4], [20, 4], [14, 14], [3, 14]], "#d6f7ff");
+    poly([[20, 4], [31, 4], [37, 14], [26, 14]], "#a8ecff");
+    poly([[14, 14], [26, 14], [20, 4]], "#ffffff");
+    poly([[3, 14], [14, 14], [20, 42]], "#9fd8ff");
+    poly([[14, 14], [26, 14], [20, 42]], "#c9b8ff");
+    poly([[26, 14], [37, 14], [20, 42]], "#ff9fd8");
+    x.fillStyle = "#ffffff"; x.fillRect(10, 6, 3, 2); x.fillRect(8, 16, 2, 6);
+    return c;
+  })();
+  function drawDiamond(c, x, y, t) {
+    const bob = Math.sin(t / 600 + x) * 2.5, pulse = 0.5 + 0.5 * Math.sin(t / 420 + y);
+    const cy = y - 22 + bob;
+    c.save();
+    // 바닥 빛
+    const g0 = c.createRadialGradient(x, y + 6, 2, x, y + 6, 30);
+    g0.addColorStop(0, `rgba(150,235,255,${0.35 + pulse * 0.25})`); g0.addColorStop(1, "rgba(150,235,255,0)");
+    c.fillStyle = g0; c.beginPath(); c.ellipse(x, y + 6, 30, 10, 0, 0, Math.PI * 2); c.fill();
+    // 후광
+    const g = c.createRadialGradient(x, cy, 4, x, cy, 42 + pulse * 8);
+    g.addColorStop(0, `rgba(255,255,255,${0.55 + pulse * 0.2})`); g.addColorStop(0.35, `rgba(160,230,255,${0.3 + pulse * 0.15})`); g.addColorStop(0.7, "rgba(255,160,230,.12)"); g.addColorStop(1, "rgba(255,160,230,0)");
+    c.fillStyle = g; c.beginPath(); c.arc(x, cy, 50, 0, Math.PI * 2); c.fill();
+    // 회전하는 빛줄기
+    c.globalCompositeOperation = "lighter";
+    for (let k = 0; k < 6; k++) {
+      const a = t / 1800 + (k * Math.PI) / 3, len = 34 + Math.sin(t / 300 + k) * 8;
+      c.strokeStyle = `rgba(${k % 2 ? "255,200,240" : "180,240,255"},${0.18 + pulse * 0.12})`; c.lineWidth = 3;
+      c.beginPath(); c.moveTo(x + Math.cos(a) * 10, cy + Math.sin(a) * 10); c.lineTo(x + Math.cos(a) * len, cy + Math.sin(a) * len); c.stroke();
+    }
+    c.globalCompositeOperation = "source-over";
+    c.imageSmoothingEnabled = false;
+    c.drawImage(DIA, Math.round(x - 20), Math.round(cy - 24));
+    // 반짝이
+    for (let k = 0; k < 5; k++) {
+      const ph = (t / 900 + k * 0.37) % 1, sx = x + Math.cos(k * 2.4) * (18 + k * 3), sy = cy - 20 + Math.sin(k * 1.7) * 16 - ph * 10;
+      const a = Math.sin(ph * Math.PI);
+      c.fillStyle = `rgba(255,255,255,${a})`; c.fillRect(Math.round(sx) - 2, Math.round(sy), 5, 1); c.fillRect(Math.round(sx), Math.round(sy) - 2, 1, 5);
+    }
+    c.restore();
+  }
   // 호스트 전용 공주 의자 (뒤: 등받이 · 앞: 방석 앞면 + 팔걸이 + 다리)
   function throneSprites() {
     const G1 = "#f2c14e", G2 = "#c9982c", G3 = "#fff3a8", V1 = "#ff6fa8", V2 = "#d84a86", V3 = "#ffb8d8";
@@ -414,7 +499,7 @@
     x.fillText(title, 40, 8.5);
     return c;
   }
-  // 🏆 점프점프 랭킹 1위 게시판 — 1위가 바뀌면 자동으로 바뀜 (World.rankTop 을 게임에서 채워 줌)
+  // 🏆 점프점프 랭킹 1위 게시판 — 1위가 바뀌면 자동으로 바뀜 (World.rankTops 를 게임에서 채워 줌)
   function drawRankBoard(c, bx, by, t) {
     const W = 116, H = 104, x0 = bx - W / 2, y0 = by - H - 6;
     c.fillStyle = "rgba(40,30,20,.28)"; c.fillRect(x0 + 6, by - 4, W - 4, 8);
@@ -424,10 +509,17 @@
     c.fillStyle = "#f2c14e"; c.fillRect(x0 + 1, y0 + 1, W - 2, H - 20);
     c.fillStyle = "#fff3a8"; c.fillRect(x0 + 1, y0 + 1, W - 2, 3);
     c.fillStyle = "#fffaf2"; c.fillRect(x0 + 5, y0 + 18, W - 10, H - 40);
+    // 점프점프 1위 ↔ 올라올라 1위 를 6초마다 번갈아 보여 줌
+    const tops = window.World.rankTops || {};
+    let which = Math.floor(t / 6000) % 2 ? "up" : "jump";
+    if (!tops[which] && tops[which === "up" ? "jump" : "up"]) which = which === "up" ? "jump" : "up";
+    const title = T(which === "up" ? "rankBoardUp" : "rankBoard");
+    c.fillStyle = which === "up" ? "#8fe07a" : "#f2c14e"; c.fillRect(x0 + 1, y0 + 1, W - 2, 16);
     c.textAlign = "center"; c.textBaseline = "middle";
-    let fs = 10; c.font = `bold ${fs}px ${FONT}`; while (c.measureText(T("rankBoard")).width > W - 10 && fs > 6) { fs--; c.font = `bold ${fs}px ${FONT}`; }
-    c.fillStyle = OUT; c.fillText(T("rankBoard"), bx, y0 + 10);
-    const top = window.World.rankTop;
+    let fs = 10; c.font = `bold ${fs}px ${FONT}`; while (c.measureText(title).width > W - 10 && fs > 6) { fs--; c.font = `bold ${fs}px ${FONT}`; }
+    c.fillStyle = OUT; c.fillText(title, bx, y0 + 10);
+    c.fillStyle = which === "jump" ? OUT : "#c9982c"; c.fillRect(bx - 6, y0 + H - 21, 4, 2); c.fillStyle = which === "up" ? OUT : "#c9982c"; c.fillRect(bx + 2, y0 + H - 21, 4, 2); // 페이지 표시
+    const top = tops[which];
     const cy0 = y0 + 18;
     if (top && top.avatar) {
       // 반짝이는 배경 + 1위 캐릭터 크게 (2배)
@@ -602,5 +694,5 @@
     };
   }
 
-  window.World = { buildPlaza, buildLounge, rankTop: null };
+  window.World = { buildPlaza, buildLounge, rankTops: {} };
 })();

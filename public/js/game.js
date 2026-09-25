@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "15"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "18"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -281,7 +281,7 @@
   function render() {
     const w = scene();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = w.id === "plaza" ? "#3f7f3a" : "#2a2230";
+    ctx.fillStyle = w.id === "plaza" ? "#4a4458" : "#2a2230";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     const k = S * dpr;
     ctx.setTransform(k, 0, 0, k, -G.cam.x * k, -G.cam.y * k);
@@ -311,6 +311,7 @@
         if (c.artist || c.admin) drawSparkles(c.x, c.y, G.t, c.admin);
       } else o.draw(ctx, G.t);
     }
+    drawFx(Math.min(0.05, (performance.now() - (G.fxT || performance.now())) / 1000)); G.fxT = performance.now();
     if (G.target) { ctx.fillStyle = "rgba(255,127,174,.8)"; const r = 3 + (Math.floor(G.t / 150) % 2); ctx.fillRect(G.target.x - r, G.target.y - 1, r * 2, 2); ctx.fillRect(G.target.x - 1, G.target.y - r, 2, r * 2); }
 
     // ---- 화면 해상도 오버레이 (이름표, 말풍선, 아이콘) ----
@@ -343,10 +344,11 @@
       ctx.fillRect(X - tw / 2, Y - 9, tw, 17);
       ctx.fillStyle = "#fff"; ctx.fillText(label, X, Y);
       const b = c.id && G.bubbles.get(c.id);
-      if (b && b.until > now) drawBubble(X, Y - 14, msgText(b.m));
+      if (b && b.until > now) drawBubble(X, Y - 14, msgText(b.m), null, bubbleStyleOf(c));
       if (c.artist && !c.id && G.scene === "plaza" && Math.floor(G.t / 4000) % 3 === 0) drawBubble(X, Y - 14, t("artistHello"));
       if (c.npc && c.npc.say && c.npc.sayUntil > G.t) drawBubble(X, Y - 14, c.npc.say);
     }
+    drawBanner();
     if (G.mode === "world" && G.t - (G.mmT || 0) > 120) { G.mmT = G.t; drawMinimapFrame(); } // 지도는 초당 8번만 (폰 부담 줄이기)
   }
   // 아티스트(조젤리) 전용: 영롱한 푸른 빛 오라 + 반짝이
@@ -391,25 +393,77 @@
     ctx.restore();
   }
   const wrapCache = new Map();
-  function drawBubble(X, Y, text, bg) {
-    ctx.font = `12px ${FONT}`;
-    let lines = wrapCache.get(text);
-    if (!lines) { lines = wrapPx(text, 150).slice(0, 3); if (wrapCache.size > 200) wrapCache.clear(); wrapCache.set(text, lines); }
-    const w = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 16, h = lines.length * 16 + 8;
-    const x = X - w / 2, y = Y - h;
-    ctx.fillStyle = "#3a2530"; ctx.fillRect(x - 2, y - 2, w + 4, h + 4); ctx.fillRect(X - 4, Y, 8, 6);
-    ctx.fillStyle = bg || "#fff"; ctx.fillRect(x, y, w, h); ctx.fillRect(X - 2, Y, 4, 4);
-    ctx.fillStyle = "#3a2530"; lines.forEach((l, i) => ctx.fillText(l, X, y + 12 + i * 16));
+  // ---------------- 💬 말풍선 디자인 (기본 · 젤리젤리샵 7종 · 호스트 · 관리자) ----------------
+  // 0 기본 · 1 노랑 · 2 파랑 · 3 초록 (700) · 4 물방울 (1000) · 5 무지개 (1500) · 6 별빛 (2000) · 7 골드 크라운 (3000)
+  const BUBBLE_STYLES = {
+    0: { border: "#3a2530", bg: "#fff", w: 2 },
+    1: { border: "#f2c14e", bg: "#fffbe6", w: 3 },
+    2: { border: "#4a90e2", bg: "#eef6ff", w: 3 },
+    3: { border: "#3fae5a", bg: "#effbef", w: 3 },
+    4: { border: "#ff8fbf", bg: "#fff0f7", w: 3, dots: "#ffd1e6" },
+    5: { border: "rainbow", bg: "#ffffff", w: 4 },
+    6: { border: "#9fe8ff", bg: "#2b2f6b", w: 3, fg: "#ffffff", stars: true },
+    7: { border: "gold", bg: "#fffaf0", w: 4, crown: true, glitter: true },
+    host: { border: "#ff6fa8", bg: "#fff0f6", w: 4, hearts: true },
+    admin: { border: "#3a2530", bg: "#ffffff", w: 3, bowtie: true },
+  };
+  function bubbleStyleOf(c) {
+    if (!c) return 0;
+    if (c.artist && c.id) return "host";
+    if (c.admin) return "admin";
+    return (c.av && c.av.bubble) | 0;
   }
+  function drawBubbleOn(g, X, Y, text, styleKey, tt, fixedBg) {
+    const st = fixedBg ? { border: "#3a2530", bg: fixedBg, w: 2 } : BUBBLE_STYLES[styleKey] || BUBBLE_STYLES[0];
+    g.save(); g.font = `12px ${FONT}`; g.textAlign = "center"; g.textBaseline = "middle";
+    let lines = wrapCache.get(text);
+    if (!lines) { lines = wrapPx(text, 150, g).slice(0, 3); if (wrapCache.size > 200) wrapCache.clear(); wrapCache.set(text, lines); }
+    const bw = st.w, w = Math.max(...lines.map((l) => g.measureText(l).width)) + 16 + (st.hearts || st.crown ? 6 : 0), h = lines.length * 16 + 8;
+    const x = Math.round(X - w / 2), y = Math.round(Y - h);
+    // 테두리 색
+    let bc = st.border;
+    if (bc === "rainbow") { const gr = g.createLinearGradient(x, 0, x + w, 0); ["#ff6f7d", "#ffb347", "#f7e27a", "#7fe0a0", "#6fb8ff", "#a77ce0"].forEach((c2, i) => gr.addColorStop(i / 5, c2)); bc = gr; }
+    if (bc === "gold") { const gr = g.createLinearGradient(x, y, x + w, y + h); const sh = ((tt || 0) / 1200) % 1; gr.addColorStop(0, "#c9982c"); gr.addColorStop(Math.max(0, sh - 0.1), "#f2c14e"); gr.addColorStop(sh, "#fff3a8"); gr.addColorStop(Math.min(1, sh + 0.1), "#f2c14e"); gr.addColorStop(1, "#c9982c"); bc = gr; }
+    g.fillStyle = "#3a2530"; g.fillRect(x - bw - 1, y - bw - 1, w + bw * 2 + 2, h + bw * 2 + 2); // 바깥 외곽선
+    g.fillStyle = bc; g.fillRect(x - bw, y - bw, w + bw * 2, h + bw * 2);
+    g.fillRect(X - 5, Y, 10, 5 + bw); // 꼬리
+    g.fillStyle = st.bg; g.fillRect(x, y, w, h); g.fillRect(X - 3, Y, 6, 3 + bw - 1);
+    if (st.dots) { g.fillStyle = st.dots; for (let yy = y + 3; yy < y + h - 2; yy += 7) for (let xx = x + 3 + ((yy - y) % 14 ? 3 : 0); xx < x + w - 2; xx += 7) g.fillRect(xx, yy, 2, 2); }
+    if (st.stars) { const tw = Math.floor((tt || 0) / 250); for (let k = 0; k < 7; k++) { const sx = x + ((k * 37 + 11) % Math.max(10, w - 6)) + 3, sy = y + ((k * 23 + 5) % Math.max(6, h - 4)) + 2; g.fillStyle = (k + tw) % 3 ? "#9fe8ff" : "#fff3a8"; g.fillRect(sx, sy, 1, 1); }
+      for (let k = 0; k < 4; k++) { const on = (k + tw) % 2; if (!on) continue; const sx = [x - bw - 3, x + w + bw + 1, x + w * 0.3, x + w * 0.75][k], sy = [y + 3, y + h - 4, y - bw - 4, y + h + bw + 1][k]; g.fillStyle = "#fff3a8"; g.fillRect(sx - 1, sy, 3, 1); g.fillRect(sx, sy - 1, 1, 3); } }
+    if (st.hearts) { // 테두리에 박힌 하트
+      const heart = (hx, hy) => { g.fillStyle = "#ff2f7f"; g.fillRect(hx - 2, hy - 1, 2, 2); g.fillRect(hx + 1, hy - 1, 2, 2); g.fillRect(hx - 2, hy, 5, 2); g.fillRect(hx - 1, hy + 2, 3, 1); g.fillRect(hx, hy + 3, 1, 1); g.fillStyle = "#ffd1e6"; g.fillRect(hx - 1, hy - 1, 1, 1); };
+      for (let hx = x + 4; hx < x + w - 2; hx += 14) { heart(hx, y - bw + 1); heart(hx + 7, y + h + 1); }
+      for (let hy = y + 6; hy < y + h - 2; hy += 12) { heart(x - bw + 2, hy); heart(x + w + 1, hy); }
+    }
+    if (st.crown) { // 골드 크라운 + 반짝이
+      const cx = x - 2, cy = y - bw - 7;
+      g.fillStyle = "#3a2530"; g.fillRect(cx - 1, cy - 1, 16, 9);
+      g.fillStyle = "#f2c14e"; g.fillRect(cx, cy + 3, 14, 4); g.fillRect(cx, cy, 3, 3); g.fillRect(cx + 5, cy - 1, 4, 4); g.fillRect(cx + 11, cy, 3, 3);
+      g.fillStyle = "#d8434e"; g.fillRect(cx + 6, cy + 4, 2, 2); g.fillStyle = "#6fb8ff"; g.fillRect(cx + 2, cy + 4, 2, 2); g.fillRect(cx + 10, cy + 4, 2, 2);
+      const tw = (tt || 0) / 300;
+      for (let k = 0; k < 3; k++) { const a = Math.sin(tw + k * 2); if (a < 0.3) continue; const sx = [x + w + bw + 2, x + w * 0.5, x - bw - 4][k], sy = [y - 2, y + h + bw + 3, y + h - 2][k]; g.fillStyle = "#fff3a8"; g.fillRect(sx - 2, sy, 5, 1); g.fillRect(sx, sy - 2, 1, 5); }
+    }
+    if (st.bowtie) { // 왼쪽 위 빨간 나비넥타이
+      const bx = x + 2, by = y - bw - 3;
+      g.fillStyle = "#3a2530"; g.fillRect(bx - 1, by - 1, 15, 9);
+      g.fillStyle = "#d8434e"; g.fillRect(bx, by, 5, 7); g.fillRect(bx + 8, by, 5, 7); g.fillRect(bx + 5, by + 2, 3, 3);
+      g.fillStyle = "#a82a36"; g.fillRect(bx + 5, by + 2, 3, 3); g.fillStyle = "#ff8f9f"; g.fillRect(bx + 1, by + 1, 2, 1); g.fillRect(bx + 9, by + 1, 2, 1);
+    }
+    g.fillStyle = st.fg || "#3a2530";
+    lines.forEach((l, i) => g.fillText(l, X, y + 12 + i * 16));
+    g.restore();
+  }
+  function drawBubble(X, Y, text, bg, style) { drawBubbleOn(ctx, X, Y, text, style ?? 0, G.t, bg); }
   // 말풍선 줄바꿈 (영어는 단어 단위, 한/일은 글자 단위)
-  function wrapPx(text, maxW) {
+  function wrapPx(text, maxW, g = ctx) {
     const out = []; let line = "";
     const tokens = String(text).match(/\S+\s*|\s+/g) || [];
     const push = (tok) => {
-      if (ctx.measureText(line + tok).width <= maxW) { line += tok; return; }
+      if (g.measureText(line + tok).width <= maxW) { line += tok; return; }
       if (line) { out.push(line.trim()); line = ""; }
-      if (ctx.measureText(tok).width <= maxW) { line = tok; return; }
-      for (const ch of tok) { if (ctx.measureText(line + ch).width > maxW) { out.push(line); line = ""; } line += ch; }
+      if (g.measureText(tok).width <= maxW) { line = tok; return; }
+      for (const ch of tok) { if (g.measureText(line + ch).width > maxW) { out.push(line); line = ""; } line += ch; }
     };
     tokens.forEach(push);
     if (line.trim()) out.push(line.trim());
@@ -458,6 +512,52 @@
     G.seat = st.id; G.seatObj = st; G.target = null; G.pendingZone = null;
     G.player.x = st.x; G.player.y = st.y; G.player.dir = st.dir; G.player.moving = false;
     G.zone = null; kickSync();
+    if (st.id === "throne" && G.user.role === "artist") {
+      celebrate(st);
+    }
+  }
+  // ---------------- 👑 호스트 등장: 빵빠레 + 폭죽 + 배너 ----------------
+  G.fx = [];
+  function celebrate(st) {
+    const w = scene(); if (!w || w.id !== "plaza") return;
+    try { Piano.fanfare(); } catch {}
+    const cx = st.x, cy = st.y - 20;
+    const cols = ["#ff5f9f", "#ffd34d", "#7fe3ff", "#a77ce0", "#8fe07a", "#ffffff", "#ff9f43"];
+    const burst = (bx, by, n, col2) => { for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2 + Math.random() * 0.2, sp = 50 + Math.random() * 70; G.fx.push({ x: bx, y: by, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1.2 + Math.random() * 0.6, max: 1.8, col: i % 3 ? col2 : "#ffffff", s: Math.random() < 0.3 ? 3.5 : 2.5, g: 40 }); } };
+    for (let k = 0; k < 9; k++) {
+      setTimeout(() => {
+        const bx = cx + (Math.random() - 0.5) * 150, by = cy - 50 - Math.random() * 70;
+        // 올라가는 불꽃 꼬리
+        for (let j = 0; j < 8; j++) G.fx.push({ x: bx + (Math.random() - 0.5) * 2, y: by + 60 + j * 5, vx: 0, vy: -140, life: 0.35 - j * 0.03, max: 0.4, col: "#fff3a8", s: 2.5, g: 0 });
+        setTimeout(() => burst(bx, by, 46, cols[k % cols.length]), 380);
+      }, k * 450 + (k === 0 ? 0 : Math.random() * 200));
+    }
+    // 의자 주변 반짝이 분수
+    for (let k = 0; k < 40; k++) setTimeout(() => { for (const sx of [-26, 26]) G.fx.push({ x: cx + sx, y: cy + 16, vx: sx * 0.6 + (Math.random() - 0.5) * 30, vy: -90 - Math.random() * 60, life: 1, max: 1, col: cols[(Math.random() * cols.length) | 0], s: 2.5, g: 140 }); }, k * 90);
+  }
+  function drawFx(dt) {
+    if (!G.fx.length) return;
+    for (const f of G.fx) { f.x += f.vx * dt; f.y += f.vy * dt; f.vy += f.g * dt; f.vx *= 0.985; f.life -= dt; }
+    G.fx = G.fx.filter((f) => f.life > 0);
+    ctx.save(); ctx.globalCompositeOperation = "lighter";
+    for (const f of G.fx) { ctx.globalAlpha = Math.max(0, Math.min(1, f.life / (f.max * 0.6))); ctx.fillStyle = f.col; ctx.fillRect(f.x - f.s / 2, f.y - f.s / 2, f.s, f.s); }
+    ctx.restore();
+  }
+  function drawBanner() {
+    const b = G.banner; if (!b) return;
+    const left = b.until - performance.now(); if (left <= 0) { G.banner = null; return; }
+    const a = Math.min(1, left / 600, (4500 - left) / 300);
+    ctx.save(); ctx.globalAlpha = a;
+    const size = Math.min(44, VW / 12);
+    ctx.font = `bold ${size}px ${FONT}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    const Y = VH * 0.28 + Math.sin(performance.now() / 200) * 3, tw = ctx.measureText(b.text).width + 50;
+    const g = ctx.createLinearGradient(VW / 2 - tw / 2, 0, VW / 2 + tw / 2, 0);
+    g.addColorStop(0, "#ff7fae"); g.addColorStop(0.5, "#a77ce0"); g.addColorStop(1, "#5fb8ff");
+    ctx.fillStyle = "#3a2530"; ctx.fillRect(VW / 2 - tw / 2 - 4, Y - size * 0.8 - 4, tw + 8, size * 1.6 + 8);
+    ctx.fillStyle = g; ctx.fillRect(VW / 2 - tw / 2, Y - size * 0.8, tw, size * 1.6);
+    ctx.fillStyle = "#3a2530"; ctx.fillText(b.text, VW / 2 + 3, Y + 3);
+    ctx.fillStyle = "#fff"; ctx.fillText(b.text, VW / 2, Y);
+    ctx.restore();
   }
   function standUp() {
     const st = G.seatObj; G.seat = null; G.seatObj = null;
@@ -602,7 +702,7 @@
   function openShop() {
     const html = `<div class="shop-top"><div class="coin-big">🪙 <b id="shop-coins">${(G.user.coins | 0).toLocaleString()}</b> <small>${esc(t("coinName"))}</small></div>
       <p>${esc(t("shopIntro"))}</p><p class="shop-how">${esc(t("shopHow"))}</p></div>
-      <div class="chips shop-tabs">${["all", "hair", "outfit", "wand"].map((k) => `<button class="chip ${k === shopTab ? "on" : ""}" data-k="${k}">${esc(t({ all: "kAll", hair: "kHair", outfit: "kOutfit", wand: "kWand" }[k]))}</button>`).join("")}</div>
+      <div class="chips shop-tabs">${["all", "hair", "outfit", "wand", "bubble"].map((k) => `<button class="chip ${k === shopTab ? "on" : ""}" data-k="${k}">${esc(t({ all: "kAll", hair: "kHair", outfit: "kOutfit", wand: "kWand", bubble: "kBubble" }[k]))}</button>`).join("")}</div>
       <div class="shop-grid" id="shop-grid"></div>`;
     openModal("🛍️ " + t("bShop"), html, (el) => {
       el.querySelectorAll(".shop-tabs .chip").forEach((b) => b.addEventListener("click", () => { shopTab = b.dataset.k; el.querySelectorAll(".shop-tabs .chip").forEach((x) => x.classList.toggle("on", x === b)); renderShop(); }));
@@ -620,7 +720,7 @@
         : on ? (it.kind === "wand" ? `<button class="btn sm" data-act="off">${esc(t("unequip"))}</button>` : `<button class="btn sm on" disabled>${esc(t("equipped"))}</button>`)
         : `<button class="btn sm grape" data-act="wear">${esc(t("equip"))}</button>`;
       return `<div class="shop-item ${tier}${own ? " own" : ""}" data-id="${it.id}">
-        <span class="kind">${esc(t({ hair: "kHair", outfit: "kOutfit", wand: "kWand" }[it.kind]))}</span>${own ? `<span class="owned">${esc(t("owned"))}</span>` : ""}
+        <span class="kind">${esc(t({ hair: "kHair", outfit: "kOutfit", wand: "kWand", bubble: "kBubble" }[it.kind]))}</span>${own ? `<span class="owned">${esc(t("owned"))}</span>` : ""}
         <canvas width="96" height="96"></canvas><b>${esc(L(it.name))}</b><span class="price">🪙 ${it.price.toLocaleString()}</span>${btn}</div>`;
     }).join("");
     grid.querySelectorAll(".shop-item").forEach((card) => {
@@ -629,7 +729,9 @@
       x.imageSmoothingEnabled = false;
       const pv = previewAv(it);
       let dirI = 0;
-      const drawPv = () => { x.clearRect(0, 0, 96, 96); x.drawImage(Avatar.sprite(pv, ["down", "right", "up", "left"][dirI % 4], 0), 0, 0, 96, 96); };
+      const drawPv = it.kind === "bubble"
+        ? () => { x.clearRect(0, 0, 96, 96); x.save(); x.scale(0.8, 0.8); drawBubbleOn(x, 60, 58, t("bubbleSample"), it.idx, performance.now()); x.restore(); x.drawImage(Avatar.sprite(pv, "down", 0), 12, 10, 26, 30, 30, 62, 36, 40); }
+        : () => { x.clearRect(0, 0, 96, 96); x.drawImage(Avatar.sprite(pv, ["down", "right", "up", "left"][dirI % 4], 0), 0, 0, 96, 96); };
       drawPv();
       c.addEventListener("click", () => { dirI++; drawPv(); });
       const b = card.querySelector("[data-act]");
@@ -719,25 +821,30 @@
   // ---------------- 🏆 랭킹 1위 게시판 ----------------
   async function refreshRankTop() {
     if (!G.user) return;
-    try { const r = await API.gameTop(); World.rankTop = (r.top && r.top[0]) || null; } catch {}
+    try { const r = await API.gameTop("all"); World.rankTops = { jump: r.jump || null, up: r.up || null }; } catch {}
   }
   setInterval(() => { if (G.mode === "world" && G.scene === "plaza" && !document.hidden) refreshRankTop(); }, 60000);
   function openRankBoard() {
-    openModal(t("rankTitle"), `<div id="jg-rank" class="jg-rank rank-modal"><div class="rk-list"><p class="rk-empty">…</p></div></div>
-      <p style="text-align:center"><button class="btn sm pink" id="rk-go-game">🎮 ${esc(t("gameTitle"))}</button></p>`, (el) => {
-      el.querySelector("#rk-go-game").addEventListener("click", openGame);
-      API.gameTop().then((r) => { renderRank(r.top || []); World.rankTop = (r.top && r.top[0]) || null; }).catch(() => renderRank([]));
+    openModal("🏆 " + t("rankBoardZ"), `<div class="chips shop-tabs rk-tabs"><button class="chip on" data-g="jump">🏃 ${esc(t("gameTitle"))}</button><button class="chip" data-g="up">⬆️ ${esc(t("upTitle"))}</button></div>
+      <div id="jg-rank" class="jg-rank rank-modal"><div class="rk-list"><p class="rk-empty">…</p></div></div>
+      <p style="text-align:center"><button class="btn sm pink" id="rk-go-game">🎮 ${esc(t("bGame"))}</button></p>`, (el) => {
+      let g = "jump";
+      const load = () => API.gameTop(g).then((r) => renderRank(r.top || [])).catch(() => renderRank([]));
+      el.querySelectorAll(".rk-tabs .chip").forEach((b) => b.addEventListener("click", () => { g = b.dataset.g; el.querySelectorAll(".rk-tabs .chip").forEach((x) => x.classList.toggle("on", x === b)); el.querySelector(".rk-list").innerHTML = "<p class='rk-empty'>…</p>"; load(); }));
+      el.querySelector("#rk-go-game").addEventListener("click", () => openGame());
+      load();
     });
   }
 
   // ---------------- 🔮 오늘의 운세 ----------------
-  function fortuneBox(el) {
+  function fortuneBox(el, openNow) {
     const box = document.createElement("div"); box.className = "ft-box";
     let saved = ""; try { saved = localStorage.getItem("jl_birth") || ""; } catch {}
     box.innerHTML = `<button class="btn pink ft-open">${esc(t("ftBtn"))}</button>
       <div class="ft-form hidden"><label>${esc(t("ftBirth"))}</label><input type="date" class="inp ft-date" min="1900-01-01" max="${Fortune.today()}" value="${esc(saved)}"><button class="btn grape ft-go">${esc(t("ftGo"))}</button></div>
       <div class="ft-result hidden"></div>`;
     el.appendChild(box);
+    if (openNow) { box.querySelector(".ft-open").classList.add("hidden"); box.querySelector(".ft-form").classList.remove("hidden"); }
     const form = box.querySelector(".ft-form"), res = box.querySelector(".ft-result"), inp = box.querySelector(".ft-date");
     box.querySelector(".ft-open").addEventListener("click", () => { form.classList.toggle("hidden"); res.classList.add("hidden"); if (!form.classList.contains("hidden")) box.scrollIntoView({ block: "nearest", behavior: "smooth" }); });
     box.querySelector(".ft-go").addEventListener("click", () => {
@@ -753,33 +860,62 @@
         <div class="ft-lucky"><div><small>${esc(t("ftLuckyColor"))}</small><b><i style="background:${f.color}"></i>${esc(f.colorName)}</b></div>
         <div><small>${esc(t("ftLuckyNum"))}</small><b>${f.num}</b></div><div><small>${esc(t("ftLuckySong"))}</small><b>🎹 ${esc(f.song)}</b></div></div>`;
       res.classList.remove("hidden"); form.classList.add("hidden");
-      box.querySelector(".ft-open").textContent = t("ftAgain");
+      box.querySelector(".ft-open").textContent = t("ftAgain"); box.querySelector(".ft-open").classList.remove("hidden");
       res.scrollIntoView({ block: "nearest", behavior: "smooth" });
     });
   }
 
   // ---------------- 🎮 젤리게임월드: 점프점프 젤리월드 ----------------
-  function openGame() {
+  // 젤리게임월드: 게임 선택 → 점프점프 젤리월드 / 올라올라 / 오늘의 운세
+  function openGame(pick) {
     G.gameOpen = true;
     BGM.play("minigame");
-    openModal("🎮 " + t("gameTitle"), `<div id="jg-root"></div>`, (el) => {
-      const g = JumpGame.mount(el.querySelector("#jg-root"), {
-        t, avatar: () => G.user.avatar, dayLeft: G.user.gameLeft,
-        onStart: () => API.gameStart(),
-        onFinish: async (run, m) => {
-          const r = await API.gameFinish(run, m);
-          if (r.user) setUser(r.user);
-          if (r.top) { renderRank(r.top); World.rankTop = r.top[0] || null; }
-          if (r.rank) setTimeout(() => toast(t("rankNew", { n: r.rank })), 600);
-          return r;
-        },
-      });
-      const box = document.createElement("div"); box.className = "jg-rank"; box.id = "jg-rank";
-      box.innerHTML = `<h3>${esc(t("rankTitle"))}</h3><div class="rk-list"><p class="rk-empty">…</p></div>`;
-      fortuneBox(el.querySelector("#jg-root"));
-      el.querySelector("#jg-root").appendChild(box);
-      API.gameTop().then((r) => renderRank(r.top || [])).catch(() => renderRank([]));
-      G.modalCleanup = () => { g.destroy(); G.gameOpen = false; BGM.play(G.scene); };
+    openModal("🎮 " + t("bGame"), `<div id="gw-root"></div>`, (el) => {
+      let cur = null;
+      const root = el.querySelector("#gw-root");
+      const stop = () => { if (cur) { cur.destroy(); cur = null; } };
+      G.modalCleanup = () => { stop(); G.gameOpen = false; BGM.play(G.scene); };
+      const setTitle = (s2) => ($("#modal-title").textContent = s2);
+      function menu() {
+        stop(); setTitle("🎮 " + t("bGame"));
+        document.querySelector("#modal .modal").classList.remove("up");
+        root.innerHTML = `<p class="gw-intro">${esc(t("gwIntro"))}</p><div class="gw-menu">
+          <button class="gw-card jump" data-g="jump"><span class="gw-ico">🏃</span><b>${esc(t("gameTitle"))}</b><small>${esc(t("gwJump"))}</small></button>
+          <button class="gw-card up" data-g="up"><span class="gw-ico">⬆️</span><b>${esc(t("upTitle"))}</b><small>${esc(t("gwUp"))}</small></button>
+          <button class="gw-card ft" data-g="fortune"><span class="gw-ico">🔮</span><b>${esc(t("ftBtn").replace(/^🔮\s*/, ""))}</b><small>${esc(t("gwFortune"))}</small></button></div>
+          <p class="gw-day">🪙 ${esc(t("gameDayLeft", { n: G.user.gameLeft ?? 600 }))}</p>`;
+        root.querySelectorAll("[data-g]").forEach((b) => b.addEventListener("click", () => go(b.dataset.g)));
+      }
+      const backBtn = () => `<p class="gw-back"><button class="btn sm" id="gw-back">◀ ${esc(t("gwBack"))}</button></p>`;
+      function go(g) {
+        stop();
+        if (g === "fortune") {
+          setTitle(t("ftTitle"));
+          root.innerHTML = backBtn() + `<div id="gw-play"></div>`;
+          root.querySelector("#gw-back").addEventListener("click", menu);
+          fortuneBox(root.querySelector("#gw-play"), true);
+          return;
+        }
+        const up = g === "up";
+        setTitle((up ? "⬆️ " : "🏃 ") + t(up ? "upTitle" : "gameTitle"));
+        document.querySelector("#modal .modal").classList.toggle("up", up);
+        root.innerHTML = backBtn() + `<div id="gw-play"></div><div id="jg-rank" class="jg-rank"><h3>${esc(t(up ? "upRankTitle" : "rankTitle"))}</h3><div class="rk-list"><p class="rk-empty">…</p></div></div>`;
+        root.querySelector("#gw-back").addEventListener("click", menu);
+        const Game = up ? UpGame : JumpGame;
+        cur = Game.mount(root.querySelector("#gw-play"), {
+          t, avatar: () => G.user.avatar, dayLeft: G.user.gameLeft,
+          onStart: () => API.gameStart(g),
+          onFinish: async (run, m) => {
+            const r = await API.gameFinish(run, m);
+            if (r.user) setUser(r.user);
+            if (r.top) { renderRank(r.top); World.rankTops = World.rankTops || {}; World.rankTops[g] = r.top[0] || null; }
+            if (r.rank) setTimeout(() => toast(t("rankNew", { n: r.rank })), 600);
+            return r;
+          },
+        });
+        API.gameTop(g).then((r) => renderRank(r.top || [])).catch(() => renderRank([]));
+      }
+      if (pick) go(pick); else menu();
     }, true);
     document.querySelector("#modal .modal").classList.add("game");
   }
@@ -1061,6 +1197,7 @@
       const ex = G.others.get(o.id);
       const upd = { x: o.x, y: o.y, dir: o.dir, name: o.name, avatar: o.avatar, role: o.role, seat: o.seat || null,
         vx: o.vx || 0, vy: o.vy || 0, age: serverNow ? Math.max(0, serverNow - o.ts) : 0, recv: now, seen: now };
+      if (ex && o.role === "artist" && upd.seat === "throne" && ex.seat !== "throne") { const st = (scene().seats || []).find((x) => x.id === "throne"); if (st) celebrate(st); }
       if (ex) Object.assign(ex, upd);
       else G.others.set(o.id, { ...upd, id: o.id, rx: o.x, ry: o.y });
     }
@@ -1202,6 +1339,8 @@
     chipRow("hair", Avatar.HAIRS.map((_, i) => ({ name: t("hairs")[i] || shopName("hair", i) || t("hairsMore")[i - 10] || "?" })), "hair");
     if (draft.avatar.wand === undefined) draft.avatar.wand = 0;
     chipRow("wand", Avatar.WANDS.map((_, i) => ({ name: i ? shopName("wand", i) : t("wandNone") })), "wand");
+    if (draft.avatar.bubble === undefined) draft.avatar.bubble = 0;
+    chipRow("bubble", Array.from({ length: 8 }, (_, i) => ({ name: i ? shopName("bubble", i) : t("bubbleBasic") })), "bubble");
     chipRow("eye", Avatar.EYES.map((c, i) => ({ c, name: t("eyes")[i] })), "eye", "sw");
     chipRow("hairColor", Avatar.HAIR_COLORS.map((c, i) => ({ ...c, name: t("hairColors")[i] })), "hairColor", "sw");
     chipRow("skin", Avatar.SKINS.map((c, i) => ({ ...c, name: t("skins")[i] })), "skin", "sw");
@@ -1216,7 +1355,7 @@
     });
     if (!isHost && outs[draft.avatar.outfit] && outs[draft.avatar.outfit].host) draft.avatar.outfit = 0;
     // 젤리젤리샵 아이템: 산 것만 고를 수 있음
-    [["hair", "#o-hair"], ["outfit", "#o-outfit"], ["wand", "#o-wand"]].forEach(([kind, sel]) => {
+    [["hair", "#o-hair"], ["outfit", "#o-outfit"], ["wand", "#o-wand"], ["bubble", "#o-bubble"]].forEach(([kind, sel]) => {
       $(sel).querySelectorAll(".chip").forEach((el, idx) => {
         const it = shopItem(kind, idx); if (!it) return;
         el.classList.add("shop-only");

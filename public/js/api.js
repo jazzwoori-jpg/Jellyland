@@ -85,15 +85,16 @@
       if ((me.coins | 0) < it.price) fail("coins");
       me.coins -= it.price; me.inv.push(it.id); save(); return { user: pub(me) };
     }
-    if (route === "game/start") return { run: Date.now() + ".demo", dayLeft: me.gameDay === kstDay() ? Math.max(0, 600 - (me.gameCoins | 0)) : 600 };
+    if (route === "game/start") return { run: Date.now() + ".demo" + (b.game === "up" ? ".up" : ""), dayLeft: me.gameDay === kstDay() ? Math.max(0, 600 - (me.gameCoins | 0)) : 600 };
     if (route === "game/finish") {
       if (me.gameDay !== kstDay()) { me.gameDay = kstDay(); me.gameCoins = 0; }
       const coins = Math.min(200, 600 - (me.gameCoins | 0), Math.floor((+b.m || 0) / 100) * 5); me.gameCoins = (me.gameCoins | 0) + coins;
-      me.coins = (me.coins | 0) + coins; if ((+b.m | 0) > (me.best | 0)) me.best = +b.m | 0; save();
-      let top = ls.get("jl_demo_top", []).filter((e) => e.id !== me.id);
-      top.push({ id: me.id, name: me.nickname, avatar: me.avatar, role: me.role || "fan", m: me.best | 0, ts: Date.now() });
-      top = top.filter((e) => e.m > 0).sort((a, c) => c.m - a.m).slice(0, 10); ls.set("jl_demo_top", top);
-      return { user: pub(me), coins, best: me.best | 0, rank: top.findIndex((e) => e.id === me.id) + 1, top, dayLeft: 600 - me.gameCoins };
+      const up = String(b.run || "").endsWith(".up"), bk = up ? "bestUp" : "best", tk = up ? "jl_demo_top_up" : "jl_demo_top";
+      me.coins = (me.coins | 0) + coins; if ((+b.m | 0) > (me[bk] | 0)) me[bk] = +b.m | 0; save();
+      let top = ls.get(tk, []).filter((e) => e.id !== me.id);
+      top.push({ id: me.id, name: me.nickname, avatar: me.avatar, role: me.role || "fan", m: me[bk] | 0, ts: Date.now() });
+      top = top.filter((e) => e.m > 0).sort((a, c) => c.m - a.m).slice(0, 10); ls.set(tk, top);
+      return { user: pub(me), coins, best: me[bk] | 0, rank: top.findIndex((e) => e.id === me.id) + 1, top, dayLeft: 600 - me.gameCoins };
     }
     if (route === "rec") {
       const all = ls.get("jl_demo_rec", []), m = opts.method || "GET";
@@ -123,7 +124,11 @@
       return { ok: true, sent: ids.length };
     }
     if (route === "admin/delete") { const e = Object.keys(users).find((k) => users[k].id === b.id); if (e) delete users[e]; save(); return { ok: true }; }
-    if (route === "game/top") return { top: ls.get("jl_demo_top", []), best: me.best | 0 };
+    if (route === "game/top") {
+      if (q.get("game") === "all") return { jump: ls.get("jl_demo_top", [])[0] || null, up: ls.get("jl_demo_top_up", [])[0] || null };
+      const up = q.get("game") === "up";
+      return { top: ls.get(up ? "jl_demo_top_up" : "jl_demo_top", []), best: me[up ? "bestUp" : "best"] | 0 };
+    }
     if (route === "settings") { if (b.lang) me.lang = b.lang; ls.set("jl_demo_users", users); return { user: pub(me) }; }
     if (route === "presence") return { others: [], online: 1 };
     if (route === "sync") {
@@ -211,8 +216,8 @@
     gbDelete: (key) => call("guestbook?key=" + encodeURIComponent(key), { method: "DELETE" }),
     daily: () => call("daily", { method: "POST", body: {} }),
     buy: (item) => call("shop/buy", { method: "POST", body: { item } }),
-    gameStart: () => call("game/start", { method: "POST", body: {} }),
-    gameTop: () => call("game/top"),
+    gameStart: (game) => call("game/start", { method: "POST", body: { game: game || "jump" } }),
+    gameTop: (game) => call("game/top?game=" + (game || "jump")),
     mail: () => call("mail"),
     recList: (page) => call("rec?page=" + (page || 0)),
     recPost: (notes, title) => call("rec", { method: "POST", body: { notes, title } }),
