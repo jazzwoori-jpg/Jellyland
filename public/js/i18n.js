@@ -79,7 +79,7 @@
       gameHow3: "🪙 100m마다 5코인 · 한 판 최대 200코인",
       gameStart: "▶ 탭해서 시작", gameOver: "GAME OVER", gameDist: "거리", gameBest: "최고 기록", gameEarn: "획득 코인",
       gameAgain: "↻ 다시하기", gameSuper: "슈퍼젤리 모드!", gameMax: "최대 코인 달성! 🎉", gameSaving: "코인 저장 중…",
-      bgm: "배경음악",
+      bgm: "배경음악", rankTitle: "🏆 점프점프 랭킹 TOP 10", rankEmpty: "아직 기록이 없어요. 첫 번째 주인공이 되어 보세요!", rankNew: "🏆 랭킹 {n}위에 올랐어요!",
     },
     en: {
       subtitle: "♪ Pianist Jo Jelly's Profile World ♪",
@@ -159,7 +159,7 @@
       gameHow3: "🪙 5 coins every 100m · up to 200 coins per run",
       gameStart: "▶ Tap to start", gameOver: "GAME OVER", gameDist: "Distance", gameBest: "Best", gameEarn: "Coins earned",
       gameAgain: "↻ Play again", gameSuper: "SUPER JELLY MODE!", gameMax: "Max coins reached! 🎉", gameSaving: "Saving coins…",
-      bgm: "Music",
+      bgm: "Music", rankTitle: "🏆 Jump Jump Ranking TOP 10", rankEmpty: "No records yet. Be the first!", rankNew: "🏆 You ranked #{n}!",
     },
     ja: {
       subtitle: "♪ ピアニスト Jo Jelly のプロフィールワールド ♪",
@@ -239,7 +239,7 @@
       gameHow3: "🪙 100mごとに5コイン · 1回最大200コイン",
       gameStart: "▶ タップでスタート", gameOver: "GAME OVER", gameDist: "きょり", gameBest: "ベスト", gameEarn: "獲得コイン",
       gameAgain: "↻ もう一回", gameSuper: "スーパーゼリーモード！", gameMax: "最大コイン達成！🎉", gameSaving: "コインを保存中…",
-      bgm: "BGM",
+      bgm: "BGM", rankTitle: "🏆 ジャンプジャンプ ランキング TOP 10", rankEmpty: "まだ記録がありません。一番乗りをめざそう！", rankNew: "🏆 ランキング{n}位にランクイン！",
     },
   };
   const LANGS = [{ code: "ko", label: "한국어" }, { code: "en", label: "English" }, { code: "ja", label: "日本語" }];

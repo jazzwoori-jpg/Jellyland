@@ -13,6 +13,7 @@
 //   POST /api/shop/buy  {item}      ← 젤리젤리샵 구매
 //   POST /api/game/start            ← 점프점프 젤리월드 시작
 //   POST /api/game/finish {run, m}  ← 결과 제출 (100m 마다 5코인, 한 판 최대 200코인)
+//   GET  /api/game/top              ← 점프점프 젤리월드 랭킹 TOP 10
 import { getStore } from "@netlify/blobs";
 import crypto from "node:crypto";
 
@@ -330,7 +331,26 @@ export default async (req) => {
       user.coins = (user.coins | 0) + coins;
       if (m > (user.best | 0)) user.best = Math.floor(m);
       await saveUser();
-      return json({ user: publicUser(user), coins, best: user.best | 0 });
+      // 랭킹 TOP 10 (한 사람당 최고 기록 1개)
+      let rank = 0;
+      const gs = store("jl-game");
+      let top = (await gs.get("top", { type: "json" })) || [];
+      const mine = top.find((e) => e.id === user.id);
+      const mm = Math.floor(m);
+      const qualifies = mm > 0 && (!mine || mm > mine.m) && (top.length < 10 || mm > top[top.length - 1].m || mine);
+      if (qualifies) {
+        top = top.filter((e) => e.id !== user.id);
+        top.push({ id: user.id, name: me.nickname || "?", avatar: me.avatar, role: me.role, m: mm, ts: Date.now() });
+        top.sort((a, b) => b.m - a.m || a.ts - b.ts);
+        top = top.slice(0, 10);
+        await gs.setJSON("top", top);
+        rank = top.findIndex((e) => e.id === user.id) + 1;
+      }
+      return json({ user: publicUser(user), coins, best: user.best | 0, rank, top });
+    }
+    if (route === "game/top" && method === "GET") {
+      const top = (await store("jl-game").get("top", { type: "json" })) || [];
+      return json({ top, best: user.best | 0 });
     }
 
     // ---------- 접속자 위치 공유 ----------
