@@ -105,9 +105,9 @@
       let reels, outcome, mult;
       if (r < 333) { outcome = "jackpot"; mult = 100; reels = ["jelly", "jelly", "jelly"]; }
       else if (r < 1333) { outcome = "jelly2"; mult = 10; reels = ["jelly", "jelly", pk(O)].sort(() => Math.random() - 0.5); }
-      else if (r < 6333) { outcome = "apple"; mult = 3; reels = ["apple", "apple", "apple"]; }
-      else if (r < 11333) { outcome = "heart"; mult = 3; reels = ["heart", "heart", "heart"]; }
-      else if (r < 51333) { outcome = "star"; mult = 1; reels = ["star", pk(O), pk(["apple", "heart", ...O])].sort(() => Math.random() - 0.5); }
+      else if (r < 7583) { outcome = "apple"; mult = 3; reels = ["apple", "apple", "apple"]; }
+      else if (r < 13833) { outcome = "heart"; mult = 3; reels = ["heart", "heart", "heart"]; }
+      else if (r < 53833) { outcome = "star"; mult = 1; reels = ["star", pk(O), pk(["apple", "heart", ...O])].sort(() => Math.random() - 0.5); }
       else { outcome = "lose"; mult = 0; do { reels = [0, 1, 2].map(() => pk(["jelly", "apple", "heart", ...O])); } while (reels.filter((x) => x === "jelly").length >= 2 || (reels[0] === reels[1] && reels[1] === reels[2])); }
       me.coins = (me.coins | 0) - 20 + 20 * mult; save();
       return { reels, outcome, payout: 20 * mult, bet: 20, user: pub(me) };
@@ -138,6 +138,11 @@
       const ids = b.to === "all" ? Object.values(users).map((u) => u.id) : [b.to];
       ids.forEach((id) => { const k = "jl_demo_mail_" + id; ls.set(k, [m, ...ls.get(k, [])]); });
       return { ok: true, sent: ids.length };
+    }
+    if (route === "admin/coins") {
+      const e = Object.keys(users).find((k) => users[k].id === b.id); if (!e) fail("notfound", 404);
+      const u = users[e], before = u.coins | 0; u.coins = Math.max(0, b.mode === "set" ? +b.amount | 0 : before + (+b.amount | 0)); save();
+      return { ok: true, id: u.id, coins: u.coins, diff: u.coins - before, user: u.id === me.id ? pub(u) : undefined };
     }
     if (route === "admin/delete") { const e = Object.keys(users).find((k) => users[k].id === b.id); if (e) delete users[e]; save(); return { ok: true }; }
     if (route === "game/top") {
@@ -243,6 +248,7 @@
     mailDelete: (ts) => call("mail?ts=" + ts, { method: "DELETE" }),
     adminUsers: () => call("admin/users"),
     adminMail: (to, text) => call("admin/mail", { method: "POST", body: { to, text } }),
+    adminCoins: (id, mode, amount) => call("admin/coins", { method: "POST", body: { id, mode, amount } }),
     adminDelete: (id) => call("admin/delete", { method: "POST", body: { id } }),
     gameFinish: (run, m) => call("game/finish", { method: "POST", body: { run, m } }),
     chatDelete: (key) => call("chat?key=" + encodeURIComponent(key), { method: "DELETE" }),
