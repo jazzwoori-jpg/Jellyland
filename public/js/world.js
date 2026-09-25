@@ -341,7 +341,7 @@
 
     const zones = [
       ...buildings.map((b) => ({ id: b.id, x: b.door.x - 20, y: b.door.y - 8, w: 40, h: 26, label: b.name })),
-      { id: "profile", x: CX - 60, y: CY - 10, w: 120, h: 70, label: T("zProfile") },
+      { id: "piano", x: CX - 40, y: CY + 4, w: 80, h: 34, label: T("zPiano") },
       { id: "guide", x: 530, y: 800, w: 60, h: 26, label: T("zGuide") },
     ];
 
@@ -349,8 +349,9 @@
       id: "plaza", W, H, ground: g, objects, colliders, zones, buildings, seats,
       walkable: (x, y) => isP(x | 0, y | 0),
       spawn: { x: 640, y: 840 },
-      artist: { x: 604, y: 506, dir: "down" },
-      icons: buildings.map((b) => ({ x: b.x + b.w / 2 + 2, y: b.y - 4, icon: b.icon, label: b.name })),
+      artist: null, // 조젤리 NPC 는 없앰 (피아노를 직접 연주)
+      piano: { x: CX, y: CY - 10, front: { x: CX, y: CY + 18 } },
+      icons: [...buildings.map((b) => ({ x: b.x + b.w / 2 + 2, y: b.y - 4, icon: b.icon, label: b.name })), { x: CX, y: CY - 34, icon: "🎹" }],
       npcArea: [300, 300, 700, 500],
     };
   }
@@ -496,9 +497,9 @@
 
     const collide = (px, py) => colliders.some(([a, b, w, h]) => px > a && px < a + w && py > b && py < b + h);
     return {
-      id: "lounge", W, H, ground: g, objects, colliders: [], zones: [{ id: "exit", x: 290, y: 388, w: 60, h: 32, label: T("zExit") }, { id: "guestbook", x: 118, y: 150, w: 108, h: 30, label: T("zGuestbook") }], seats,
+      id: "lounge", W, H, ground: g, objects, colliders: [], zones: [{ id: "exit", x: 290, y: 388, w: 60, h: 32, label: T("zExit") }, { id: "guestbook", x: 118, y: 150, w: 108, h: 30, label: T("zGuestbook") }, { id: "piano", x: 290, y: 132, w: 64, h: 22, label: T("zPiano") }], seats,
       walkable: (px, py) => px > 10 && px < W - 10 && py > 92 && py < H - 4 && !collide(px, py),
-      spawn: { x: 320, y: 380 }, artist: null, icons: [{ x: 172, y: 84, icon: "✍️" }], signs: [{ x: 172, y: 76, key: "gbSign" }],
+      spawn: { x: 320, y: 380 }, artist: null, piano: { x: 322, y: 118, front: { x: 322, y: 142 } }, icons: [{ x: 172, y: 84, icon: "✍️" }, { x: 322, y: 96, icon: "🎹" }], signs: [{ x: 172, y: 76, key: "gbSign" }],
     };
   }
 

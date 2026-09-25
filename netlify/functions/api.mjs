@@ -290,7 +290,7 @@ export default async (req) => {
       user.nickname = nickname;
       const isHost = me.role === "artist";
       const owns = (kind, idx) => { const it = shopItemFor(kind, idx); return !it || isHost || (user.inv || []).includes(it[0]); };
-      let outfit = n(a.outfit, 16), hair = n(a.hair), wand = n(a.wand, 4);
+      let outfit = n(a.outfit, 16), hair = n(a.hair, 13), wand = n(a.wand, 4);
       if (HOST_OUTFITS.includes(outfit) && !isHost) outfit = 0; // 호스트 전용 의상은 호스트만
       if (!owns("outfit", outfit)) outfit = 0;                  // 샵 아이템은 산 사람만
       if (!owns("hair", hair)) hair = 0;

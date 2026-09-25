@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "12"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "13"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -156,6 +156,7 @@
     const w = scene();
     // 건물 클릭 → 문 앞으로 이동 후 입장
     if (w.buildings) for (const b of w.buildings) if (p.x > b.x && p.x < b.x + b.w && p.y > b.y && p.y < b.y + b.h + 6) { G.target = { x: b.door.x, y: b.door.y + 6 }; G.pendingZone = b.id; return; }
+    if (w.piano && Math.abs(p.x - w.piano.x) < 26 && p.y > w.piano.y - 26 && p.y < w.piano.y + 16) { G.target = { ...w.piano.front }; G.pendingZone = "piano"; return; }
     if (w.artist && Math.hypot(p.x - w.artist.x, p.y - 18 - w.artist.y) < 22) { G.target = { x: w.artist.x + 10, y: w.artist.y + 26 }; G.pendingZone = "profile"; return; }
     G.target = p; G.pendingZone = null;
   });
@@ -268,7 +269,7 @@
   function renderPrompt() {
     const pr = $("#prompt"), z = G.zone;
     if (!z) return pr.classList.add("hidden");
-    const act = z.id === "exit" || z.id === "seat" || z.id === "stand" ? "" : z.id === "profile" || z.id === "guide" || z.id === "guestbook" ? t("actView") : t("actEnter");
+    const act = z.id === "exit" || z.id === "seat" || z.id === "stand" ? "" : z.id === "piano" ? t("actPlay") : z.id === "profile" || z.id === "guide" || z.id === "guestbook" ? t("actView") : t("actEnter");
     pr.innerHTML = `<kbd>E</kbd>${esc(z.label)} ${esc(act)}`;
     pr.classList.remove("hidden");
   }
@@ -472,6 +473,7 @@
     if (id === "profile") return openProfile();
     if (id === "guide") return openGuide();
     if (id === "shop") return openShop();
+    if (id === "piano") return openPiano();
     if (id === "game") return openGame();
     if (id === "lounge") { await fade(true); setScene("lounge"); await fade(false); toast(t("enteredLounge")); return; }
     if (id === "exit") { const b = G.worlds.plaza.buildings.find((x) => x.id === "lounge"); await fade(true); setScene("plaza", { x: b.door.x, y: b.door.y + 22, dir: "down" }); await fade(false); }
@@ -481,7 +483,7 @@
   function openModal(title, html, onMount, wide) {
     if (G.modalCleanup) { const f = G.modalCleanup; G.modalCleanup = null; try { f(); } catch {} }
     document.querySelector("#modal .modal").classList.toggle("wide", !!wide);
-    document.querySelector("#modal .modal").classList.remove("game");
+    document.querySelector("#modal .modal").classList.remove("game", "piano");
     $("#modal-close-big").textContent = t("close");
     $("#modal-title").textContent = title;
     $("#modal-body").innerHTML = html;
@@ -499,9 +501,9 @@
   $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
 
   function openGallery() {
-    const html = `<p style="margin-top:0">${esc(t("galleryIntro"))}</p>
+    const html = `<p style="margin-top:0">${esc(t("galleryIntro"))} <button class="btn sm grape" data-go="profile">${esc(t("seeProfile"))}</button></p>
       <div class="gallery">${CFG.photos.map((p, i) => `<div class="polaroid" data-i="${i}"><img src="${esc(p.src)}" alt="${esc(L(p.caption))}" loading="lazy"><p>${esc(L(p.caption))}</p></div>`).join("")}</div>`;
-    openModal("📷 " + t("bGallery"), html, (el) => el.querySelectorAll(".polaroid").forEach((d) => d.addEventListener("click", () => {
+    openModal("📷 " + t("bGallery"), html, (el) => { el.querySelector("[data-go=profile]").addEventListener("click", openProfile); el.querySelectorAll(".polaroid").forEach((d) => d.addEventListener("click", () => {
       const i = +d.dataset.i, p = CFG.photos[i], n = CFG.photos.length;
       openModal("📷 " + t("bGallery"), `<div class="lightbox"><img src="${esc(p.src)}" alt=""><p>${esc(L(p.caption))} <small>(${i + 1}/${n})</small></p>
         <p class="lb-nav"><button class="btn sm" id="prev">◀</button><button class="btn sm" id="back">${esc(t("back"))}</button><button class="btn sm" id="next">▶</button></p></div>`, (e2) => {
@@ -510,7 +512,7 @@
         e2.querySelector("#prev").addEventListener("click", () => go(i - 1));
         e2.querySelector("#next").addEventListener("click", () => go(i + 1));
       });
-    })));
+    })); });
   }
   function openGalleryAt(i) { openGallery(); $("#modal-body").querySelector(`.polaroid[data-i="${i}"]`).click(); }
   function openAlbums() {
@@ -654,6 +656,44 @@
     if (!off) toast(t("wearing", { name: L(it.name) }));
   }
 
+  // ---------------- 🎹 피아노 연주 ----------------
+  function openPiano() {
+    BGM.stop(); // 연주하는 동안 배경음악은 잠시 멈춤
+    openModal(t("pianoTitle"), `<div id="pn-root"></div>`, (el) => {
+      const pn = Piano.mount(el.querySelector("#pn-root"), { t, lang: I.lang });
+      G.modalCleanup = () => { pn.destroy(); BGM.play(G.scene); };
+    }, true);
+    document.querySelector("#modal .modal").classList.add("piano");
+  }
+
+  // ---------------- 🔮 오늘의 운세 ----------------
+  function fortuneBox(el) {
+    const box = document.createElement("div"); box.className = "ft-box";
+    let saved = ""; try { saved = localStorage.getItem("jl_birth") || ""; } catch {}
+    box.innerHTML = `<button class="btn pink ft-open">${esc(t("ftBtn"))}</button>
+      <div class="ft-form hidden"><label>${esc(t("ftBirth"))}</label><input type="date" class="inp ft-date" min="1900-01-01" max="${Fortune.today()}" value="${esc(saved)}"><button class="btn grape ft-go">${esc(t("ftGo"))}</button></div>
+      <div class="ft-result hidden"></div>`;
+    el.appendChild(box);
+    const form = box.querySelector(".ft-form"), res = box.querySelector(".ft-result"), inp = box.querySelector(".ft-date");
+    box.querySelector(".ft-open").addEventListener("click", () => { form.classList.toggle("hidden"); res.classList.add("hidden"); if (!form.classList.contains("hidden")) box.scrollIntoView({ block: "nearest", behavior: "smooth" }); });
+    box.querySelector(".ft-go").addEventListener("click", () => {
+      const v = inp.value;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return toast(t("ftNeed"));
+      try { localStorage.setItem("jl_birth", v); } catch {}
+      const f = Fortune.make(v, I.lang);
+      const star = (n) => "★".repeat(n) + "☆".repeat(5 - n);
+      res.innerHTML = `<h3>${esc(t("ftTitle"))}</h3><p class="ft-for">${esc(t("ftFor", { date: Fortune.today(), sign: f.sign, animal: f.animal }))}</p>
+        <p class="ft-msg">${esc(f.msg)}</p>
+        <div class="ft-grid"><span>${esc(t("ftTotal"))}</span><b>${star(f.total)}</b><span>${esc(t("ftLove"))}</span><b>${star(f.love)}</b>
+        <span>${esc(t("ftMoney"))}</span><b>${star(f.money)}</b><span>${esc(t("ftHealth"))}</span><b>${star(f.health)}</b></div>
+        <div class="ft-lucky"><div><small>${esc(t("ftLuckyColor"))}</small><b><i style="background:${f.color}"></i>${esc(f.colorName)}</b></div>
+        <div><small>${esc(t("ftLuckyNum"))}</small><b>${f.num}</b></div><div><small>${esc(t("ftLuckySong"))}</small><b>🎹 ${esc(f.song)}</b></div></div>`;
+      res.classList.remove("hidden"); form.classList.add("hidden");
+      box.querySelector(".ft-open").textContent = t("ftAgain");
+      res.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  }
+
   // ---------------- 🎮 젤리게임월드: 점프점프 젤리월드 ----------------
   function openGame() {
     G.gameOpen = true;
@@ -672,6 +712,7 @@
       });
       const box = document.createElement("div"); box.className = "jg-rank"; box.id = "jg-rank";
       box.innerHTML = `<h3>${esc(t("rankTitle"))}</h3><div class="rk-list"><p class="rk-empty">…</p></div>`;
+      fortuneBox(el.querySelector("#jg-root"));
       el.querySelector("#jg-root").appendChild(box);
       API.gameTop().then((r) => renderRank(r.top || [])).catch(() => renderRank([]));
       G.modalCleanup = () => { g.destroy(); G.gameOpen = false; BGM.play(G.scene); };
@@ -866,8 +907,8 @@
   }
 
   function openGuide() {
-    openModal(t("guideTitle"), `<ul class="guide">${t("guide").map((g) => `<li>${g}</li>`).join("")}</ul><p style="text-align:center"><button class="btn sm pink" id="guide-install">${esc(t("installHelp"))}</button></p>`,
-      (el) => el.querySelector("#guide-install").addEventListener("click", openInstall));
+    openModal(t("guideTitle"), `<ul class="guide">${t("guide").map((g) => `<li>${g}</li>`).join("")}</ul><p style="text-align:center"><button class="btn sm grape" id="guide-profile">${esc(t("seeProfile"))}</button> <button class="btn sm pink" id="guide-install">${esc(t("installHelp"))}</button></p>`,
+      (el) => { el.querySelector("#guide-install").addEventListener("click", openInstall); el.querySelector("#guide-profile").addEventListener("click", openProfile); });
   }
   $("#btn-help").addEventListener("click", openGuide);
   function bgmBtn() { $("#btn-bgm").textContent = BGM.on ? "🔊" : "🔇"; $("#btn-bgm").title = t("bgm"); }
@@ -1094,7 +1135,7 @@
   function renderCreator() {
     chipRow("gender", [{ v: "f", name: t("female") }, { v: "m", name: t("male") }], "gender");
     const shopName = (kind, i) => { const it = shopItem(kind, i); return it ? L(it.name) : ""; };
-    chipRow("hair", Avatar.HAIRS.map((_, i) => ({ name: t("hairs")[i] || shopName("hair", i) })), "hair");
+    chipRow("hair", Avatar.HAIRS.map((_, i) => ({ name: t("hairs")[i] || shopName("hair", i) || t("hairsMore")[i - 10] || "?" })), "hair");
     if (draft.avatar.wand === undefined) draft.avatar.wand = 0;
     chipRow("wand", Avatar.WANDS.map((_, i) => ({ name: i ? shopName("wand", i) : t("wandNone") })), "wand");
     chipRow("eye", Avatar.EYES.map((c, i) => ({ c, name: t("eyes")[i] })), "eye", "sw");
