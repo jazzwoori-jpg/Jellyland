@@ -517,3 +517,16 @@ body.touch .pn-hint:first-of-type { display: none; }
 @keyframes shotflash { 0% { opacity: .85; } 100% { opacity: 0; } }
 .shot-view { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
 .shot-view img { max-width: 100%; max-height: 60vh; border: 3px solid var(--ink); border-radius: 8px; -webkit-touch-callout: default; -webkit-user-select: auto; user-select: auto; }
+/* ---------- v21: 럭키젤리! ---------- */
+.gw-card.lucky { background: linear-gradient(#fff3a8, #ffd34d); }
+.sl-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.sl { width: min(100%, 640px); aspect-ratio: 360 / 250; image-rendering: pixelated; border: 3px solid var(--ink); border-radius: 10px; }
+.sl-bar { display: flex; gap: 12px; align-items: center; }
+.sl-bar .sl-coins { font-weight: bold; background: #fff3a8; border: 2px solid var(--ink); border-radius: 12px; padding: 4px 10px; }
+.sl-bar .sl-spin { font-size: 18px; padding: 10px 22px; }
+.sl-pay { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; width: 100%; max-width: 640px; }
+.sl-row { display: flex; align-items: center; gap: 3px; border: 2px solid var(--ink); border-radius: 8px; background: #fff; padding: 3px 6px; }
+.sl-row canvas { width: 26px; height: 26px; image-rendering: pixelated; }
+.sl-row i.any { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; font-style: normal; font-weight: bold; color: #9a8a9a; }
+.sl-row b { margin-left: auto; font-size: 12px; color: #d8434e; }
+.sl-note { font-size: 11px; opacity: .75; text-align: center; margin: 0; }

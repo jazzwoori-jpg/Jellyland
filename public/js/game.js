@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "20"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "21"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -884,6 +884,7 @@
         root.innerHTML = `<p class="gw-intro">${esc(t("gwIntro"))}</p><div class="gw-menu">
           <button class="gw-card jump" data-g="jump"><span class="gw-ico">🏃</span><b>${esc(t("gameTitle"))}</b><small>${esc(t("gwJump"))}</small></button>
           <button class="gw-card up" data-g="up"><span class="gw-ico">⬆️</span><b>${esc(t("upTitle"))}</b><small>${esc(t("gwUp"))}</small></button>
+          <button class="gw-card lucky" data-g="slot"><span class="gw-ico">🎰</span><b>${esc(t("slTitle"))}</b><small>${esc(t("gwSlot"))}</small></button>
           <button class="gw-card ft" data-g="fortune"><span class="gw-ico">🔮</span><b>${esc(t("ftBtn").replace(/^🔮\s*/, ""))}</b><small>${esc(t("gwFortune"))}</small></button></div>
           <p class="gw-day">🪙 ${esc(t("gameDayLeft", { n: G.user.gameLeft ?? 600 }))}</p>`;
         root.querySelectorAll("[data-g]").forEach((b) => b.addEventListener("click", () => go(b.dataset.g)));
@@ -897,6 +898,17 @@
           root.innerHTML = backBtn() + `<div id="gw-play"></div>`;
           root.querySelector("#gw-back").addEventListener("click", menu);
           fortuneBox(root.querySelector("#gw-play"), true);
+          return;
+        }
+        if (g === "slot") {
+          setTitle("🎰 " + t("slTitle"));
+          root.innerHTML = backBtn() + `<div id="gw-play"></div>`;
+          root.querySelector("#gw-back").addEventListener("click", menu);
+          cur = LuckyJelly.mount(root.querySelector("#gw-play"), {
+            t, toast, coins: () => G.user.coins | 0,
+            onSpin: async () => { const r = await API.slotSpin(); G.user.coins = (r.user.coins | 0) - (r.payout | 0); renderCoins(); G._slotUser = r.user; return r; },
+            onResult: () => { if (G._slotUser) { setUser(G._slotUser); G._slotUser = null; } },
+          });
           return;
         }
         const up = g === "up";

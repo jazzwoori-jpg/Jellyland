@@ -44,6 +44,13 @@
     coin() { if (!ctx()) return; const t = actx.currentTime; tone("square", hz(88), 0, t, 0.08, 0.07); tone("square", hz(93), 0, t + 0.07, 0.22, 0.07); },
     smash() { if (!ctx()) return; const t = actx.currentTime; noise(t, 0.25, 0.4, 500, "lowpass"); tone("square", 300, 90, t, 0.2, 0.1); },
     star() { if (!ctx()) return; const t = actx.currentTime; [0, 4, 7, 12, 16, 19, 24].forEach((s, i) => tone("triangle", hz(72 + s), 0, t + i * 0.05, 0.18, 0.08)); },
+    // 🎰 럭키젤리
+    slotStart() { if (!ctx()) return; const t = actx.currentTime; tone("square", 220, 660, t, 0.25, 0.08); noise(t, 0.3, 0.1, 2500, "bandpass"); },
+    slotTick() { if (!ctx()) return; const t = actx.currentTime; tone("square", 1800, 1200, t, 0.025, 0.035); },
+    slotStop() { if (!ctx()) return; const t = actx.currentTime; tone("square", 180, 90, t, 0.1, 0.12); noise(t, 0.06, 0.2, 600, "lowpass"); },
+    win() { if (!ctx()) return; const t = actx.currentTime; [72, 76, 79, 84, 79, 84].forEach((m, i) => tone("square", hz(m), 0, t + i * 0.09, 0.14, 0.08)); for (let i = 0; i < 8; i++) tone("triangle", hz(96 + (i % 3) * 4), 0, t + 0.5 + i * 0.06, 0.08, 0.05); },
+    jackpot() { if (!ctx()) return; const t = actx.currentTime; [60, 64, 67, 72, 76, 79, 84, 88, 91, 96].forEach((m, i) => tone("square", hz(m), 0, t + i * 0.06, 0.2, 0.08)); [72, 76, 79, 84].forEach((m) => tone("sawtooth", hz(m), 0, t + 0.7, 1.2, 0.05)); for (let i = 0; i < 24; i++) tone("triangle", hz(100 + (i % 5) * 2), 0, t + 0.7 + i * 0.05, 0.06, 0.04); noise(t + 0.7, 1.2, 0.15, 7000, "highpass"); },
+    aww() { if (!ctx()) return; const t = actx.currentTime; tone("triangle", hz(67), hz(60), t, 0.35, 0.1); tone("triangle", hz(60), hz(55), t + 0.35, 0.5, 0.1); },
     // 😝 탈락: "깔깔깔깔~" 웃음 + "메롱~" 놀리는 멜로디 (나나나나나~)
     laugh() {
       if (!ctx()) return;
@@ -106,6 +113,21 @@
         for (let s = 0; s < 16; s++) { if (s === 0 || s === 6 || s === 10) drums.push([b, s, "k"]); if (s === 4 || s === 12) drums.push([b, s, "s"]); if (s % 2 === 1) drums.push([b, s, "h"]); }
       });
       return { bpm: 138, spb: 16, bars: 8, parts: [{ wave: "triangle", vol: 0.5, notes: bass }, { wave: "square", vol: 0.06, notes: arp }, { wave: "square", vol: 0.15, notes: mel }], drums };
+    })(),
+    // 🎰 럭키젤리!: 반짝이는 카지노 스윙 (워킹 베이스 + 셔플 리듬, 126bpm)
+    slot: (() => {
+      const prog = [[48, 0], [45, 1], [50, 1], [43, 0], [48, 0], [45, 1], [50, 1], [43, 0]];
+      const bass = [], comp = [], mel = [], drums = [];
+      const lick = [[[0, 79, 2], [3, 76, 1], [4, 79, 2], [7, 81, 1], [8, 79, 4], [12, 76, 2], [14, 74, 2]], [[0, 72, 2], [3, 76, 1], [4, 79, 3], [8, 84, 2], [11, 83, 1], [12, 81, 4]],
+        [[0, 77, 2], [3, 81, 1], [4, 84, 2], [7, 81, 1], [8, 77, 2], [10, 74, 2], [12, 77, 4]], [[0, 79, 3], [4, 74, 2], [6, 77, 2], [8, 79, 2], [10, 83, 2], [12, 86, 4]]];
+      prog.forEach(([r, mi], b) => {
+        const ch = chordNotes(r, mi), walk = [r - 12, ch[1] - 12, ch[2] - 12, r - 12 + (b % 2 ? 10 : 9)];
+        walk.forEach((m, i) => bass.push([b, i * 4, m, 3.2]));
+        [4, 12].forEach((st) => ch.forEach((m) => comp.push([b, st, m + 12, 1.5])));
+        lick[b % 4].forEach(([st, m, l]) => mel.push([b, st, m, l]));
+        for (let st = 0; st < 16; st++) { if (st === 0 || st === 8) drums.push([b, st, "k"]); if (st === 4 || st === 12) drums.push([b, st, "s"]); if (st % 4 === 0 || st % 4 === 3) drums.push([b, st, "h"]); }
+      });
+      return { bpm: 126, spb: 16, bars: 8, parts: [{ wave: "triangle", vol: 0.5, notes: bass }, { wave: "square", vol: 0.05, notes: comp }, { wave: "square", vol: 0.14, notes: mel }], drums };
     })(),
     // 🔮 오늘의 운세: 신비로운 오르골 (3/4박, 80bpm)
     fortune: (() => {

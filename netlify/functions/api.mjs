@@ -14,6 +14,7 @@
 //   POST /api/game/start            ← 점프점프 젤리월드 시작
 //   POST /api/game/finish {run, m}  ← 결과 제출 (100m 마다 5코인, 한 판 최대 200코인)
 //   GET  /api/game/top              ← 점프점프 젤리월드 랭킹 TOP 10
+//   POST /api/slot/spin             ← 🎰 럭키젤리! (참가비 100코인, 결과는 서버에서 확률로 결정)
 //   GET  /api/rec?page · POST /api/rec {notes, title} · DELETE /api/rec?key  ← 🎹 "젤리에게 들려줘!" 피아노 녹음 게시판 (하루 3개, 10초)
 //   GET  /api/mail  · POST /api/mail/read · DELETE /api/mail?ts=  ← 내 쪽지함
 //   GET  /api/admin/users · POST /api/admin/mail {to, text} · POST /api/admin/delete {id}  ← 관리자 전용 회원관리
@@ -394,6 +395,39 @@ export default async (req) => {
       const g = gameOf(url.searchParams.get("game"));
       const top = (await gs.get(GAMES[g].top, { type: "json" })) || [];
       return json({ top, best: user[GAMES[g].best] | 0 });
+    }
+
+    // ---------- 🎰 럭키젤리! ----------
+    // 확률 (10만 분율): Jelly! 3개 1/1000 → 20배 · Jelly! 2개 1/500 → 5배 · 사과 3개 1/100 → 3배 · 하트 3개 1/100 → 3배
+    //                  별 1개 이상 18% → 참가비 돌려받음 · 나머지 → 참가비 잃음
+    if (route === "slot/spin" && method === "POST") {
+      const BET = 100;
+      if ((user.coins | 0) < BET) return err("coins", 400);
+      const J = "jelly", A = "apple", Hh = "heart", S = "star";
+      const OTHERS = ["grape", "bell", "note", "candy", "clover", "lemon"];
+      const pick = (arr) => arr[crypto.randomInt(arr.length)];
+      const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+      const r = crypto.randomInt(100000);
+      let outcome, reels, mult;
+      if (r < 100) { outcome = "jackpot"; mult = 20; reels = [J, J, J]; }
+      else if (r < 300) { outcome = "jelly2"; mult = 5; reels = shuffle([J, J, pick([A, Hh, ...OTHERS])]); }
+      else if (r < 1300) { outcome = "apple"; mult = 3; reels = [A, A, A]; }
+      else if (r < 2300) { outcome = "heart"; mult = 3; reels = [Hh, Hh, Hh]; }
+      else if (r < 20300) { // 별: 1~2개 + 나머지 (Jelly! 는 최대 1개, 같은 그림 3개는 안 나오게)
+        outcome = "star"; mult = 1;
+        const stars = crypto.randomInt(10) < 8 ? 1 : 2;
+        const rest = []; while (rest.length < 3 - stars) { const c = pick([J, A, Hh, ...OTHERS]); if (c === J && rest.includes(J)) continue; rest.push(c); }
+        reels = shuffle([...Array(stars).fill(S), ...rest]);
+      } else { // 꽝: 별 없음 · Jelly! 최대 1개 · 3개 같은 그림 없음
+        outcome = "lose"; mult = 0;
+        do { reels = [0, 1, 2].map(() => pick([J, A, Hh, ...OTHERS])); } while (reels.filter((x) => x === J).length >= 2 || (reels[0] === reels[1] && reels[1] === reels[2]));
+      }
+      const payout = BET * mult;
+      user.coins = (user.coins | 0) - BET + payout;
+      user.slotSpins = (user.slotSpins | 0) + 1;
+      await saveUser();
+      if (outcome === "jackpot") { try { const gs = store("jl-game"); const list = (await gs.get("slot_jackpots", { type: "json" })) || []; list.unshift({ name: me.nickname, ts: Date.now() }); await gs.setJSON("slot_jackpots", list.slice(0, 20)); } catch {} }
+      return json({ reels, outcome, payout, bet: BET, user: publicUser(user) });
     }
 
     // ---------- 🎹 젤리에게 들려줘! (피아노 녹음 게시판) ----------
