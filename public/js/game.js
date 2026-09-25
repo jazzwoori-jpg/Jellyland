@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "17"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "18"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -344,7 +344,7 @@
       ctx.fillRect(X - tw / 2, Y - 9, tw, 17);
       ctx.fillStyle = "#fff"; ctx.fillText(label, X, Y);
       const b = c.id && G.bubbles.get(c.id);
-      if (b && b.until > now) drawBubble(X, Y - 14, msgText(b.m));
+      if (b && b.until > now) drawBubble(X, Y - 14, msgText(b.m), null, bubbleStyleOf(c));
       if (c.artist && !c.id && G.scene === "plaza" && Math.floor(G.t / 4000) % 3 === 0) drawBubble(X, Y - 14, t("artistHello"));
       if (c.npc && c.npc.say && c.npc.sayUntil > G.t) drawBubble(X, Y - 14, c.npc.say);
     }
@@ -393,25 +393,77 @@
     ctx.restore();
   }
   const wrapCache = new Map();
-  function drawBubble(X, Y, text, bg) {
-    ctx.font = `12px ${FONT}`;
-    let lines = wrapCache.get(text);
-    if (!lines) { lines = wrapPx(text, 150).slice(0, 3); if (wrapCache.size > 200) wrapCache.clear(); wrapCache.set(text, lines); }
-    const w = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 16, h = lines.length * 16 + 8;
-    const x = X - w / 2, y = Y - h;
-    ctx.fillStyle = "#3a2530"; ctx.fillRect(x - 2, y - 2, w + 4, h + 4); ctx.fillRect(X - 4, Y, 8, 6);
-    ctx.fillStyle = bg || "#fff"; ctx.fillRect(x, y, w, h); ctx.fillRect(X - 2, Y, 4, 4);
-    ctx.fillStyle = "#3a2530"; lines.forEach((l, i) => ctx.fillText(l, X, y + 12 + i * 16));
+  // ---------------- 💬 말풍선 디자인 (기본 · 젤리젤리샵 7종 · 호스트 · 관리자) ----------------
+  // 0 기본 · 1 노랑 · 2 파랑 · 3 초록 (700) · 4 물방울 (1000) · 5 무지개 (1500) · 6 별빛 (2000) · 7 골드 크라운 (3000)
+  const BUBBLE_STYLES = {
+    0: { border: "#3a2530", bg: "#fff", w: 2 },
+    1: { border: "#f2c14e", bg: "#fffbe6", w: 3 },
+    2: { border: "#4a90e2", bg: "#eef6ff", w: 3 },
+    3: { border: "#3fae5a", bg: "#effbef", w: 3 },
+    4: { border: "#ff8fbf", bg: "#fff0f7", w: 3, dots: "#ffd1e6" },
+    5: { border: "rainbow", bg: "#ffffff", w: 4 },
+    6: { border: "#9fe8ff", bg: "#2b2f6b", w: 3, fg: "#ffffff", stars: true },
+    7: { border: "gold", bg: "#fffaf0", w: 4, crown: true, glitter: true },
+    host: { border: "#ff6fa8", bg: "#fff0f6", w: 4, hearts: true },
+    admin: { border: "#3a2530", bg: "#ffffff", w: 3, bowtie: true },
+  };
+  function bubbleStyleOf(c) {
+    if (!c) return 0;
+    if (c.artist && c.id) return "host";
+    if (c.admin) return "admin";
+    return (c.av && c.av.bubble) | 0;
   }
+  function drawBubbleOn(g, X, Y, text, styleKey, tt, fixedBg) {
+    const st = fixedBg ? { border: "#3a2530", bg: fixedBg, w: 2 } : BUBBLE_STYLES[styleKey] || BUBBLE_STYLES[0];
+    g.save(); g.font = `12px ${FONT}`; g.textAlign = "center"; g.textBaseline = "middle";
+    let lines = wrapCache.get(text);
+    if (!lines) { lines = wrapPx(text, 150, g).slice(0, 3); if (wrapCache.size > 200) wrapCache.clear(); wrapCache.set(text, lines); }
+    const bw = st.w, w = Math.max(...lines.map((l) => g.measureText(l).width)) + 16 + (st.hearts || st.crown ? 6 : 0), h = lines.length * 16 + 8;
+    const x = Math.round(X - w / 2), y = Math.round(Y - h);
+    // 테두리 색
+    let bc = st.border;
+    if (bc === "rainbow") { const gr = g.createLinearGradient(x, 0, x + w, 0); ["#ff6f7d", "#ffb347", "#f7e27a", "#7fe0a0", "#6fb8ff", "#a77ce0"].forEach((c2, i) => gr.addColorStop(i / 5, c2)); bc = gr; }
+    if (bc === "gold") { const gr = g.createLinearGradient(x, y, x + w, y + h); const sh = ((tt || 0) / 1200) % 1; gr.addColorStop(0, "#c9982c"); gr.addColorStop(Math.max(0, sh - 0.1), "#f2c14e"); gr.addColorStop(sh, "#fff3a8"); gr.addColorStop(Math.min(1, sh + 0.1), "#f2c14e"); gr.addColorStop(1, "#c9982c"); bc = gr; }
+    g.fillStyle = "#3a2530"; g.fillRect(x - bw - 1, y - bw - 1, w + bw * 2 + 2, h + bw * 2 + 2); // 바깥 외곽선
+    g.fillStyle = bc; g.fillRect(x - bw, y - bw, w + bw * 2, h + bw * 2);
+    g.fillRect(X - 5, Y, 10, 5 + bw); // 꼬리
+    g.fillStyle = st.bg; g.fillRect(x, y, w, h); g.fillRect(X - 3, Y, 6, 3 + bw - 1);
+    if (st.dots) { g.fillStyle = st.dots; for (let yy = y + 3; yy < y + h - 2; yy += 7) for (let xx = x + 3 + ((yy - y) % 14 ? 3 : 0); xx < x + w - 2; xx += 7) g.fillRect(xx, yy, 2, 2); }
+    if (st.stars) { const tw = Math.floor((tt || 0) / 250); for (let k = 0; k < 7; k++) { const sx = x + ((k * 37 + 11) % Math.max(10, w - 6)) + 3, sy = y + ((k * 23 + 5) % Math.max(6, h - 4)) + 2; g.fillStyle = (k + tw) % 3 ? "#9fe8ff" : "#fff3a8"; g.fillRect(sx, sy, 1, 1); }
+      for (let k = 0; k < 4; k++) { const on = (k + tw) % 2; if (!on) continue; const sx = [x - bw - 3, x + w + bw + 1, x + w * 0.3, x + w * 0.75][k], sy = [y + 3, y + h - 4, y - bw - 4, y + h + bw + 1][k]; g.fillStyle = "#fff3a8"; g.fillRect(sx - 1, sy, 3, 1); g.fillRect(sx, sy - 1, 1, 3); } }
+    if (st.hearts) { // 테두리에 박힌 하트
+      const heart = (hx, hy) => { g.fillStyle = "#ff2f7f"; g.fillRect(hx - 2, hy - 1, 2, 2); g.fillRect(hx + 1, hy - 1, 2, 2); g.fillRect(hx - 2, hy, 5, 2); g.fillRect(hx - 1, hy + 2, 3, 1); g.fillRect(hx, hy + 3, 1, 1); g.fillStyle = "#ffd1e6"; g.fillRect(hx - 1, hy - 1, 1, 1); };
+      for (let hx = x + 4; hx < x + w - 2; hx += 14) { heart(hx, y - bw + 1); heart(hx + 7, y + h + 1); }
+      for (let hy = y + 6; hy < y + h - 2; hy += 12) { heart(x - bw + 2, hy); heart(x + w + 1, hy); }
+    }
+    if (st.crown) { // 골드 크라운 + 반짝이
+      const cx = x - 2, cy = y - bw - 7;
+      g.fillStyle = "#3a2530"; g.fillRect(cx - 1, cy - 1, 16, 9);
+      g.fillStyle = "#f2c14e"; g.fillRect(cx, cy + 3, 14, 4); g.fillRect(cx, cy, 3, 3); g.fillRect(cx + 5, cy - 1, 4, 4); g.fillRect(cx + 11, cy, 3, 3);
+      g.fillStyle = "#d8434e"; g.fillRect(cx + 6, cy + 4, 2, 2); g.fillStyle = "#6fb8ff"; g.fillRect(cx + 2, cy + 4, 2, 2); g.fillRect(cx + 10, cy + 4, 2, 2);
+      const tw = (tt || 0) / 300;
+      for (let k = 0; k < 3; k++) { const a = Math.sin(tw + k * 2); if (a < 0.3) continue; const sx = [x + w + bw + 2, x + w * 0.5, x - bw - 4][k], sy = [y - 2, y + h + bw + 3, y + h - 2][k]; g.fillStyle = "#fff3a8"; g.fillRect(sx - 2, sy, 5, 1); g.fillRect(sx, sy - 2, 1, 5); }
+    }
+    if (st.bowtie) { // 왼쪽 위 빨간 나비넥타이
+      const bx = x + 2, by = y - bw - 3;
+      g.fillStyle = "#3a2530"; g.fillRect(bx - 1, by - 1, 15, 9);
+      g.fillStyle = "#d8434e"; g.fillRect(bx, by, 5, 7); g.fillRect(bx + 8, by, 5, 7); g.fillRect(bx + 5, by + 2, 3, 3);
+      g.fillStyle = "#a82a36"; g.fillRect(bx + 5, by + 2, 3, 3); g.fillStyle = "#ff8f9f"; g.fillRect(bx + 1, by + 1, 2, 1); g.fillRect(bx + 9, by + 1, 2, 1);
+    }
+    g.fillStyle = st.fg || "#3a2530";
+    lines.forEach((l, i) => g.fillText(l, X, y + 12 + i * 16));
+    g.restore();
+  }
+  function drawBubble(X, Y, text, bg, style) { drawBubbleOn(ctx, X, Y, text, style ?? 0, G.t, bg); }
   // 말풍선 줄바꿈 (영어는 단어 단위, 한/일은 글자 단위)
-  function wrapPx(text, maxW) {
+  function wrapPx(text, maxW, g = ctx) {
     const out = []; let line = "";
     const tokens = String(text).match(/\S+\s*|\s+/g) || [];
     const push = (tok) => {
-      if (ctx.measureText(line + tok).width <= maxW) { line += tok; return; }
+      if (g.measureText(line + tok).width <= maxW) { line += tok; return; }
       if (line) { out.push(line.trim()); line = ""; }
-      if (ctx.measureText(tok).width <= maxW) { line = tok; return; }
-      for (const ch of tok) { if (ctx.measureText(line + ch).width > maxW) { out.push(line); line = ""; } line += ch; }
+      if (g.measureText(tok).width <= maxW) { line = tok; return; }
+      for (const ch of tok) { if (g.measureText(line + ch).width > maxW) { out.push(line); line = ""; } line += ch; }
     };
     tokens.forEach(push);
     if (line.trim()) out.push(line.trim());
@@ -650,7 +702,7 @@
   function openShop() {
     const html = `<div class="shop-top"><div class="coin-big">🪙 <b id="shop-coins">${(G.user.coins | 0).toLocaleString()}</b> <small>${esc(t("coinName"))}</small></div>
       <p>${esc(t("shopIntro"))}</p><p class="shop-how">${esc(t("shopHow"))}</p></div>
-      <div class="chips shop-tabs">${["all", "hair", "outfit", "wand"].map((k) => `<button class="chip ${k === shopTab ? "on" : ""}" data-k="${k}">${esc(t({ all: "kAll", hair: "kHair", outfit: "kOutfit", wand: "kWand" }[k]))}</button>`).join("")}</div>
+      <div class="chips shop-tabs">${["all", "hair", "outfit", "wand", "bubble"].map((k) => `<button class="chip ${k === shopTab ? "on" : ""}" data-k="${k}">${esc(t({ all: "kAll", hair: "kHair", outfit: "kOutfit", wand: "kWand", bubble: "kBubble" }[k]))}</button>`).join("")}</div>
       <div class="shop-grid" id="shop-grid"></div>`;
     openModal("🛍️ " + t("bShop"), html, (el) => {
       el.querySelectorAll(".shop-tabs .chip").forEach((b) => b.addEventListener("click", () => { shopTab = b.dataset.k; el.querySelectorAll(".shop-tabs .chip").forEach((x) => x.classList.toggle("on", x === b)); renderShop(); }));
@@ -668,7 +720,7 @@
         : on ? (it.kind === "wand" ? `<button class="btn sm" data-act="off">${esc(t("unequip"))}</button>` : `<button class="btn sm on" disabled>${esc(t("equipped"))}</button>`)
         : `<button class="btn sm grape" data-act="wear">${esc(t("equip"))}</button>`;
       return `<div class="shop-item ${tier}${own ? " own" : ""}" data-id="${it.id}">
-        <span class="kind">${esc(t({ hair: "kHair", outfit: "kOutfit", wand: "kWand" }[it.kind]))}</span>${own ? `<span class="owned">${esc(t("owned"))}</span>` : ""}
+        <span class="kind">${esc(t({ hair: "kHair", outfit: "kOutfit", wand: "kWand", bubble: "kBubble" }[it.kind]))}</span>${own ? `<span class="owned">${esc(t("owned"))}</span>` : ""}
         <canvas width="96" height="96"></canvas><b>${esc(L(it.name))}</b><span class="price">🪙 ${it.price.toLocaleString()}</span>${btn}</div>`;
     }).join("");
     grid.querySelectorAll(".shop-item").forEach((card) => {
@@ -677,7 +729,9 @@
       x.imageSmoothingEnabled = false;
       const pv = previewAv(it);
       let dirI = 0;
-      const drawPv = () => { x.clearRect(0, 0, 96, 96); x.drawImage(Avatar.sprite(pv, ["down", "right", "up", "left"][dirI % 4], 0), 0, 0, 96, 96); };
+      const drawPv = it.kind === "bubble"
+        ? () => { x.clearRect(0, 0, 96, 96); x.save(); x.scale(0.8, 0.8); drawBubbleOn(x, 60, 58, t("bubbleSample"), it.idx, performance.now()); x.restore(); x.drawImage(Avatar.sprite(pv, "down", 0), 12, 10, 26, 30, 30, 62, 36, 40); }
+        : () => { x.clearRect(0, 0, 96, 96); x.drawImage(Avatar.sprite(pv, ["down", "right", "up", "left"][dirI % 4], 0), 0, 0, 96, 96); };
       drawPv();
       c.addEventListener("click", () => { dirI++; drawPv(); });
       const b = card.querySelector("[data-act]");
@@ -1285,6 +1339,8 @@
     chipRow("hair", Avatar.HAIRS.map((_, i) => ({ name: t("hairs")[i] || shopName("hair", i) || t("hairsMore")[i - 10] || "?" })), "hair");
     if (draft.avatar.wand === undefined) draft.avatar.wand = 0;
     chipRow("wand", Avatar.WANDS.map((_, i) => ({ name: i ? shopName("wand", i) : t("wandNone") })), "wand");
+    if (draft.avatar.bubble === undefined) draft.avatar.bubble = 0;
+    chipRow("bubble", Array.from({ length: 8 }, (_, i) => ({ name: i ? shopName("bubble", i) : t("bubbleBasic") })), "bubble");
     chipRow("eye", Avatar.EYES.map((c, i) => ({ c, name: t("eyes")[i] })), "eye", "sw");
     chipRow("hairColor", Avatar.HAIR_COLORS.map((c, i) => ({ ...c, name: t("hairColors")[i] })), "hairColor", "sw");
     chipRow("skin", Avatar.SKINS.map((c, i) => ({ ...c, name: t("skins")[i] })), "skin", "sw");
@@ -1299,7 +1355,7 @@
     });
     if (!isHost && outs[draft.avatar.outfit] && outs[draft.avatar.outfit].host) draft.avatar.outfit = 0;
     // 젤리젤리샵 아이템: 산 것만 고를 수 있음
-    [["hair", "#o-hair"], ["outfit", "#o-outfit"], ["wand", "#o-wand"]].forEach(([kind, sel]) => {
+    [["hair", "#o-hair"], ["outfit", "#o-outfit"], ["wand", "#o-wand"], ["bubble", "#o-bubble"]].forEach(([kind, sel]) => {
       $(sel).querySelectorAll(".chip").forEach((el, idx) => {
         const it = shopItem(kind, idx); if (!it) return;
         el.classList.add("shop-only");

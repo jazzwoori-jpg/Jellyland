@@ -52,6 +52,14 @@ const SHOP = {
   w_piano: { kind: "wand", idx: 4, price: 12000 },
   o_aurora: { kind: "outfit", idx: 15, price: 15000 },
   o_royal: { kind: "outfit", idx: 16, price: 30000 },
+  // 말풍선 (호스트·관리자 말풍선은 역할로 자동 적용, 판매 안 함)
+  b_yellow: { kind: "bubble", idx: 1, price: 700 },
+  b_blue: { kind: "bubble", idx: 2, price: 700 },
+  b_green: { kind: "bubble", idx: 3, price: 700 },
+  b_dots: { kind: "bubble", idx: 4, price: 1000 },
+  b_rainbow: { kind: "bubble", idx: 5, price: 1500 },
+  b_star: { kind: "bubble", idx: 6, price: 2000 },
+  b_gold: { kind: "bubble", idx: 7, price: 3000 },
 };
 const WELCOME_COINS = 100, DAILY_COINS = 100, GB_COINS = 50;
 const GAME_MAX = 200, GAME_DAY_MAX = 600, GAME_STEP_M = 100, GAME_STEP_COINS = 5; // 한 판 최대 200 · 하루 최대 600
@@ -292,12 +300,13 @@ export default async (req) => {
       user.nickname = nickname;
       const isHost = me.role === "artist";
       const owns = (kind, idx) => { const it = shopItemFor(kind, idx); return !it || isHost || (user.inv || []).includes(it[0]); };
-      let outfit = n(a.outfit, 16), hair = n(a.hair, 13), wand = n(a.wand, 4);
+      let outfit = n(a.outfit, 16), hair = n(a.hair, 13), wand = n(a.wand, 4), bubble = n(a.bubble, 7);
       if (HOST_OUTFITS.includes(outfit) && !isHost) outfit = 0; // 호스트 전용 의상은 호스트만
       if (!owns("outfit", outfit)) outfit = 0;                  // 샵 아이템은 산 사람만
       if (!owns("hair", hair)) hair = 0;
       if (!owns("wand", wand)) wand = 0;
-      user.avatar = { gender: a.gender === "m" ? "m" : "f", hair, hairColor: n(a.hairColor), skin: n(a.skin), outfit, eye: n(a.eye), ...(wand ? { wand } : {}) };
+      if (!owns("bubble", bubble)) bubble = 0;
+      user.avatar = { gender: a.gender === "m" ? "m" : "f", hair, hairColor: n(a.hairColor), skin: n(a.skin), outfit, eye: n(a.eye), ...(wand ? { wand } : {}), ...(bubble ? { bubble } : {}) };
       await saveUser();
       return json({ user: publicUser(user), token: await tokenFor(user) });
     }
