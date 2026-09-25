@@ -14,5 +14,5 @@ window.JELLY_SHOP = [
   { id: "o_fairy", kind: "outfit", idx: 14, price: 9000, name: { ko: "요정 날개 드레스", en: "Fairy Wing Dress", ja: "ようせいの羽ドレス" } },
   { id: "w_piano", kind: "wand", idx: 4, price: 12000, name: { ko: "그랜드 피아노 셉터", en: "Grand Piano Scepter", ja: "グランドピアノの笏" } },
   { id: "o_aurora", kind: "outfit", idx: 15, price: 15000, name: { ko: "오로라 프린세스 가운", en: "Aurora Princess Gown", ja: "オーロラプリンセス" } },
-  { id: "o_royal", kind: "outfit", idx: 16, price: 20000, name: { ko: "젤리 퀸 로열 드레스", en: "Jelly Queen Royal Gown", ja: "ゼリークイーンドレス" } },
+  { id: "o_royal", kind: "outfit", idx: 16, price: 30000, name: { ko: "젤리 퀸 로열 드레스", en: "Jelly Queen Royal Gown", ja: "ゼリークイーンドレス" } },
 ];

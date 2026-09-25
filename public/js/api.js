@@ -54,7 +54,7 @@
       if (!EMAIL_RE.test(email)) fail("email");
       if (String(b.password || "").length < 6) fail("pw6");
       if (users[email]) fail("exists", 409);
-      users[email] = { id: "d" + Date.now(), email, pw: await sha(b.password), nickname: "", avatar: null, lang: b.lang || "ko" };
+      users[email] = { id: "d" + Date.now(), email, pw: await sha(b.password), nickname: "", avatar: null, lang: b.lang || "ko", role: email.startsWith("admin") ? "admin" : "fan" }; // 데모: admin 으로 시작하는 메일은 관리자
       ls.set("jl_demo_users", users);
       return { token: "demo:" + email, user: pub(users[email]) };
     }
@@ -85,15 +85,30 @@
       if ((me.coins | 0) < it.price) fail("coins");
       me.coins -= it.price; me.inv.push(it.id); save(); return { user: pub(me) };
     }
-    if (route === "game/start") return { run: Date.now() + ".demo" };
+    if (route === "game/start") return { run: Date.now() + ".demo", dayLeft: me.gameDay === kstDay() ? Math.max(0, 600 - (me.gameCoins | 0)) : 600 };
     if (route === "game/finish") {
-      const coins = Math.min(200, Math.floor((+b.m || 0) / 100) * 5);
+      if (me.gameDay !== kstDay()) { me.gameDay = kstDay(); me.gameCoins = 0; }
+      const coins = Math.min(200, 600 - (me.gameCoins | 0), Math.floor((+b.m || 0) / 100) * 5); me.gameCoins = (me.gameCoins | 0) + coins;
       me.coins = (me.coins | 0) + coins; if ((+b.m | 0) > (me.best | 0)) me.best = +b.m | 0; save();
       let top = ls.get("jl_demo_top", []).filter((e) => e.id !== me.id);
       top.push({ id: me.id, name: me.nickname, avatar: me.avatar, role: me.role || "fan", m: me.best | 0, ts: Date.now() });
       top = top.filter((e) => e.m > 0).sort((a, c) => c.m - a.m).slice(0, 10); ls.set("jl_demo_top", top);
-      return { user: pub(me), coins, best: me.best | 0, rank: top.findIndex((e) => e.id === me.id) + 1, top };
+      return { user: pub(me), coins, best: me.best | 0, rank: top.findIndex((e) => e.id === me.id) + 1, top, dayLeft: 600 - me.gameCoins };
     }
+    if (route === "mail") {
+      const box = ls.get("jl_demo_mail_" + me.id, []);
+      if ((opts.method || "GET") === "DELETE") { const nb = box.filter((m) => m.ts !== +q.get("ts")); ls.set("jl_demo_mail_" + me.id, nb); return { box: nb, unread: nb.filter((m) => !m.read).length }; }
+      return { box, unread: box.filter((m) => !m.read).length };
+    }
+    if (route === "mail/read") { ls.set("jl_demo_mail_" + me.id, ls.get("jl_demo_mail_" + me.id, []).map((m) => ({ ...m, read: true }))); return { ok: true }; }
+    if (route === "admin/users") return { users: Object.values(users).map((u) => ({ id: u.id, email: u.email, nickname: u.nickname, avatar: u.avatar, role: u.role || "fan", coins: u.coins | 0, createdAt: +String(u.id).slice(1) || 0, best: u.best | 0 })) };
+    if (route === "admin/mail") {
+      const m = { ts: Date.now(), from: me.nickname, fromRole: me.role || "admin", text: b.text, read: false, all: b.to === "all" };
+      const ids = b.to === "all" ? Object.values(users).map((u) => u.id) : [b.to];
+      ids.forEach((id) => { const k = "jl_demo_mail_" + id; ls.set(k, [m, ...ls.get(k, [])]); });
+      return { ok: true, sent: ids.length };
+    }
+    if (route === "admin/delete") { const e = Object.keys(users).find((k) => users[k].id === b.id); if (e) delete users[e]; save(); return { ok: true }; }
     if (route === "game/top") return { top: ls.get("jl_demo_top", []), best: me.best | 0 };
     if (route === "settings") { if (b.lang) me.lang = b.lang; ls.set("jl_demo_users", users); return { user: pub(me) }; }
     if (route === "presence") return { others: [], online: 1 };
@@ -108,10 +123,11 @@
       if (m === "GET") { const page = +q.get("page") || 0; return { entries: all.slice().reverse().slice(page * 20, page * 20 + 20), total: all.length }; }
       if (m === "POST") {
         const text = String(b.text || "").trim().slice(0, 300); if (!text) fail("msg");
+        if (me.gbDay === kstDay() && me.role !== "admin" && me.role !== "artist") fail("gbDaily", 429);
         const e = { id: me.id, name: me.nickname, role: me.role || "fan", avatar: me.avatar, text, ts: Date.now(), key: "g" + Date.now() };
         all.push(e); ls.set("jl_demo_gb", all);
         const d = kstDay(); if (me.gbDay !== d) { me.gbDay = d; me.gbCount = 0; }
-        let coins = 0; if ((me.gbCount | 0) < 3) { me.gbCount = (me.gbCount | 0) + 1; me.coins = (me.coins | 0) + 50; coins = 50; }
+        let coins = 0; if ((me.gbCount | 0) < 1) { me.gbCount = 1; me.coins = (me.coins | 0) + 50; coins = 50; }
         save(); return { entry: e, coins, user: pub(me) };
       }
       if (m === "DELETE") { ls.set("jl_demo_gb", all.filter((e) => e.key !== q.get("key"))); return { ok: true }; }
@@ -183,6 +199,12 @@
     buy: (item) => call("shop/buy", { method: "POST", body: { item } }),
     gameStart: () => call("game/start", { method: "POST", body: {} }),
     gameTop: () => call("game/top"),
+    mail: () => call("mail"),
+    mailRead: () => call("mail/read", { method: "POST", body: {} }),
+    mailDelete: (ts) => call("mail?ts=" + ts, { method: "DELETE" }),
+    adminUsers: () => call("admin/users"),
+    adminMail: (to, text) => call("admin/mail", { method: "POST", body: { to, text } }),
+    adminDelete: (id) => call("admin/delete", { method: "POST", body: { id } }),
     gameFinish: (run, m) => call("game/finish", { method: "POST", body: { run, m } }),
     chatDelete: (key) => call("chat?key=" + encodeURIComponent(key), { method: "DELETE" }),
   };

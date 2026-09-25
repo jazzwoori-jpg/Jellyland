@@ -19,10 +19,11 @@
     ctx.imageSmoothingEnabled = false;
     let best = +(localStorage.getItem("jl_best") || 0) || 0;
     let S = null, raf = 0, last = 0, alive = true;
+    let dayLeft = opts.dayLeft == null ? 600 : opts.dayLeft; // 오늘 미니게임으로 더 받을 수 있는 코인
 
     function reset() {
       S = { state: "ready", time: 0, dist: 0, y: GY, vy: 0, jumps: 0, obs: [], items: [], fx: [], pops: [], nextObs: 260, nextItem: 2600 + Math.random() * 1200,
-        superT: 0, run: null, milestone: 0, coins: 0, shake: 0, result: null, anim: 0 };
+        superT: 0, run: null, milestone: 0, coins: 0, cap: Math.min(200, dayLeft), shake: 0, result: null, anim: 0 };
     }
     reset();
 
@@ -43,7 +44,7 @@
 
     function start() {
       S.state = "run"; S.time = 0;
-      opts.onStart && opts.onStart().then((r) => { if (S) S.run = r && r.run; }).catch(() => {});
+      opts.onStart && opts.onStart().then((r) => { if (!S) return; S.run = r && r.run; if (r && r.dayLeft != null) { dayLeft = r.dayLeft; S.cap = Math.min(200, dayLeft); S.coins = Math.min(S.coins, S.cap); } }).catch(() => {});
     }
     async function finish() {
       S.state = "over"; S.overAt = performance.now();
@@ -55,7 +56,7 @@
         // 시작 토큰이 아직 안 왔으면 잠깐 기다림
         for (let i = 0; i < 20 && !my.run; i++) await new Promise((r) => setTimeout(r, 150));
         const r = my.run ? await opts.onFinish(my.run, m) : null;
-        if (r) { my.result.coins = r.coins; if (r.best > best) best = r.best; }
+        if (r) { my.result.coins = r.coins; if (r.best > best) best = r.best; if (r.dayLeft != null) dayLeft = r.dayLeft; }
       } catch {}
       my.result.saving = false;
     }
@@ -203,7 +204,7 @@
       const ms = Math.floor(m / 100);
       while (S.milestone < ms) {
         S.milestone++;
-        if (S.coins < 200) { S.coins = Math.min(200, S.coins + 5); S.pops.push({ x: PX + 16, y: S.y - 44, text: S.coins >= 200 ? t("gameMax") : "+5 🪙", life: 1.1, col: "#c98a2c" }); }
+        if (S.coins < S.cap) { S.coins = Math.min(S.cap, S.coins + 5); S.pops.push({ x: PX + 16, y: S.y - 44, text: S.coins >= S.cap ? t("gameMax") : "+5 🪙", life: 1.1, col: "#c98a2c" }); }
       }
     }
 
@@ -236,13 +237,13 @@
       ctx.setTransform(R, 0, 0, R, 0, 0);
       const m = Math.floor(S.dist / 10);
       pill(6, 6, `${m} m`, "#3a2530", "#fff");
-      pill(6, 22, `🪙 ${S.coins}/200`, "#fff3a8", "#7a4a00");
+      pill(6, 22, `🪙 ${S.coins}/${S.cap}`, "#fff3a8", "#7a4a00");
       pill(W - 6, 6, `${t("gameBest")} ${best} m`, "rgba(58,37,48,.7)", "#fff", true);
       if (S.superT > 0) { ctx.fillStyle = OUT; ctx.fillRect(W / 2 - 41, 7, 82, 7); ctx.fillStyle = `hsl(${(S.anim * 300) % 360},90%,65%)`; ctx.fillRect(W / 2 - 40, 8, 80 * (S.superT / SUPER_TIME), 5); }
-      if (S.state === "ready") panel([t("gameTitle"), "", t("gameStart")], true);
+      if (S.state === "ready") panel([t("gameTitle"), dayLeft > 0 ? t("gameDayLeft", { n: dayLeft }) : t("gameDayDone"), t("gameStart")], true);
       if (S.state === "over") {
         const r = S.result || { m, coins: S.coins };
-        panel([t("gameOver"), `${t("gameDist")} ${r.m} m · ${t("gameBest")} ${best} m`, `${t("gameEarn")} 🪙 ${r.coins}${r.saving ? "  (" + t("gameSaving") + ")" : ""}`, performance.now() - S.overAt > 700 ? t("gameAgain") : ""]);
+        panel([t("gameOver"), `${t("gameDist")} ${r.m} m · ${t("gameBest")} ${best} m`, `${t("gameEarn")} 🪙 ${r.coins}${r.saving ? "  (" + t("gameSaving") + ")" : ""}`, r.saving ? "" : dayLeft > 0 ? t("gameDayLeft", { n: dayLeft }) : t("gameDayDone"), performance.now() - S.overAt > 700 ? t("gameAgain") : ""]);
       }
     }
     function pill(x, y, text, bg, fg, right) {
@@ -252,7 +253,7 @@
       ctx.fillStyle = bg; ctx.fillRect(x0, y, w, 13); ctx.fillStyle = fg; ctx.textAlign = "left"; ctx.fillText(text, x0 + 5, y + 7);
     }
     function panel(lines, title) {
-      const w = 240, h = 26 + lines.length * 16, x = (W - w) / 2, y = (H - h) / 2 - 8;
+      const w = 312, h = 26 + lines.length * 16, x = (W - w) / 2, y = (H - h) / 2 - 8;
       ctx.fillStyle = "rgba(58,37,48,.25)"; ctx.fillRect(x + 3, y + 3, w, h);
       ctx.fillStyle = OUT; ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
       ctx.fillStyle = "#fff8ea"; ctx.fillRect(x, y, w, h);
