@@ -32,8 +32,8 @@
       if (!S) return;
       if (S.state === "ready") return start();
       if (S.state === "over") { if (S.result && S.time > 0 && performance.now() - S.overAt > 700) { reset(); start(); } return; }
-      if (S.jumps === 0 && S.y >= GY - 0.5) { S.vy = JUMP; S.jumps = 1; puff(PX, GY, "#ffffff"); }
-      else if (S.jumps < 2) { S.vy = JUMP2; S.jumps = 2; puff(PX, S.y, "#ffd1e6"); }
+      if (S.jumps === 0 && S.y >= GY - 0.5) { S.vy = JUMP; S.jumps = 1; puff(PX, GY, "#ffffff"); snd("jump"); }
+      else if (S.jumps < 2) { S.vy = JUMP2; S.jumps = 2; puff(PX, S.y, "#ffd1e6"); snd("jump2"); }
     }
     const onKey = (e) => {
       if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
@@ -64,7 +64,9 @@
 
     // ---------- 효과 ----------
     function puff(x, y, col) { for (let i = 0; i < 6; i++) S.fx.push({ x, y, vx: -40 - Math.random() * 60, vy: -Math.random() * 60, life: 0.4, col, s: 2 }); }
+    const snd = (n) => { try { window.SFX && window.SFX[n](); } catch {} };
     function smash(o) {
+      snd("smash");
       const cols = o.cols;
       for (let i = 0; i < 16; i++) S.fx.push({ x: o.x + Math.random() * o.w, y: o.top + Math.random() * o.h, vx: 60 + Math.random() * 200, vy: -80 - Math.random() * 220, life: 0.8, col: cols[i % cols.length], s: 3, g: true });
       S.shake = 0.15;
@@ -189,7 +191,7 @@
       const big = S.superT > 0 ? 1.4 : 1;
       const hb = { x0: PX - 6 * big, x1: PX + 6 * big, y0: S.y - 26 * big, y1: S.y - 1 };
       for (const it of S.items) if (Math.abs(it.x - PX) < 14 * big && it.y > hb.y0 - 10 && it.y < hb.y1 + 6) {
-        it.got = true; S.superT = SUPER_TIME; S.pops.push({ x: PX, y: S.y - 50, text: "⭐ " + t("gameSuper"), life: 1.4, col: "#ff4f9a" });
+        it.got = true; snd("star"); S.superT = SUPER_TIME; S.pops.push({ x: PX, y: S.y - 50, text: "⭐ " + t("gameSuper"), life: 1.4, col: "#ff4f9a" });
         for (let i = 0; i < 20; i++) S.fx.push({ x: it.x, y: it.y, vx: (Math.random() - 0.5) * 260, vy: (Math.random() - 0.5) * 260, life: 0.6, col: ["#fff3a8", "#ff9fc8", "#9fe8ff"][i % 3], s: 2 });
       }
       for (const o of S.obs) {
@@ -197,7 +199,7 @@
         const pad = 3;
         if (hb.x1 > o.x + pad && hb.x0 < o.x + o.w - pad && hb.y1 > o.top + pad && hb.y0 < o.top + o.h - pad) {
           if (S.superT > 0) { o.broken = true; o.gone = true; smash(o); S.pops.push({ x: o.x, y: o.top - 6, text: "SMASH!", life: 0.6, col: "#7a3fc0" }); }
-          else { S.shake = 0.3; for (let i = 0; i < 14; i++) S.fx.push({ x: PX, y: S.y - 14, vx: (Math.random() - 0.5) * 240, vy: -Math.random() * 240, life: 0.7, col: ["#ff7fae", "#ffffff", "#ffd34d"][i % 3], s: 2, g: true }); finish(); return; }
+          else { S.shake = 0.3; for (let i = 0; i < 14; i++) S.fx.push({ x: PX, y: S.y - 14, vx: (Math.random() - 0.5) * 240, vy: -Math.random() * 240, life: 0.7, col: ["#ff7fae", "#ffffff", "#ffd34d"][i % 3], s: 2, g: true }); snd("laugh"); finish(); return; }
         }
       }
       // 100m 마다 코인
@@ -205,7 +207,7 @@
       const ms = Math.floor(m / 100);
       while (S.milestone < ms) {
         S.milestone++;
-        if (S.coins < S.cap) { S.coins = Math.min(S.cap, S.coins + 5); S.pops.push({ x: PX + 16, y: S.y - 44, text: S.coins >= S.cap ? t("gameMax") : "+5 🪙", life: 1.1, col: "#c98a2c" }); }
+        if (S.coins < S.cap) { S.coins = Math.min(S.cap, S.coins + 5); snd("coin"); S.pops.push({ x: PX + 16, y: S.y - 44, text: S.coins >= S.cap ? t("gameMax") : "+5 🪙", life: 1.1, col: "#c98a2c" }); }
       }
     }
 

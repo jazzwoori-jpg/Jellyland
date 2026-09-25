@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "19"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "20"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -875,10 +875,11 @@
       let cur = null;
       const root = el.querySelector("#gw-root");
       const stop = () => { if (cur) { cur.destroy(); cur = null; } };
-      G.modalCleanup = () => { stop(); G.gameOpen = false; BGM.play(G.scene); };
+      G.modalCleanup = () => { stop(); Chip.stop(); G.gameOpen = false; BGM.play(G.scene); };
       const setTitle = (s2) => ($("#modal-title").textContent = s2);
       function menu() {
         stop(); setTitle("🎮 " + t("bGame"));
+        Chip.stop(); BGM.play("minigame"); // 선택 화면: 미니게임 BGM
         document.querySelector("#modal .modal").classList.remove("up");
         root.innerHTML = `<p class="gw-intro">${esc(t("gwIntro"))}</p><div class="gw-menu">
           <button class="gw-card jump" data-g="jump"><span class="gw-ico">🏃</span><b>${esc(t("gameTitle"))}</b><small>${esc(t("gwJump"))}</small></button>
@@ -890,6 +891,7 @@
       const backBtn = () => `<p class="gw-back"><button class="btn sm" id="gw-back">◀ ${esc(t("gwBack"))}</button></p>`;
       function go(g) {
         stop();
+        BGM.stop(); Chip.play(g); // 게임마다 전용 BGM (광장·미니게임 BGM 은 끔)
         if (g === "fortune") {
           setTitle(t("ftTitle"));
           root.innerHTML = backBtn() + `<div id="gw-play"></div>`;
