@@ -8,7 +8,7 @@
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
-  const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 6 }; // 긴 웨이브 흑발 + 블랙 재킷
+  const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
   if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) document.body.classList.add("ios");
@@ -144,7 +144,7 @@
     const w = scene();
     // 건물 클릭 → 문 앞으로 이동 후 입장
     if (w.buildings) for (const b of w.buildings) if (p.x > b.x && p.x < b.x + b.w && p.y > b.y && p.y < b.y + b.h + 6) { G.target = { x: b.door.x, y: b.door.y + 6 }; G.pendingZone = b.id; return; }
-    if (w.artist && Math.hypot(p.x - w.artist.x, p.y - 12 - w.artist.y) < 18) { G.target = { x: w.artist.x + 10, y: w.artist.y + 26 }; G.pendingZone = "profile"; return; }
+    if (w.artist && Math.hypot(p.x - w.artist.x, p.y - 18 - w.artist.y) < 22) { G.target = { x: w.artist.x + 10, y: w.artist.y + 26 }; G.pendingZone = "profile"; return; }
     G.target = p; G.pendingZone = null;
   });
 
@@ -212,13 +212,13 @@
     if (zone !== G.zone) { G.zone = zone; renderPrompt(); }
     // 카메라
     const vw = VW / S, vh = VH / S;
-    let cx = p.x - vw / 2, cy = p.y - 12 - vh / 2;
+    let cx = p.x - vw / 2, cy = p.y - 18 - vh / 2;
     // 모바일에서 채팅창이 열려 있으면 캐릭터가 가려지지 않게 카메라를 옮김
     if (IS_TOUCH && G.mode === "world") {
       if (!G.chatRectT || G.t - G.chatRectT > 400) { G.chatRectT = G.t; const c = $("#chat"); G.chatRect = c.classList.contains("collapsed") ? null : c.getBoundingClientRect(); G.hudBottom = $(".hud-top").getBoundingClientRect().bottom; }
       const r = G.chatRect;
       if (r) {
-        if (r.width > VW * 0.6) cy = p.y - 12 - (G.hudBottom + r.top) / 2 / S; // 세로 화면: 상단 메뉴와 채팅창 사이 가운데
+        if (r.width > VW * 0.6) cy = p.y - 18 - (G.hudBottom + r.top) / 2 / S; // 세로 화면: 상단 메뉴와 채팅창 사이 가운데
         else if (r.left > VW * 0.3) cx = p.x - r.left / 2 / S; // 가로 화면: 채팅창 왼쪽 공간 가운데
       }
     }
@@ -254,7 +254,7 @@
     const list = [];
     for (const o of w.objects) if (o.y > vy0 && o.y < vy1 + 120 && o.x > vx0 - 200 && o.x < vx1) list.push(o);
     const chars = [];
-    if (w.artist) chars.push({ y: w.artist.y, x: w.artist.x, name: L(CFG.artist.name) + " ♪", av: ARTIST_LOOK, dir: "down", frame: 0, crown: true, artist: true, bobby: true });
+    if (w.artist) chars.push({ y: w.artist.y, x: w.artist.x, name: L(CFG.artist.name) + " ♪", av: ARTIST_LOOK, dir: "down", frame: 0, crown: true, artist: true, bobby: true, keytar: true });
     if (G.scene === "plaza") for (const n of G.npcs) chars.push({ x: n.x, y: n.y, name: t("npc")[n.i], av: n.av, dir: n.dir, frame: frameOf(n.moving, n.t), npc: true });
     for (const o of G.others.values()) chars.push({ x: o.rx, y: o.ry, name: o.name, av: o.avatar, dir: o.dir || "down", frame: frameOf(o.walking, o.t || 0), crown: o.role === "artist", id: o.id, artist: o.role === "artist" });
     if (G.mode === "world") chars.push({ x: G.player.x, y: G.player.y, name: G.user.nickname, av: G.user.avatar, dir: G.player.dir, frame: frameOf(G.player.moving, G.player.t), crown: G.user.role === "artist", me: true, id: G.user.id, artist: G.user.role === "artist" });
@@ -264,7 +264,7 @@
       if (o.char) {
         const c = o.char;
         if (c.artist) drawAura(c.x, c.y, G.t);
-        Avatar.draw(ctx, c.av, c.x, c.y, c.dir, c.bobby ? Math.floor(G.t / 500) % 2 : c.frame, { crown: false });
+        Avatar.draw(ctx, c.av, c.x, c.y, c.dir, c.bobby ? (Math.floor(G.t / 500) % 2 ? 1 : 0) : c.frame, { keytar: c.keytar });
         if (c.artist) drawSparkles(c.x, c.y, G.t);
       } else o.draw(ctx, G.t);
     }
@@ -282,7 +282,7 @@
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     const now = Date.now();
     for (const c of chars) {
-      const X = sx(c.x), Y = sy(c.y - 29);
+      const X = sx(c.x), Y = sy(c.y - 42);
       ctx.font = `${c.me || c.artist ? "bold " : ""}12px ${FONT}`;
       const tw = ctx.measureText(c.artist ? "✦ " + c.name : c.name).width + 10;
       ctx.fillStyle = c.artist ? "rgba(40,130,230,.95)" : c.me ? "rgba(58,37,48,.85)" : c.npc ? "rgba(79,195,176,.85)" : "rgba(58,37,48,.6)";
@@ -299,18 +299,18 @@
     const pulse = 0.75 + Math.sin(tt / 380) * 0.25;
     ctx.save();
     // 푸른 후광 (밝은 바닥에서도 잘 보이도록 진한 파랑 → 투명)
-    const R = 30 * pulse + 6;
-    const g = ctx.createRadialGradient(x, y - 12, 3, x, y - 12, R);
+    const R = 34 * pulse + 8;
+    const g = ctx.createRadialGradient(x, y - 18, 3, x, y - 18, R);
     g.addColorStop(0, "rgba(120,215,255,.75)");
     g.addColorStop(0.5, "rgba(60,150,255,.38)");
     g.addColorStop(1, "rgba(40,110,255,0)");
     ctx.fillStyle = g;
-    ctx.beginPath(); ctx.ellipse(x, y - 12, R * 0.8, R, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x, y - 18, R * 0.8, R * 1.05, 0, 0, Math.PI * 2); ctx.fill();
     // 위로 올라가는 빛기둥
-    const g2 = ctx.createLinearGradient(0, y - 56, 0, y);
+    const g2 = ctx.createLinearGradient(0, y - 66, 0, y);
     g2.addColorStop(0, "rgba(140,225,255,0)");
     g2.addColorStop(1, `rgba(140,225,255,${0.35 * pulse})`);
-    ctx.fillStyle = g2; ctx.fillRect(x - 7, y - 56, 14, 56);
+    ctx.fillStyle = g2; ctx.fillRect(x - 8, y - 66, 16, 66);
     // 발밑 빛 고리
     ctx.fillStyle = `rgba(80,190,255,${0.55 + 0.35 * pulse})`;
     for (let i = -11; i <= 11; i++) { const h = Math.round(Math.sqrt(121 - i * i) / 3); ctx.fillRect(x + i, y - h + 1, 1, 1); ctx.fillRect(x + i, y + h + 1, 1, 1); }
@@ -320,8 +320,8 @@
     ctx.save();
     for (let i = 0; i < 6; i++) {
       const a = tt / 700 + (i * Math.PI) / 3;
-      const r = 13 + Math.sin(tt / 300 + i) * 2;
-      const sx = Math.round(x + Math.cos(a) * r), sy = Math.round(y - 12 + Math.sin(a) * r * 0.8 - ((tt / 25 + i * 9) % 18) * 0.3);
+      const r = 15 + Math.sin(tt / 300 + i) * 2;
+      const sx = Math.round(x + Math.cos(a) * r), sy = Math.round(y - 18 + Math.sin(a) * r * 1.1 - ((tt / 25 + i * 9) % 18) * 0.3);
       const on = (Math.floor(tt / 160) + i) % 3;
       ctx.fillStyle = on === 0 ? "#ffffff" : on === 1 ? "#9fe8ff" : "#5fb8ff";
       ctx.fillRect(sx, sy, 1, 1);
@@ -432,13 +432,23 @@
   }
   function openGalleryAt(i) { openGallery(); $("#modal-body").querySelector(`.polaroid[data-i="${i}"]`).click(); }
   function openAlbums() {
-    const html = `<p style="margin-top:0">${esc(t("albumsIntro"))}</p>` + CFG.albums.map((a) => `
-      <div class="album"><img src="${esc(a.cover)}" alt=""><div>
-        <span class="tag">${esc(L(a.type))}</span>
-        <h3>${esc(L(a.title))}</h3><p style="margin:0;line-height:1.6">${esc(L(a.desc))}</p>
-        ${a.tracks && a.tracks.length ? `<ol>${a.tracks.map((tr) => `<li>${esc(L(tr))}</li>`).join("")}</ol>` : ""}
-        ${a.link ? `<p><a class="btn sm pink" href="${esc(a.link)}" target="_blank" rel="noopener">${esc(t("listen"))}</a></p>` : ""}
-      </div><div class="yr">${esc(a.year)}</div></div>`).join("");
+    const meta = (k, v) => (v ? `<div><span>${esc(t(k))}</span><b>${esc(L(v))}</b></div>` : "");
+    const html = `<p style="margin-top:0">${esc(t("albumsIntro"))}</p>` + CFG.albums.map((a, i) => `
+      <div class="album">
+        <div class="album-top">
+          <img src="${esc(a.cover)}" alt="" class="cover">
+          <div class="album-info">
+            <span class="tag">${esc(L(a.type))}</span>
+            <h3>${esc(L(a.title))}</h3>
+            <div class="artist-line">Jo Jelly</div>
+            <div class="meta">${meta("albRelease", a.date || a.year)}${meta("albGenre", a.genre)}${meta("albLabel", a.label)}${meta("albAgency", a.agency)}</div>
+            ${a.link ? `<a class="btn sm pink" href="${esc(a.link)}" target="_blank" rel="noopener">${esc(t("listen"))}</a>` : ""}
+          </div>
+        </div>
+        ${a.tracks && a.tracks.length ? `<h4>${esc(t("albTracks"))}</h4><ol class="tracks">${a.tracks.map((tr) => `<li>${esc(L(tr))}</li>`).join("")}</ol>` : ""}
+        ${a.desc ? `<h4>${esc(t("albAbout"))}</h4><p class="desc">${esc(L(a.desc)).replace(/\n/g, "<br>")}</p>` : ""}
+        ${a.credits && a.credits.length ? `<details class="credits"${i === 0 ? "" : ""}><summary>${esc(t("albCredits"))}</summary><dl>${a.credits.map(([r, n]) => `<dt>${esc(r)}</dt><dd>${esc(n)}</dd>`).join("")}</dl></details>` : ""}
+      </div>`).join("");
     openModal("💿 " + t("bAlbums"), html);
   }
   function openCinema(idx = 0) {
@@ -666,16 +676,17 @@
   function renderCreator() {
     chipRow("gender", [{ v: "f", name: t("female") }, { v: "m", name: t("male") }], "gender");
     chipRow("hair", t("hairs").map((n) => ({ name: n })), "hair");
+    chipRow("eye", Avatar.EYES.map((c, i) => ({ c, name: t("eyes")[i] })), "eye", "sw");
     chipRow("hairColor", Avatar.HAIR_COLORS.map((c, i) => ({ ...c, name: t("hairColors")[i] })), "hairColor", "sw");
     chipRow("skin", Avatar.SKINS.map((c, i) => ({ ...c, name: t("skins")[i] })), "skin", "sw");
-    chipRow("outfit", Avatar.OUTFITS.map((o, i) => ({ name: t("outfits")[i] || o.name, col: o.top === "#f7f4ff" || o.top === "#fff3f6" ? o.bot : o.top })), "outfit");
+    chipRow("outfit", Avatar.OUTFITS.map((o, i) => ({ name: t("outfits")[i] || o.id, col: o.overall || (o.top === "#f7f5ff" ? o.skirt : o.top) })), "outfit");
   }
   const DIRS = ["down", "right", "up", "left"];
   function drawPreview() {
     const c = $("#preview"), x = c.getContext("2d");
     x.clearRect(0, 0, 32, 40);
     const now = performance.now();
-    Avatar.draw(x, draft.avatar, 16, 34, DIRS[Math.floor(now / 1400) % 4], [1, 0, 3, 0][Math.floor(now / 160) % 4]);
+    Avatar.draw(x, draft.avatar, 16, 39, DIRS[Math.floor(now / 1400) % 4], [1, 0, 3, 0][Math.floor(now / 160) % 4]);
   }
   function openCreator(editing) {
     if (G.mode !== "world") G.mode = "creator";
@@ -742,8 +753,8 @@
   function refreshMe() {
     $("#me-name").textContent = G.user.nickname + (G.user.role === "artist" ? " 👑" : "");
     const c = $("#me-face"), x = c.getContext("2d");
-    x.clearRect(0, 0, 16, 20);
-    Avatar.draw(x, G.user.avatar, 8, 22, "down", 0);
+    x.clearRect(0, 0, c.width, c.height); x.imageSmoothingEnabled = false;
+    x.drawImage(Avatar.sprite(G.user.avatar, "down", 0), 0, 0, 32, 26, 0, 0, c.width, c.height);
     $("#chat-opts").classList.toggle("hidden", G.user.role !== "artist");
     $("#online").textContent = API.demo ? t("demoSolo") : G.online > 1 ? t("online", { n: G.online }) : t("onlineShort");
   }

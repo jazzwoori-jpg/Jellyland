@@ -40,34 +40,29 @@ window.JELLY_CONFIG = {
     { src: "img/photos/jojelly-03.jpg", caption: { ko: "프로필 · 앤티크 룸", en: "Profile · Antique Room", ja: "プロフィール · アンティークルーム" } },
   ],
 
-  // 앨범 기록관 — 최신 순 (아래는 예시 데이터예요. 실제 정보로 바꿔주세요)
+  // 앨범 기록관 — 최신 순으로 위에 추가하세요
   albums: [
     {
-      title: { ko: "앨범 제목을 입력하세요", en: "Album title", ja: "アルバムタイトル" },
+      title: "Can't Stop! (feat. Larnell Lewis, Johannes Groth, Justin Raines)",
       year: "2026",
-      type: "EP",
-      cover: "img/photos/album1.svg",
-      desc: { ko: "앨범 소개 문구를 입력하세요.", en: "Album description.", ja: "アルバム紹介文。" },
-      tracks: ["Track 1", "Track 2", "Track 3"],
-      link: "",
-    },
-    {
-      title: { ko: "싱글 제목을 입력하세요", en: "Single title", ja: "シングルタイトル" },
-      year: "2025",
-      type: "Single",
-      cover: "img/photos/album2.svg",
-      desc: { ko: "싱글 소개 문구를 입력하세요.", en: "Single description.", ja: "シングル紹介文。" },
-      tracks: ["Track 1"],
-      link: "",
-    },
-    {
-      title: { ko: "첫 번째 앨범", en: "First Album", ja: "ファーストアルバム" },
-      year: "2024",
-      type: "Album",
-      cover: "img/photos/album3.svg",
-      desc: { ko: "데뷔 앨범 소개 문구를 입력하세요.", en: "Debut album description.", ja: "デビューアルバム紹介文。" },
-      tracks: ["Track 1", "Track 2", "Track 3", "Track 4"],
-      link: "",
+      date: "2026.04.22",
+      type: { ko: "싱글", en: "Single", ja: "シングル" },
+      genre: { ko: "재즈", en: "Jazz", ja: "ジャズ" },
+      label: "3.14",
+      agency: "조우리",
+      cover: "img/albums/cant-stop.jpg",
+      desc: {
+        ko: "재즈 피아니스트 조젤리!\n30만 팔로워 조젤리!\n멈출 수 없어! 조젤리!\n\n독보적인 재즈 펑크 사운드의 곡 Can't Stop! 은 앞으로의 조젤리 음악 행보를 알리는 첫 시작이다!!\n그녀의 펑키한 피아노와 키치한 매력은 도저히 멈출 수 없어 많은 이들에게 주목받고 있다!\n이토록 대단한 조젤리의 매력을 느끼기라도 한 듯 밴드 \"Snarky Puppy\"의 드러머이자 세계적인 아티스트 \"Larnell Lewis\"가 함께 연주해 주었다.....!! 대 박 사 건!!\n\n이 멋진 곡을 듣는다면 당신도 그녀의 매력에 빠져 그녀를 팔로잉 하는 것을 멈출 수 없을 것입니다!!",
+        en: "Jazz pianist Jo Jelly!\nJo Jelly with 300K followers!\nCan't stop! Jo Jelly!\n\n\"Can't Stop!\", a track with a one-of-a-kind jazz-funk sound, is the very first step announcing Jo Jelly's musical journey ahead!!\nHer funky piano and kitschy charm simply can't be stopped, and people everywhere are taking notice!\nAs if he felt Jo Jelly's amazing charm, world-class artist Larnell Lewis — drummer of the band \"Snarky Puppy\" — joined in on the track.....!! What a huge moment!!\n\nOnce you hear this wonderful song, you'll fall for her charm too — and you won't be able to stop following her!!",
+        ja: "ジャズピアニスト Jo Jelly！\nフォロワー30万人の Jo Jelly！\n止まらない！Jo Jelly！\n\n唯一無二のジャズファンクサウンドの曲「Can't Stop!」は、これからの Jo Jelly の音楽活動を告げる最初の一歩！！\n彼女のファンキーなピアノとキッチュな魅力はもう止められず、多くの人から注目を集めています！\nそんな Jo Jelly の魅力を感じ取ったかのように、バンド「Snarky Puppy」のドラマーで世界的アーティストの Larnell Lewis が一緒に演奏してくれました.....!! 大事件です！！\n\nこの素敵な曲を聴けば、あなたも彼女の魅力にハマって、フォローするのが止められなくなるはず！！",
+      },
+      tracks: ["Can't Stop! (feat. Larnell Lewis, Johannes Groth, Justin Raines)"],
+      credits: [
+        ["Piano", "Jo Jelly"], ["Drum", "Larnell Lewis"], ["Bass", "Justin Raines"], ["Guitar", "Johannes Groth"],
+        ["Organ", "Johannes Groth"], ["Percussion", "조한샘 (Hansam Cho)"], ["Arranged", "Jo Jelly"], ["Mixed", "Johannes Groth"],
+        ["Mastered", "Thomas Berg"], ["Design Artwork", "Tape Piano"], ["Video director", "Dody"], ["A&R / Management", "Dody"],
+      ],
+      link: "https://www.youtube.com/watch?v=Y8aVeGVmZ8U",
     },
   ],
 

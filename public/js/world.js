@@ -119,10 +119,10 @@
     const CX = 640, CY = 500;
     const gardens = [[420, 380], [860, 380], [420, 650], [860, 650]];
     const buildings = [
-      { id: "gallery", name: T("bGallery"), x: 250, y: 118, w: 190, h: 130, roof: "#ff7fae", wall: "#fff4e2", trim: "#c98b5a", icon: "📷" },
-      { id: "albums", name: T("bAlbums"), x: 840, y: 118, w: 190, h: 130, roof: "#9d7cf0", wall: "#fff4e2", trim: "#a86d42", icon: "💿" },
-      { id: "cinema", name: T("bCinema"), x: 150, y: 420, w: 170, h: 130, roof: "#ff6b6b", wall: "#fff0da", trim: "#8f5a34", icon: "🎬" },
-      { id: "lounge", name: T("bLounge"), x: 960, y: 420, w: 176, h: 136, roof: "#4fc3b0", wall: "#fff4e2", trim: "#a86d42", icon: "💬" },
+      { id: "gallery", name: T("bGallery"), x: 250, y: 118, w: 190, h: 130, roof: "#d8434e", wall: "#fffaf2", trim: "#c98b5a", icon: "📷" },
+      { id: "albums", name: T("bAlbums"), x: 840, y: 118, w: 190, h: 130, roof: "#a77ce0", wall: "#fffaf2", trim: "#a86d42", icon: "💿" },
+      { id: "cinema", name: T("bCinema"), x: 150, y: 420, w: 170, h: 130, roof: "#f2a93b", wall: "#fff6e8", trim: "#8f5a34", icon: "🎬" },
+      { id: "lounge", name: T("bLounge"), x: 960, y: 420, w: 176, h: 136, roof: "#5fb8c9", wall: "#fffaf2", trim: "#a86d42", icon: "💬" },
     ];
     const paving = (x, y) => {
       const dx = Math.abs(x - CX), dy = Math.abs(y - CY);
@@ -299,9 +299,9 @@
     const [c, x] = cv(160, 56);
     x.fillStyle = OUT; x.fillRect(18, 10, 22, 46); x.fillRect(120, 10, 22, 46);
     x.fillStyle = "#fff4e2"; x.fillRect(20, 12, 18, 42); x.fillRect(122, 12, 18, 42);
-    x.fillStyle = "#ff8fb8"; x.fillRect(20, 12, 18, 6); x.fillRect(122, 12, 18, 6);
+    x.fillStyle = "#d8434e"; x.fillRect(20, 12, 18, 6); x.fillRect(122, 12, 18, 6);
     x.fillStyle = OUT; x.fillRect(4, 0, 152, 24);
-    const grad = ["#ff7fae", "#ff9fc4"];
+    const grad = ["#a77ce0", "#c3a2f0"];
     for (let i = 0; i < 22; i++) { x.fillStyle = grad[Math.floor(i / 4) % 2]; x.fillRect(5, 1 + i, 150, 1); }
     x.font = `bold 13px ${FONT}`; x.textAlign = "center"; x.textBaseline = "middle";
     x.fillStyle = OUT; x.fillText("JELLY LAND", 81, 13); x.fillStyle = "#fff"; x.fillText("JELLY LAND", 80, 12);
@@ -344,7 +344,7 @@
     }
     // 벽
     x.fillStyle = OUT; x.fillRect(0, 0, W, 84);
-    for (let xx = 0; xx < W; xx += 16) { x.fillStyle = (xx / 16) % 2 ? "#ffe3ee" : "#fbd2e2"; x.fillRect(xx, 0, 16, 78); }
+    for (let xx = 0; xx < W; xx += 16) { x.fillStyle = (xx / 16) % 2 ? "#efe4f7" : "#e2d3f3"; x.fillRect(xx, 0, 16, 78); }
     x.fillStyle = "#c98b5a"; x.fillRect(0, 70, W, 10); x.fillStyle = "#a86d42"; x.fillRect(0, 78, W, 4);
     // 창문
     [[40, 16], [520, 16]].forEach(([wx, wy]) => {

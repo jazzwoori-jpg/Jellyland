@@ -228,7 +228,7 @@ export default async (req) => {
       const a = body.avatar || {};
       const n = (v) => Math.max(0, Math.min(9, v | 0));
       user.nickname = nickname;
-      user.avatar = { gender: a.gender === "m" ? "m" : "f", hair: n(a.hair), hairColor: n(a.hairColor), skin: n(a.skin), outfit: n(a.outfit) };
+      user.avatar = { gender: a.gender === "m" ? "m" : "f", hair: n(a.hair), hairColor: n(a.hairColor), skin: n(a.skin), outfit: n(a.outfit), eye: n(a.eye) };
       await saveUser();
       return json({ user: publicUser(user), token: await tokenFor(user) });
     }
