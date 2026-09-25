@@ -78,6 +78,17 @@
       const all = ls.get("jl_demo_chat_" + room, []);
       return { others: [], online: 1, messages: all.filter((m) => m.ts >= (b.since || 0)).slice(-50), notice: ls.get("jl_demo_notice_" + room, null) };
     }
+    if (route === "guestbook") {
+      const all = ls.get("jl_demo_gb", []);
+      const m = opts.method || "GET";
+      if (m === "GET") { const page = +q.get("page") || 0; return { entries: all.slice().reverse().slice(page * 20, page * 20 + 20), total: all.length }; }
+      if (m === "POST") {
+        const text = String(b.text || "").trim().slice(0, 300); if (!text) fail("msg");
+        const e = { id: me.id, name: me.nickname, role: me.role || "fan", avatar: me.avatar, text, ts: Date.now(), key: "g" + Date.now() };
+        all.push(e); ls.set("jl_demo_gb", all); return { entry: e };
+      }
+      if (m === "DELETE") { ls.set("jl_demo_gb", all.filter((e) => e.key !== q.get("key"))); return { ok: true }; }
+    }
     if (route === "chat") {
       const room = q.get("room") || b.room || "lounge";
       const all = ls.get("jl_demo_chat_" + room, []);
@@ -138,6 +149,9 @@
     presence: (p) => call("presence", { method: "POST", body: p }),
     chatList: (room, since) => call(`chat?room=${room}&since=${since || 0}`),
     chatSend: (room, text, notice) => call("chat", { method: "POST", body: { room, text, notice: !!notice } }),
+    gbList: (page) => call("guestbook?page=" + (page || 0)),
+    gbWrite: (text) => call("guestbook", { method: "POST", body: { text } }),
+    gbDelete: (key) => call("guestbook?key=" + encodeURIComponent(key), { method: "DELETE" }),
     chatDelete: (key) => call("chat?key=" + encodeURIComponent(key), { method: "DELETE" }),
   };
 })();

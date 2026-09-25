@@ -308,3 +308,34 @@ body.touch .modal { max-height: calc(var(--vh, 100vh) - 24px - env(safe-area-ins
 .album .credits dt { opacity: .6; }
 .album .credits dd { margin: 0; }
 @media (max-width: 560px) { .album .album-top { grid-template-columns: 1fr; } .album img.cover { width: 100%; height: auto; aspect-ratio: 1; } }
+
+/* ================= v7: 방명록 · 호스트 전용 의상 ================= */
+.chip.host-only { border-color: #2882e6; }
+.chip.host-only small { font-size: 10px; color: #2882e6; margin-left: 2px; }
+.chip.host-only.on small { color: #9fe8ff; }
+.chip:disabled { opacity: .45; cursor: not-allowed; }
+.gb-form textarea { width: 100%; padding: 10px; border: 3px solid var(--ink); border-radius: 6px; font-family: inherit; font-size: 14px; resize: vertical; background: #fff; }
+body.touch .gb-form textarea { font-size: 16px; }
+.gb-row { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; font-size: 12px; opacity: .9; }
+.gb-list { margin-top: 12px; border: 3px solid var(--ink); border-radius: 6px; overflow: hidden; background: #fff; }
+.gb-head, .gb-item { display: grid; grid-template-columns: 44px 120px 1fr 118px; gap: 8px; padding: 8px 10px; align-items: center; font-size: 13px; }
+.gb-head { background: #8459c2; color: #fff; font-size: 12px; }
+.gb-item { border-top: 2px dashed var(--cream2); }
+.gb-item:nth-child(even) { background: #faf6ff; }
+.gb-item.host { background: #eaf6ff; }
+.gb-item .no { text-align: center; opacity: .6; }
+.gb-item .who { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.gb-item .who canvas { width: 26px; height: 21px; image-rendering: pixelated; background: #e8dcfa; border: 2px solid var(--ink); border-radius: 4px; flex: none; }
+.gb-item .who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gb-item.host .who b { color: #2882e6; }
+.gb-item .txt { word-break: break-all; line-height: 1.55; }
+.gb-item .when { font-size: 11px; opacity: .7; white-space: nowrap; }
+.gb-del { border: 0; background: none; color: #d0304e; cursor: pointer; font-size: 12px; }
+.gb-empty { padding: 18px; text-align: center; opacity: .7; margin: 0; }
+.gb-pager { display: flex; gap: 6px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
+@media (max-width: 600px) {
+  .gb-head { display: none; }
+  .gb-item { grid-template-columns: 1fr auto; grid-template-areas: "who when" "txt txt"; }
+  .gb-item .no { display: none; }
+  .gb-item .who { grid-area: who; } .gb-item .when { grid-area: when; } .gb-item .txt { grid-area: txt; }
+}

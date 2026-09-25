@@ -55,6 +55,62 @@
   }
   const BENCH = benchSprite();
 
+  // ---- 앉을 수 있는 벤치 / 테이블 세트 ----
+  const WOOD = "#b8784a", WOOD2 = "#8f5a34", WOOD3 = "#d4955f";
+  function benchBack(w, withBack) { // 뒤쪽(등받이 + 앉는 판 윗면) — 캐릭터보다 먼저 그림
+    const [c, x] = cv(w, 24);
+    if (withBack) {
+      x.fillStyle = OUT; x.fillRect(3, 0, 3, 14); x.fillRect(w - 6, 0, 3, 14); x.fillRect(1, 1, w - 2, 11);
+      x.fillStyle = WOOD; x.fillRect(2, 2, w - 4, 4); x.fillRect(2, 7, w - 4, 4);
+      x.fillStyle = WOOD3; x.fillRect(2, 2, w - 4, 1); x.fillRect(2, 7, w - 4, 1);
+    }
+    x.fillStyle = OUT; x.fillRect(0, 13, w, 8);
+    x.fillStyle = WOOD; x.fillRect(1, 14, w - 2, 6); x.fillStyle = WOOD3; x.fillRect(1, 14, w - 2, 1);
+    x.fillStyle = WOOD2; x.fillRect(1, 17, w - 2, 1);
+    return c;
+  }
+  function benchFront(w) { // 앞쪽(앉는 판 앞면 + 다리) — 캐릭터 뒤에 그려서 무릎 앞을 가림
+    const [c, x] = cv(w, 12);
+    x.fillStyle = "rgba(40,30,20,.22)"; x.fillRect(2, 8, w - 2, 4);
+    x.fillStyle = OUT; x.fillRect(0, 0, w, 4); x.fillRect(3, 3, 3, 8); x.fillRect(w - 6, 3, 3, 8);
+    x.fillStyle = WOOD2; x.fillRect(1, 1, w - 2, 2);
+    x.fillStyle = "#6c4429"; x.fillRect(4, 4, 1, 6); x.fillRect(w - 5, 4, 1, 6);
+    return c;
+  }
+  function tableTop(w, h) {
+    const [c, x] = cv(w + 4, h + 10);
+    x.fillStyle = "rgba(40,30,20,.25)"; x.fillRect(4, h + 2, w, 7);
+    x.fillStyle = OUT; x.fillRect(6, h - 2, 4, 10); x.fillRect(w - 6, h - 2, 4, 10); x.fillRect(0, 0, w + 2, h + 2);
+    x.fillStyle = WOOD; x.fillRect(1, 1, w, h);
+    x.fillStyle = WOOD3; x.fillRect(1, 1, w, 2);
+    x.fillStyle = WOOD2; for (let i = 8; i < h; i += 7) x.fillRect(1, i, w, 1); x.fillRect(1, h - 1, w, 2);
+    x.fillStyle = "#fff8ea"; x.fillRect(w / 2 - 6, 5, 12, 8); x.fillStyle = "#ff8fb8"; x.fillRect(w / 2 - 3, 7, 3, 3); x.fillStyle = "#f2c14e"; x.fillRect(w / 2 + 1, 8, 3, 3);
+    return c;
+  }
+  // 2인용 벤치 (앞을 보고 앉음)
+  function addBench(objects, colliders, seats, id, bx, by) {
+    const W2 = 46, back = benchBack(W2, true), front = benchFront(W2);
+    objects.push({ y: by - 8, x: bx, draw: (c) => c.drawImage(back, bx - W2 / 2, by - 20) });
+    objects.push({ y: by + 6, x: bx, draw: (c) => c.drawImage(front, bx - W2 / 2, by) });
+    colliders.push([bx - W2 / 2, by - 12, W2, 18]);
+    seats.push({ id: id + "a", x: bx - 11, y: by + 1, dir: "down", ax: bx - 11, ay: by + 16 }, { id: id + "b", x: bx + 11, y: by + 1, dir: "down", ax: bx + 11, ay: by + 16 });
+  }
+  // 4인용 테이블 세트 (위쪽 2명은 앞을 보고, 아래쪽 2명은 뒤를 보고 앉음)
+  function addTableSet(objects, colliders, seats, id, tx, ty) {
+    const TW = 50, TH = 22, tt = tableTop(TW, TH), upB = benchBack(TW, false), upF = benchFront(TW), lowB = benchBack(TW, false);
+    objects.push({ y: ty - 26, x: tx, draw: (c) => c.drawImage(upB, tx - TW / 2, ty - 38) });
+    objects.push({ y: ty - 19, x: tx, draw: (c) => c.drawImage(upF, tx - TW / 2, ty - 20) });
+    objects.push({ y: ty + 12, x: tx, draw: (c) => c.drawImage(tt, tx - TW / 2 - 1, ty - 10) });
+    objects.push({ y: ty + 18, x: tx, draw: (c) => c.drawImage(lowB, tx - TW / 2, ty + 5) });
+    colliders.push([tx - TW / 2, ty - 30, TW, 58]);
+    seats.push(
+      { id: id + "a", x: tx - 12, y: ty - 19, dir: "down", ax: tx - 12, ay: ty - 36 },
+      { id: id + "b", x: tx + 12, y: ty - 19, dir: "down", ax: tx + 12, ay: ty - 36 },
+      { id: id + "c", x: tx - 12, y: ty + 23, dir: "up", ax: tx - 12, ay: ty + 36 },
+      { id: id + "d", x: tx + 12, y: ty + 23, dir: "up", ax: tx + 12, ay: ty + 36 },
+    );
+  }
+
   function flowerPot(col) {
     const [c, x] = cv(14, 16);
     x.fillStyle = OUT; x.fillRect(2, 8, 10, 8); x.fillStyle = "#d9774f"; x.fillRect(3, 9, 8, 6);
@@ -110,41 +166,6 @@
     x.fillStyle = "#fff8ea"; x.fillRect(sx, sy, tw, 15);
     x.fillStyle = b.roof; x.fillRect(sx, sy + 13, tw, 2);
     x.fillStyle = OUT; x.fillText(b.name, sx + 7, sy + 7);
-    return c;
-  }
-
-  // 2.5D 건물: 정면 그림 + 오른쪽 옆면(깊이) + 오른쪽 아래로 드리운 그림자
-  function building3D(b) {
-    const front = buildingSprite(b);
-    const W = b.w, H = b.h, D = 22, rise = 0.5;
-    const wallTop = Math.round(H * 0.42), rt = 6;
-    const [c, x] = cv(front.width + D + 18, front.height + 14);
-    // 바닥 그림자
-    x.fillStyle = "rgba(25,12,35,.22)";
-    for (let i = 0; i < W + D + 14; i++) { const h = Math.max(0, 14 - Math.max(0, i - W) * 0.7); x.fillRect(8 + i, H - 2, 1, h); }
-    x.fillStyle = "rgba(25,12,35,.12)";
-    for (let i = 0; i < D + 14; i++) x.fillRect(W + 2 + i, wallTop + 6 - i * rise, 1, H - wallTop - 4);
-    // 옆면 벽 + 지붕 옆면
-    const sideWall = Avatar.mix(b.wall, "#3a2a50", 0.30), sideTrim = Avatar.mix(b.trim, "#000000", 0.35);
-    const sideRoof = Avatar.mix(b.roof, "#1a0f2a", 0.38), sideRoof2 = Avatar.mix(b.roof, "#1a0f2a", 0.25);
-    for (let i = 0; i < D; i++) {
-      const X = W + 2 + i, off = Math.round(i * rise);
-      x.fillStyle = OUT; x.fillRect(X, wallTop - off - 1, 1, H - wallTop + 1);
-      x.fillStyle = i % 8 === 7 ? sideTrim : sideWall; x.fillRect(X, wallTop - off, 1, H - wallTop - 1 - (i === D - 1 ? 0 : 0));
-      if (i > 3 && i < D - 3 && (i % 8 === 2 || i % 8 === 3)) { x.fillStyle = "#6f9fb8"; x.fillRect(X, wallTop - off + 14, 1, 14); } // 옆 창문
-      x.fillStyle = OUT; x.fillRect(X, rt - off - 1, 1, wallTop - rt + 6);
-      for (let yy = rt - off; yy < wallTop - off + 4; yy++) { x.fillStyle = (Math.floor((yy + off - rt) / 6) % 2) ? sideRoof : sideRoof2; x.fillRect(X, yy, 1, 1); }
-      x.fillStyle = OUT; x.fillRect(X, H - off - 1, 1, 1);
-    }
-    x.fillStyle = OUT; x.fillRect(W + 2 + D, rt - Math.round(D * rise) - 1, 1, H - rt + 1); // 뒤 모서리
-    // 정면
-    x.drawImage(front, 0, 0);
-    // 정면 벽에 위→아래 명암 (빛은 왼쪽 위)
-    const g = x.createLinearGradient(0, wallTop, W, H);
-    g.addColorStop(0, "rgba(255,255,255,.10)"); g.addColorStop(0.6, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(30,10,40,.14)");
-    x.fillStyle = g; x.fillRect(3, wallTop + 1, W - 2, H - wallTop - 2);
-    // 지붕 앞면 반사광
-    x.fillStyle = "rgba(255,255,255,.18)"; x.fillRect(2, rt + 1, W, 2);
     return c;
   }
 
@@ -251,10 +272,10 @@
 
     // 건물
     for (const b of buildings) {
-      b.sprite = building3D(b);
+      b.sprite = buildingSprite(b);
       objects.push({ y: b.y + b.h, x: b.x, draw: (c) => c.drawImage(b.sprite, b.x - 2, b.y) });
       const wt = Math.round(b.h * 0.42);
-      colliders.push([b.x, b.y + wt - 10, b.w + 20, b.h - wt + 8]);
+      colliders.push([b.x, b.y + wt - 10, b.w, b.h - wt + 8]);
       b.door = { x: b.x + b.w / 2, y: b.y + b.h + 4 };
     }
 
@@ -287,7 +308,13 @@
       colliders.push([lx - 3, ly - 3, 6, 4]);
     });
     // 벤치 & 화분
-    [[470, 480], [790, 480], [470, 540], [790, 540]].forEach(([bx, by]) => { objects.push({ y: by + 12, x: bx, draw: (c) => c.drawImage(BENCH, bx - 14, by) }); colliders.push([bx - 14, by + 2, 28, 10]); });
+    const seats = [];
+    [[462, 470], [818, 470], [462, 560], [818, 560]].forEach(([bx, by], i) => addBench(objects, colliders, seats, "b" + i, bx, by));
+    // 테이블 세트 5개 (광장 바닥 위에 있는지 확인하고 배치)
+    const okArea = (x0, y0, w, h) => { for (let yy = y0; yy <= y0 + h; yy += 6) for (let xx = x0; xx <= x0 + w; xx += 6) if (!isP(xx, yy)) return false; return true; };
+    const tableSpots = [[335, 330], [945, 330], [300, 640], [985, 640], [530, 700], [750, 700], [640, 360]];
+    let tCount = 0;
+    for (const [tx, ty] of tableSpots) { if (tCount >= 5) break; if (!okArea(tx - 30, ty - 44, 60, 94)) continue; addTableSet(objects, colliders, seats, "t" + tCount, tx, ty); tCount++; }
     [[560, 860, "#ff8fb8"], [720, 860, "#ffd34d"], [250, 600, "#b58cff"], [1030, 600, "#ff8fb8"], [480, 200, "#ffd34d"], [800, 200, "#b58cff"]].forEach(([px, py, col]) => {
       const sp = flowerPot(col); objects.push({ y: py + 16, x: px, draw: (c) => c.drawImage(sp, px - 7, py) }); colliders.push([px - 6, py + 8, 12, 8]);
     });
@@ -309,7 +336,7 @@
     ];
 
     return {
-      id: "plaza", W, H, ground: g, objects, colliders, zones, buildings,
+      id: "plaza", W, H, ground: g, objects, colliders, zones, buildings, seats,
       walkable: (x, y) => isP(x | 0, y | 0),
       spawn: { x: 640, y: 840 },
       artist: { x: 604, y: 506, dir: "down" },
@@ -414,13 +441,17 @@
     // 테이블
     const table = (tx, ty) => { const [c, s] = cv(30, 22); s.fillStyle = "rgba(40,30,20,.25)"; s.fillRect(3, 17, 26, 5); s.fillStyle = OUT; s.fillRect(0, 0, 30, 12); s.fillRect(13, 10, 4, 10); s.fillStyle = "#fff8ea"; s.fillRect(1, 1, 28, 9); s.fillStyle = "#ff8fb8"; s.fillRect(10, 3, 4, 4); s.fillStyle = "#ffd34d"; s.fillRect(17, 4, 3, 3); objects.push({ y: ty + 20, x: tx, draw: (cc) => cc.drawImage(c, tx, ty) }); colliders.push([tx, ty + 4, 30, 14]); };
     table(80, 240); table(530, 240); table(120, 170); table(490, 170);
+    // 방명록 (조젤리에게 남기는 글)
+    const gb = (() => { const [c, s] = cv(30, 34); s.fillStyle = "rgba(40,30,20,.25)"; s.fillRect(4, 29, 24, 5); s.fillStyle = OUT; s.fillRect(12, 14, 6, 18); s.fillRect(6, 29, 18, 4); s.fillStyle = "#8f5a34"; s.fillRect(13, 15, 4, 16); s.fillStyle = OUT; s.fillRect(0, 2, 30, 14); s.fillStyle = "#a77ce0"; s.fillRect(1, 3, 28, 12); s.fillStyle = "#fffaf2"; s.fillRect(3, 4, 11, 9); s.fillRect(16, 4, 11, 9); s.fillStyle = "#c9b8e8"; for (let i = 0; i < 3; i++) { s.fillRect(5, 6 + i * 2, 7, 1); s.fillRect(18, 6 + i * 2, 7, 1); } s.fillStyle = "#d8434e"; s.fillRect(14, 0, 2, 6); return c; })();
+    objects.push({ y: 146, x: 470, draw: (c) => c.drawImage(gb, 455, 114) });
+    colliders.push([457, 130, 26, 16]);
     [[20, 100, "#ff8fb8"], [608, 100, "#b58cff"], [20, 390, "#ffd34d"], [608, 390, "#ff8fb8"]].forEach(([px, py, col]) => { const sp = flowerPot(col); objects.push({ y: py + 16, x: px, draw: (c) => c.drawImage(sp, px - 7, py) }); colliders.push([px - 7, py + 6, 14, 10]); });
 
     const collide = (px, py) => colliders.some(([a, b, w, h]) => px > a && px < a + w && py > b && py < b + h);
     return {
-      id: "lounge", W, H, ground: g, objects, colliders: [], zones: [{ id: "exit", x: 290, y: 388, w: 60, h: 32, label: T("zExit") }],
+      id: "lounge", W, H, ground: g, objects, colliders: [], zones: [{ id: "exit", x: 290, y: 388, w: 60, h: 32, label: T("zExit") }, { id: "guestbook", x: 450, y: 146, w: 40, h: 26, label: T("zGuestbook") }], seats: [],
       walkable: (px, py) => px > 10 && px < W - 10 && py > 92 && py < H - 4 && !collide(px, py),
-      spawn: { x: 320, y: 380 }, artist: null, icons: [],
+      spawn: { x: 320, y: 380 }, artist: null, icons: [{ x: 470, y: 112, icon: "📖" }],
     };
   }
 

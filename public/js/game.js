@@ -85,7 +85,7 @@
     const w = scene();
     const p = pos || w.spawn;
     G.player.x = p.x; G.player.y = p.y; G.player.dir = pos && pos.dir ? pos.dir : "up";
-    G.target = null; G.pendingZone = null; G.others.clear(); G.zone = null;
+    G.target = null; G.pendingZone = null; G.others.clear(); G.zone = null; G.seat = null; G.seatObj = null;
     $("#prompt").classList.add("hidden");
     buildMinimap();
     updateSceneLabels();
@@ -107,12 +107,20 @@
 
   // 주민 NPC (분위기용)
   function makeNPCs() {
-    G.npcs = [0, 1, 2].map((i) => ({ i, av: Avatar.random(), x: 560 + i * 60, y: 640 + (i % 2) * 40, tx: 0, ty: 0, dir: "down", moving: false, wait: 1 + i, t: 0 }));
+    G.npcs = [0, 1, 2].map((i) => ({ i, av: Avatar.random(), x: 560 + i * 60, y: 640 + (i % 2) * 40, tx: 0, ty: 0, dir: "down", moving: false, wait: 1 + i, t: 0, line: 0 }));
   }
   function updateNPCs(dt) {
     if (G.scene !== "plaza") return;
     for (const n of G.npcs) {
       n.t += dt;
+      // 대사: 1번부터 10번까지 순서대로, 말풍선 4.5초 → 쉬고 → 다음 대사
+      if (n.nextTalk === undefined) { n.nextTalk = G.t + 1500 + n.i * 2500; n.line = 0; }
+      if (G.t >= n.nextTalk) {
+        const lines = t("npcLines")[n.i] || [];
+        n.say = lines[n.line % Math.max(1, lines.length)]; n.sayUntil = G.t + 4500;
+        n.line = (n.line + 1) % Math.max(1, lines.length);
+        n.nextTalk = G.t + 7500;
+      }
       if (n.wait > 0) { n.wait -= dt; n.moving = false; if (n.wait <= 0) { n.tx = n.x + (Math.random() - 0.5) * 220; n.ty = n.y + (Math.random() - 0.5) * 160; } continue; }
       const dx = n.tx - n.x, dy = n.ty - n.y, d = Math.hypot(dx, dy);
       if (d < 3) { n.wait = 1.5 + Math.random() * 3; continue; }
@@ -174,6 +182,7 @@
     if (G.mode === "world" && !G.modalOpen) {
       if (G.keys.has("u")) vy -= 1; if (G.keys.has("d")) vy += 1; if (G.keys.has("l")) vx -= 1; if (G.keys.has("r")) vx += 1;
       if (G.joy.x || G.joy.y) { vx = G.joy.x; vy = G.joy.y; }
+      if (G.seat && (vx || vy || G.target)) standUp();
       if (!vx && !vy && G.target) {
         const dx = G.target.x - p.x, dy = G.target.y - p.y, d = Math.hypot(dx, dy);
         if (d < 3) { G.target = null; if (G.pendingZone) { const z = G.pendingZone; G.pendingZone = null; runZone(z); } }
@@ -209,6 +218,13 @@
     const w = scene();
     let zone = null;
     if (G.mode === "world") for (const z of w.zones) if (p.x > z.x && p.x < z.x + z.w && p.y > z.y && p.y < z.y + z.h) { zone = z; break; }
+    // 벤치 · 테이블 좌석: 가까운 빈자리가 있으면 "앉기"
+    if (G.mode === "world" && G.seat) zone = G.standZone || (G.standZone = { id: "stand", label: t("actStand") });
+    else if (G.mode === "world" && !zone && w.seats) {
+      let best = null, bd = 26;
+      for (const st of w.seats) { const d = Math.hypot(p.x - st.ax, p.y - st.ay); if (d < bd && !seatTaken(st.id)) { bd = d; best = st; } }
+      if (best) zone = best.zone || (best.zone = { id: "seat", seat: best, label: t("actSit") });
+    }
     if (zone !== G.zone) { G.zone = zone; renderPrompt(); }
     // 카메라
     const vw = VW / S, vh = VH / S;
@@ -232,7 +248,7 @@
   function renderPrompt() {
     const pr = $("#prompt"), z = G.zone;
     if (!z) return pr.classList.add("hidden");
-    const act = z.id === "exit" ? "" : z.id === "profile" || z.id === "guide" ? t("actView") : t("actEnter");
+    const act = z.id === "exit" || z.id === "seat" || z.id === "stand" ? "" : z.id === "profile" || z.id === "guide" || z.id === "guestbook" ? t("actView") : t("actEnter");
     pr.innerHTML = `<kbd>E</kbd>${esc(z.label)} ${esc(act)}`;
     pr.classList.remove("hidden");
   }
@@ -255,16 +271,21 @@
     for (const o of w.objects) if (o.y > vy0 && o.y < vy1 + 120 && o.x > vx0 - 200 && o.x < vx1) list.push(o);
     const chars = [];
     if (w.artist) chars.push({ y: w.artist.y, x: w.artist.x, name: L(CFG.artist.name) + " ♪", av: ARTIST_LOOK, dir: "down", frame: 0, crown: true, artist: true, bobby: true, keytar: true });
-    if (G.scene === "plaza") for (const n of G.npcs) chars.push({ x: n.x, y: n.y, name: t("npc")[n.i], av: n.av, dir: n.dir, frame: frameOf(n.moving, n.t), npc: true });
-    for (const o of G.others.values()) chars.push({ x: o.rx, y: o.ry, name: o.name, av: o.avatar, dir: o.dir || "down", frame: frameOf(o.walking, o.t || 0), crown: o.role === "artist", id: o.id, artist: o.role === "artist" });
-    if (G.mode === "world") chars.push({ x: G.player.x, y: G.player.y, name: G.user.nickname, av: G.user.avatar, dir: G.player.dir, frame: frameOf(G.player.moving, G.player.t), crown: G.user.role === "artist", me: true, id: G.user.id, artist: G.user.role === "artist" });
+    if (G.scene === "plaza") for (const n of G.npcs) chars.push({ x: n.x, y: n.y, name: t("npc")[n.i], av: n.av, dir: n.dir, frame: frameOf(n.moving, n.t), npc: n });
+    const seatMap = w.seats ? Object.fromEntries(w.seats.map((st) => [st.id, st])) : {};
+    for (const o of G.others.values()) {
+      const st = o.seat && seatMap[o.seat];
+      if (st) { o.rx = o.x = st.x; o.ry = o.y = st.y; }
+      chars.push({ x: o.rx, y: o.ry, name: o.name, av: o.avatar, dir: st ? st.dir : o.dir || "down", frame: frameOf(o.walking, o.t || 0), crown: o.role === "artist", id: o.id, artist: o.role === "artist", sit: !!st });
+    }
+    if (G.mode === "world") chars.push({ x: G.player.x, y: G.player.y, name: G.user.nickname, av: G.user.avatar, dir: G.player.dir, frame: frameOf(G.player.moving, G.player.t), crown: G.user.role === "artist", me: true, id: G.user.id, artist: G.user.role === "artist", sit: !!G.seat });
     for (const c of chars) list.push({ y: c.y, char: c });
     list.sort((a, b) => a.y - b.y);
     for (const o of list) {
       if (o.char) {
         const c = o.char;
         if (c.artist) drawAura(c.x, c.y, G.t);
-        Avatar.draw(ctx, c.av, c.x, c.y, c.dir, c.bobby ? (Math.floor(G.t / 500) % 2 ? 1 : 0) : c.frame, { keytar: c.keytar });
+        Avatar.draw(ctx, c.av, c.x, c.y, c.dir, c.bobby ? (Math.floor(G.t / 500) % 2 ? 1 : 0) : c.frame, { keytar: c.keytar, sit: c.sit });
         if (c.artist) drawSparkles(c.x, c.y, G.t);
       } else o.draw(ctx, G.t);
     }
@@ -290,7 +311,7 @@
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     const now = Date.now();
     for (const c of chars) {
-      const X = sx(c.x), Y = sy(c.y - 42);
+      const X = sx(c.x), Y = sy(c.y - (c.sit ? 33 : 42));
       ctx.font = `${c.me || c.artist ? "bold " : ""}12px ${FONT}`;
       const tw = ctx.measureText(c.artist ? "✦ " + c.name : c.name).width + 10;
       ctx.fillStyle = c.artist ? "rgba(40,130,230,.95)" : c.me ? "rgba(58,37,48,.85)" : c.npc ? "rgba(79,195,176,.85)" : "rgba(58,37,48,.6)";
@@ -299,6 +320,7 @@
       const b = c.id && G.bubbles.get(c.id);
       if (b && b.until > now) drawBubble(X, Y - 14, msgText(b.m));
       if (c.artist && !c.id && G.scene === "plaza" && Math.floor(G.t / 4000) % 3 === 0) drawBubble(X, Y - 14, t("artistHello"));
+      if (c.npc && c.npc.say && c.npc.sayUntil > G.t) drawBubble(X, Y - 14, c.npc.say);
     }
     if (G.mode === "world" && G.t - (G.mmT || 0) > 120) { G.mmT = G.t; drawMinimapFrame(); } // 지도는 초당 8번만 (폰 부담 줄이기)
   }
@@ -399,7 +421,22 @@
     if (G.mode !== "world" || G.modalOpen) return;
     if (G.zone) runZone(G.zone.id);
   }
+  function seatTaken(id) { for (const o of G.others.values()) if (o.seat === id) return true; return false; }
+  function sitDown(st) {
+    if (seatTaken(st.id)) return;
+    G.seat = st.id; G.seatObj = st; G.target = null; G.pendingZone = null;
+    G.player.x = st.x; G.player.y = st.y; G.player.dir = st.dir; G.player.moving = false;
+    G.zone = null; kickSync();
+  }
+  function standUp() {
+    const st = G.seatObj; G.seat = null; G.seatObj = null;
+    if (st) { G.player.x = st.ax; G.player.y = st.ay; }
+    G.zone = null; kickSync();
+  }
   async function runZone(id) {
+    if (id === "seat" && G.zone && G.zone.seat) return sitDown(G.zone.seat);
+    if (id === "stand") return standUp();
+    if (id === "guestbook") return openGuestbook();
     if (id === "gallery") return openGallery();
     if (id === "albums") return openAlbums();
     if (id === "cinema") return openCinema();
@@ -480,6 +517,49 @@
     </div></div>`;
     openModal("🎹 " + t("zProfile"), html, (el) => el.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => runZone(b.dataset.go))));
   }
+  // ---------------- 방명록 ----------------
+  const fmtTime = (ts) => { const d = new Date(ts), z = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}.${z(d.getMonth() + 1)}.${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`; };
+  async function openGuestbook(page = 0) {
+    openModal("📖 " + t("gbTitle"), `<p style="margin-top:0">${esc(t("gbIntro"))}</p>
+      <form class="gb-form" id="gb-form"><textarea id="gb-text" maxlength="300" rows="3" placeholder="${esc(t("gbPh"))}"></textarea>
+      <div class="gb-row"><span id="gb-count">0/300</span><button class="btn pink" type="submit">${esc(t("gbWrite"))}</button></div><div class="err" id="gb-err"></div></form>
+      <div class="gb-list" id="gb-list"><p class="gb-empty">…</p></div><div class="gb-pager" id="gb-pager"></div>`, (el) => {
+      const ta = el.querySelector("#gb-text");
+      ta.addEventListener("input", () => (el.querySelector("#gb-count").textContent = ta.value.length + "/300"));
+      el.querySelector("#gb-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const text = ta.value.trim(); if (!text) return;
+        const btn = e.target.querySelector("button"); btn.disabled = true;
+        try { await API.gbWrite(text); ta.value = ""; el.querySelector("#gb-count").textContent = "0/300"; toast(t("gbDone")); loadGb(0); }
+        catch (err) { el.querySelector("#gb-err").textContent = err.message; }
+        finally { btn.disabled = false; }
+      });
+      loadGb(page);
+    });
+  }
+  async function loadGb(page) {
+    const list = $("#gb-list"), pager = $("#gb-pager");
+    if (!list) return;
+    try {
+      const r = await API.gbList(page);
+      if (!r.entries.length) { list.innerHTML = `<p class="gb-empty">${esc(t("gbEmpty"))}</p>`; pager.innerHTML = ""; return; }
+      list.innerHTML = `<div class="gb-head"><span>${esc(t("gbNo"))}</span><span>${esc(t("gbWriter"))}</span><span>${esc(t("gbContent"))}</span><span>${esc(t("gbDate"))}</span></div>` +
+        r.entries.map((e, i) => `<div class="gb-item${e.role === "artist" ? " host" : ""}" data-key="${esc(e.key)}">
+          <span class="no">${r.total - page * 20 - i}</span>
+          <span class="who"><canvas width="32" height="26" data-av='${esc(JSON.stringify(e.avatar || null))}'></canvas><b>${e.role === "artist" ? "✦ " : ""}${esc(e.name)}</b></span>
+          <span class="txt">${esc(e.text).replace(/\n/g, "<br>")}</span>
+          <span class="when">${fmtTime(e.ts)}${G.user && (G.user.role === "artist" || G.user.id === e.id) ? ` <button class="gb-del" title="${esc(t("del"))}">✕</button>` : ""}</span></div>`).join("");
+      list.querySelectorAll("canvas[data-av]").forEach((c) => { try { const av = JSON.parse(c.dataset.av); const x = c.getContext("2d"); x.imageSmoothingEnabled = false; x.drawImage(Avatar.sprite(av, "down", 0), 0, 0, 32, 26, 0, 0, 32, 26); } catch {} });
+      list.querySelectorAll(".gb-del").forEach((b) => b.addEventListener("click", async () => {
+        const key = b.closest(".gb-item").dataset.key;
+        try { await API.gbDelete(key); loadGb(page); } catch (e) { toast(e.message); }
+      }));
+      const pages = Math.ceil(r.total / 20);
+      pager.innerHTML = pages > 1 ? Array.from({ length: pages }, (_, i) => `<button class="chip ${i === page ? "on" : ""}" data-p="${i}">${i + 1}</button>`).join("") : "";
+      pager.querySelectorAll("[data-p]").forEach((b) => b.addEventListener("click", () => loadGb(+b.dataset.p)));
+    } catch (e) { list.innerHTML = `<p class="gb-empty">${esc(e.message)}</p>`; }
+  }
+
   function openGuide() {
     openModal(t("guideTitle"), `<ul class="guide">${t("guide").map((g) => `<li>${g}</li>`).join("")}</ul>`);
   }
@@ -540,7 +620,7 @@
     syncBusy = true; lastSync = Date.now();
     const room = G.scene;
     try {
-      const r = await API.sync({ scene: room, x: Math.round(G.player.x), y: Math.round(G.player.y), dir: G.player.dir, since: G.chat.since });
+      const r = await API.sync({ scene: room, x: Math.round(G.player.x), y: Math.round(G.player.y), dir: G.player.dir, seat: G.seat, since: G.chat.since });
       if (room !== G.scene) return;
       applyOthers(r.others || []);
       if (!API.demo) { G.online = r.online || 1; $("#online").textContent = t("online", { n: G.online }); }
@@ -696,7 +776,16 @@
     chipRow("eye", Avatar.EYES.map((c, i) => ({ c, name: t("eyes")[i] })), "eye", "sw");
     chipRow("hairColor", Avatar.HAIR_COLORS.map((c, i) => ({ ...c, name: t("hairColors")[i] })), "hairColor", "sw");
     chipRow("skin", Avatar.SKINS.map((c, i) => ({ ...c, name: t("skins")[i] })), "skin", "sw");
-    chipRow("outfit", Avatar.OUTFITS.map((o, i) => ({ name: t("outfits")[i] || o.id, col: o.overall || (o.top === "#f7f5ff" ? o.skirt : o.top) })), "outfit");
+    const isHost = G.user && G.user.role === "artist";
+    const outs = Avatar.OUTFITS.map((o, i) => ({ i, name: t("outfits")[i] || o.id, col: o.overall || (o.top === "#f7f5ff" ? o.skirt : o.top), host: !!o.host }));
+    chipRow("outfit", outs, "outfit");
+    // 호스트 전용 의상: 호스트가 아니면 잠금 표시
+    $("#o-outfit").querySelectorAll(".chip").forEach((el, idx) => {
+      if (!outs[idx].host) return;
+      el.classList.add("host-only"); el.insertAdjacentHTML("beforeend", `<small>${isHost ? "✦" : "🔒"} ${esc(t("hostOnly"))}</small>`);
+      if (!isHost) { el.disabled = true; el.title = t("hostOnly"); }
+    });
+    if (!isHost && outs[draft.avatar.outfit] && outs[draft.avatar.outfit].host) draft.avatar.outfit = 0;
   }
   const DIRS = ["down", "right", "up", "left"];
   function drawPreview() {

@@ -25,6 +25,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const LANGS = ["ko", "en", "ja"];
 const ROOMS = ["plaza", "lounge"];
 const CHAT_TTL = 5 * 60 * 1000; // 채팅은 5분 뒤 사라짐
+const HOST_OUTFITS = [1, 7, 8, 9]; // 호스트(조젤리) 전용 의상 번호 — public/js/avatar.js 의 host: true 와 같아야 함
 const keyTs = (k) => +k.split("/")[2].split("-")[0];
 const b64u = (buf) => Buffer.from(buf).toString("base64url");
 
@@ -192,10 +193,10 @@ export default async (req) => {
       const mine = cur[tp.id];
       const entry = {
         id: tp.id, name: tp.n, avatar: tp.a, role,
-        x: Math.round(+body.x || 0), y: Math.round(+body.y || 0), dir: clean(body.dir, 5), ts: now,
+        x: Math.round(+body.x || 0), y: Math.round(+body.y || 0), dir: clean(body.dir, 5), seat: clean(body.seat, 12) || null, ts: now,
       };
       // 위치가 그대로이고 최근에 저장했다면 쓰기를 건너뜀 (비용 절약)
-      const unchanged = mine && mine.x === entry.x && mine.y === entry.y && mine.dir === entry.dir && mine.name === entry.name &&
+      const unchanged = mine && mine.x === entry.x && mine.y === entry.y && mine.dir === entry.dir && mine.seat === entry.seat && mine.name === entry.name &&
         JSON.stringify(mine.avatar) === JSON.stringify(entry.avatar) && now - mine.ts < 8000;
       const writes = [];
       for (const k of Object.keys(cur)) if (now - cur[k].ts > 15000) { delete cur[k]; }
@@ -230,7 +231,9 @@ export default async (req) => {
       const a = body.avatar || {};
       const n = (v) => Math.max(0, Math.min(9, v | 0));
       user.nickname = nickname;
-      user.avatar = { gender: a.gender === "m" ? "m" : "f", hair: n(a.hair), hairColor: n(a.hairColor), skin: n(a.skin), outfit: n(a.outfit), eye: n(a.eye) };
+      let outfit = n(a.outfit);
+      if (HOST_OUTFITS.includes(outfit) && me.role !== "artist") outfit = 0; // 호스트 전용 의상은 호스트만
+      user.avatar = { gender: a.gender === "m" ? "m" : "f", hair: n(a.hair), hairColor: n(a.hairColor), skin: n(a.skin), outfit, eye: n(a.eye) };
       await saveUser();
       return json({ user: publicUser(user), token: await tokenFor(user) });
     }
@@ -260,6 +263,40 @@ export default async (req) => {
       }
       const online = all.filter(([, p]) => p && now - p.ts < 12000).length;
       return json({ others, online });
+    }
+
+    // ---------- 방명록 (팬 라운지) ----------
+    if (route === "guestbook") {
+      const gs = store("jl-guestbook");
+      if (method === "GET") {
+        const { blobs } = await gs.list({ prefix: "g/" });
+        const keys = blobs.map((b) => b.key).sort().reverse();
+        const page = Math.max(0, +url.searchParams.get("page") || 0);
+        const slice = keys.slice(page * 20, page * 20 + 20);
+        const entries = (await Promise.all(slice.map((k) => gs.get(k, { type: "json" }).then((e) => e && { ...e, key: k })))).filter(Boolean);
+        return json({ entries, total: keys.length });
+      }
+      if (method === "POST") {
+        const text = String(body.text || "").replace(/\r/g, "").replace(/[\u0000-\u0009\u000b-\u001f]/g, "").trim().slice(0, 300).replace(/\n{3,}/g, "\n\n");
+        if (!text) return err("msg");
+        const lastKey = "u/" + user.id;
+        const last = +(await gs.get(lastKey)) || 0;
+        if (Date.now() - last < 30000) return err("slow", 429); // 30초에 한 번
+        const ts = Date.now();
+        const key = `g/${String(ts).padStart(15, "0")}-${crypto.randomBytes(3).toString("hex")}`;
+        const e = { id: user.id, name: me.nickname || "?", role: me.role, avatar: me.avatar, text, ts };
+        await Promise.all([gs.setJSON(key, e), gs.set(lastKey, String(ts))]);
+        return json({ entry: { ...e, key } });
+      }
+      if (method === "DELETE") {
+        const key = url.searchParams.get("key") || "";
+        if (!key.startsWith("g/")) return err("forbidden", 400);
+        const e = await gs.get(key, { type: "json" });
+        if (!e) return json({ ok: true });
+        if (me.role !== "artist" && e.id !== user.id) return err("forbidden", 403); // 본인 글 또는 호스트만 삭제
+        await gs.delete(key);
+        return json({ ok: true });
+      }
     }
 
     // ---------- 채팅 (광장 / 팬 라운지) ----------

@@ -29,12 +29,19 @@
     { id: "magic", top: "#a77ce0", topS: "#8459c2", skirt: "#a77ce0", skirtS: "#8459c2", frill: "#ffffff", sleeve: "#ffffff", cape: "#d8434e", capeS: "#ad2d3a",
       glove: "#8a5634", legs: "#ffffff", boots: "#a77ce0", bootsS: "#7d52b8", cuff: "#f2c14e", belt: "#7a4a2c", star: "#f7cd45", pantsM: "#5b4a8a" },
     { id: "bear", top: "#f5b544", topS: "#d9952c", skirt: "#f5b544", skirtS: "#d9952c", sleeve: "#f5b544", belly: "#fff6ea", legs: "#f5b544", boots: "#ffffff", bootsS: "#e6ddd6",
-      hood: true, pantsM: "#f5b544", onesie: true },
+      hood: true, pantsM: "#f5b544", onesie: true, host: true, keytar: true },
     { id: "tux", top: "#2c2736", topS: "#1b1822", shirt: "#ffffff", skirt: "#2c2736", skirtS: "#1b1822", sleeve: "#2c2736", legs: null, boots: "#2c2736", bootsS: "#1b1822", bow: "#d8434e", pantsM: "#2c2736" },
     { id: "sailor", top: "#f7f5ff", topS: "#d9d4ec", collar: "#33407e", skirt: "#33407e", skirtS: "#232d60", sleeve: "#f7f5ff", legs: "#ffffff", boots: "#6b3f2a", bootsS: "#4f2c1d", bow: "#d8434e", pantsM: "#33407e" },
     { id: "mint", top: "#8fe0cc", topS: "#62c0aa", collar: "#ffffff", skirt: "#8fe0cc", skirtS: "#62c0aa", frill: "#ffffff", sleeve: "#8fe0cc", legs: null, boots: "#f7f5ff", bootsS: "#d9d4ec", pantsM: "#5aa996" },
     { id: "black", top: "#27232f", topS: "#17141c", shirt: "#1b1820", skirt: "#27232f", skirtS: "#17141c", sleeve: "#27232f", legs: "#27232f", boots: "#1b1820", bootsS: "#0f0d12", pearls: true, pantsM: "#27232f" },
     { id: "berry", top: "#fff4f6", topS: "#f0d6dc", skirt: "#e3566a", skirtS: "#c03c50", sleeve: "#fff4f6", legs: null, boots: "#e3566a", bootsS: "#c03c50", overall: "#e3566a", pantsM: "#e3566a" },
+    // ---- 호스트(조젤리) 전용 ----
+    { id: "stage", host: true, top: "#2b2f6b", topS: "#1d2050", skirt: "#2b2f6b", skirtS: "#1d2050", sleeve: "#ffffff", glove: "#ffffff", legs: null, boots: "#f2c14e", bootsS: "#c9982c",
+      gown: true, sparkle: ["#f7cd45", "#ffffff"], star: "#f7cd45", belt: "#f2c14e", pantsM: "#2b2f6b" },
+    { id: "galaxy", host: true, top: "#5b3fa8", topS: "#432c86", shirt: "#ff9fc8", skirt: "#262a5c", skirtS: "#1a1d44", sleeve: "#5b3fa8", legs: "#262a5c", boots: "#ffffff", bootsS: "#d9d4ec",
+      cape: "#3a2a7a", capeS: "#281c5a", star: "#9fe8ff", sparkle: ["#ffffff", "#9fe8ff", "#ff9fc8"], pantsM: "#262a5c" },
+    { id: "rockstar", host: true, top: "#d8434e", topS: "#ad2d3a", shirt: "#1b1820", skirt: "#1b1820", skirtS: "#0f0d12", sleeve: "#d8434e", legs: "#1b1820", boots: "#1b1820", bootsS: "#0f0d12",
+      cuff: "#f2c14e", belt: "#f2c14e", star: "#f2c14e", pantsM: "#1b1820", keytar: true },
   ];
 
   function mix(a, b, t) {
@@ -165,11 +172,17 @@
       } else if (of.cape) R(CX - 5, ty - 1, 11, 3, of.cape);
     }
     // 치마 / 바지
-    if (fem && !of.onesie) {
+    if (of.gown) { // 롱 드레스 (호스트 전용)
+      for (let i = 0; i < 12; i++) { const w = (side ? 8 : 11) + Math.min(i, 6) * 2; R(CX - Math.floor(w / 2), ty + 5 + i, w, 1, i >= 10 ? of.skirtS : of.skirt); }
+    } else if (fem && !of.onesie) {
       for (let i = 0; i < 4; i++) { const w = (side ? 8 : 11) + i * 2; R(CX - Math.floor(w / 2) + (side ? 0 : 0), ty + 5 + i, w, 1, i === 3 ? of.skirtS : of.skirt); }
       if (of.frill) { const w = (side ? 8 : 11) + 8; for (let i = 0; i < w; i++) if (i % 2 === 0) P(CX - Math.floor(w / 2) + i, ty + 9, of.frill); }
     } else {
       R(CX - (side ? 3 : 4), ty + 5, side ? 7 : 9, 3, of.onesie ? of.top : of.pantsM);
+    }
+    if (of.sparkle && !back) { // 반짝이는 원단
+      const sp = [[-3, 2], [3, 1], [-1, 4], [2, 6], [-4, 8], [4, 9], [0, 11], [-2, 13], [3, 14]];
+      sp.forEach(([dx, dy], k) => P(CX + dx, ty + dy, of.sparkle[k % of.sparkle.length]));
     }
     // 팔 (퍼프 소매 + 장갑)
     const armSw = side ? 0 : sway;
@@ -232,7 +245,7 @@
       }
     }
     // ===== 소품: 키타 (조젤리 전용) =====
-    if (opts.keytar && !back) {
+    if ((opts.keytar || of.keytar) && !back) {
       const kx = side ? CX - 3 : CX - 7, ky = ty + 3;
       for (let i = 0; i < 12; i++) { R(kx + i, ky + 4 - Math.floor(i / 3), 1, 3, "#e0344a"); if (i > 2 && i < 11) P(kx + i, ky + 5 - Math.floor(i / 3), i % 2 ? "#ffffff" : "#1b1820"); }
     }
@@ -255,20 +268,27 @@
   }
   function draw(ctx, av, x, y, dir = "down", frame = 0, opts = {}) {
     // 부드러운 바닥 그림자 (빛이 왼쪽 위라 오른쪽 아래로)
+    if (!opts.sit) {
     ctx.save();
     ctx.fillStyle = "rgba(30,15,40,.30)";
     ctx.beginPath(); ctx.ellipse(Math.round(x) + 2, Math.round(y) - 0.5, 9, 3, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = "rgba(30,15,40,.18)";
     ctx.beginPath(); ctx.ellipse(Math.round(x) + 3, Math.round(y), 12, 4, 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
+    }
+    if (opts.sit) { // 앉은 자세: 다리 부분을 잘라 엉덩이가 의자 높이에 오도록
+      ctx.drawImage(sprite(av, dir, 0, opts), 0, 0, W, 29, Math.round(x) - CX, Math.round(y) - 29, W, 29);
+      return;
+    }
     ctx.drawImage(sprite(av, dir, frame, opts), Math.round(x) - CX, Math.round(y) - FOOT);
   }
 
   window.Avatar = {
+    HOST_OUTFITS: OUTFITS.map((o, i) => (o.host ? i : -1)).filter((i) => i >= 0),
     draw, sprite, SKINS, HAIR_COLORS, HAIRS, OUTFITS, EYES, mix, HEIGHT: 36,
     random: () => ({
       gender: Math.random() < 0.6 ? "f" : "m", hair: (Math.random() * HAIRS.length) | 0, hairColor: (Math.random() * HAIR_COLORS.length) | 0,
-      skin: (Math.random() * SKINS.length) | 0, outfit: (Math.random() * OUTFITS.length) | 0, eye: (Math.random() * EYES.length) | 0,
+      skin: (Math.random() * SKINS.length) | 0, outfit: [0, 2, 3, 4, 5, 6][(Math.random() * 6) | 0], eye: (Math.random() * EYES.length) | 0,
     }),
   };
 })();
