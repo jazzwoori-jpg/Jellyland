@@ -499,7 +499,7 @@
     x.fillText(title, 40, 8.5);
     return c;
   }
-  // 🏆 점프점프 랭킹 1위 게시판 — 1위가 바뀌면 자동으로 바뀜 (World.rankTop 을 게임에서 채워 줌)
+  // 🏆 점프점프 랭킹 1위 게시판 — 1위가 바뀌면 자동으로 바뀜 (World.rankTops 를 게임에서 채워 줌)
   function drawRankBoard(c, bx, by, t) {
     const W = 116, H = 104, x0 = bx - W / 2, y0 = by - H - 6;
     c.fillStyle = "rgba(40,30,20,.28)"; c.fillRect(x0 + 6, by - 4, W - 4, 8);
@@ -509,10 +509,17 @@
     c.fillStyle = "#f2c14e"; c.fillRect(x0 + 1, y0 + 1, W - 2, H - 20);
     c.fillStyle = "#fff3a8"; c.fillRect(x0 + 1, y0 + 1, W - 2, 3);
     c.fillStyle = "#fffaf2"; c.fillRect(x0 + 5, y0 + 18, W - 10, H - 40);
+    // 점프점프 1위 ↔ 올라올라 1위 를 6초마다 번갈아 보여 줌
+    const tops = window.World.rankTops || {};
+    let which = Math.floor(t / 6000) % 2 ? "up" : "jump";
+    if (!tops[which] && tops[which === "up" ? "jump" : "up"]) which = which === "up" ? "jump" : "up";
+    const title = T(which === "up" ? "rankBoardUp" : "rankBoard");
+    c.fillStyle = which === "up" ? "#8fe07a" : "#f2c14e"; c.fillRect(x0 + 1, y0 + 1, W - 2, 16);
     c.textAlign = "center"; c.textBaseline = "middle";
-    let fs = 10; c.font = `bold ${fs}px ${FONT}`; while (c.measureText(T("rankBoard")).width > W - 10 && fs > 6) { fs--; c.font = `bold ${fs}px ${FONT}`; }
-    c.fillStyle = OUT; c.fillText(T("rankBoard"), bx, y0 + 10);
-    const top = window.World.rankTop;
+    let fs = 10; c.font = `bold ${fs}px ${FONT}`; while (c.measureText(title).width > W - 10 && fs > 6) { fs--; c.font = `bold ${fs}px ${FONT}`; }
+    c.fillStyle = OUT; c.fillText(title, bx, y0 + 10);
+    c.fillStyle = which === "jump" ? OUT : "#c9982c"; c.fillRect(bx - 6, y0 + H - 21, 4, 2); c.fillStyle = which === "up" ? OUT : "#c9982c"; c.fillRect(bx + 2, y0 + H - 21, 4, 2); // 페이지 표시
+    const top = tops[which];
     const cy0 = y0 + 18;
     if (top && top.avatar) {
       // 반짝이는 배경 + 1위 캐릭터 크게 (2배)
@@ -687,5 +694,5 @@
     };
   }
 
-  window.World = { buildPlaza, buildLounge, rankTop: null };
+  window.World = { buildPlaza, buildLounge, rankTops: {} };
 })();

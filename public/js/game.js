@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "16"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "17"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -462,12 +462,6 @@
     G.zone = null; kickSync();
     if (st.id === "throne" && G.user.role === "artist") {
       celebrate(st);
-      // 모두에게 공지: "Jo Jelly 등장!" (자동 번역) — 너무 자주 올라가지 않게 5분에 한 번
-      let last = 0; try { last = +localStorage.getItem("jl_throne_notice") || 0; } catch {}
-      if (Date.now() - last > 5 * 60 * 1000) {
-        try { localStorage.setItem("jl_throne_notice", String(Date.now())); } catch {}
-        API.chatSend("plaza", "👑 Jo Jelly 등장! 👑", true).then((r) => { if (r && r.notice) { G.chat.notice = r.notice; renderNotice(); } }).catch(() => {});
-      }
     }
   }
   // ---------------- 👑 호스트 등장: 빵빠레 + 폭죽 + 배너 ----------------
@@ -488,7 +482,6 @@
     }
     // 의자 주변 반짝이 분수
     for (let k = 0; k < 40; k++) setTimeout(() => { for (const sx of [-26, 26]) G.fx.push({ x: cx + sx, y: cy + 16, vx: sx * 0.6 + (Math.random() - 0.5) * 30, vy: -90 - Math.random() * 60, life: 1, max: 1, col: cols[(Math.random() * cols.length) | 0], s: 2.5, g: 140 }); }, k * 90);
-    G.banner = { text: t("joEnter"), until: performance.now() + 4500 };
   }
   function drawFx(dt) {
     if (!G.fx.length) return;
@@ -774,25 +767,30 @@
   // ---------------- 🏆 랭킹 1위 게시판 ----------------
   async function refreshRankTop() {
     if (!G.user) return;
-    try { const r = await API.gameTop(); World.rankTop = (r.top && r.top[0]) || null; } catch {}
+    try { const r = await API.gameTop("all"); World.rankTops = { jump: r.jump || null, up: r.up || null }; } catch {}
   }
   setInterval(() => { if (G.mode === "world" && G.scene === "plaza" && !document.hidden) refreshRankTop(); }, 60000);
   function openRankBoard() {
-    openModal(t("rankTitle"), `<div id="jg-rank" class="jg-rank rank-modal"><div class="rk-list"><p class="rk-empty">…</p></div></div>
-      <p style="text-align:center"><button class="btn sm pink" id="rk-go-game">🎮 ${esc(t("gameTitle"))}</button></p>`, (el) => {
-      el.querySelector("#rk-go-game").addEventListener("click", openGame);
-      API.gameTop().then((r) => { renderRank(r.top || []); World.rankTop = (r.top && r.top[0]) || null; }).catch(() => renderRank([]));
+    openModal("🏆 " + t("rankBoardZ"), `<div class="chips shop-tabs rk-tabs"><button class="chip on" data-g="jump">🏃 ${esc(t("gameTitle"))}</button><button class="chip" data-g="up">⬆️ ${esc(t("upTitle"))}</button></div>
+      <div id="jg-rank" class="jg-rank rank-modal"><div class="rk-list"><p class="rk-empty">…</p></div></div>
+      <p style="text-align:center"><button class="btn sm pink" id="rk-go-game">🎮 ${esc(t("bGame"))}</button></p>`, (el) => {
+      let g = "jump";
+      const load = () => API.gameTop(g).then((r) => renderRank(r.top || [])).catch(() => renderRank([]));
+      el.querySelectorAll(".rk-tabs .chip").forEach((b) => b.addEventListener("click", () => { g = b.dataset.g; el.querySelectorAll(".rk-tabs .chip").forEach((x) => x.classList.toggle("on", x === b)); el.querySelector(".rk-list").innerHTML = "<p class='rk-empty'>…</p>"; load(); }));
+      el.querySelector("#rk-go-game").addEventListener("click", () => openGame());
+      load();
     });
   }
 
   // ---------------- 🔮 오늘의 운세 ----------------
-  function fortuneBox(el) {
+  function fortuneBox(el, openNow) {
     const box = document.createElement("div"); box.className = "ft-box";
     let saved = ""; try { saved = localStorage.getItem("jl_birth") || ""; } catch {}
     box.innerHTML = `<button class="btn pink ft-open">${esc(t("ftBtn"))}</button>
       <div class="ft-form hidden"><label>${esc(t("ftBirth"))}</label><input type="date" class="inp ft-date" min="1900-01-01" max="${Fortune.today()}" value="${esc(saved)}"><button class="btn grape ft-go">${esc(t("ftGo"))}</button></div>
       <div class="ft-result hidden"></div>`;
     el.appendChild(box);
+    if (openNow) { box.querySelector(".ft-open").classList.add("hidden"); box.querySelector(".ft-form").classList.remove("hidden"); }
     const form = box.querySelector(".ft-form"), res = box.querySelector(".ft-result"), inp = box.querySelector(".ft-date");
     box.querySelector(".ft-open").addEventListener("click", () => { form.classList.toggle("hidden"); res.classList.add("hidden"); if (!form.classList.contains("hidden")) box.scrollIntoView({ block: "nearest", behavior: "smooth" }); });
     box.querySelector(".ft-go").addEventListener("click", () => {
@@ -808,33 +806,62 @@
         <div class="ft-lucky"><div><small>${esc(t("ftLuckyColor"))}</small><b><i style="background:${f.color}"></i>${esc(f.colorName)}</b></div>
         <div><small>${esc(t("ftLuckyNum"))}</small><b>${f.num}</b></div><div><small>${esc(t("ftLuckySong"))}</small><b>🎹 ${esc(f.song)}</b></div></div>`;
       res.classList.remove("hidden"); form.classList.add("hidden");
-      box.querySelector(".ft-open").textContent = t("ftAgain");
+      box.querySelector(".ft-open").textContent = t("ftAgain"); box.querySelector(".ft-open").classList.remove("hidden");
       res.scrollIntoView({ block: "nearest", behavior: "smooth" });
     });
   }
 
   // ---------------- 🎮 젤리게임월드: 점프점프 젤리월드 ----------------
-  function openGame() {
+  // 젤리게임월드: 게임 선택 → 점프점프 젤리월드 / 올라올라 / 오늘의 운세
+  function openGame(pick) {
     G.gameOpen = true;
     BGM.play("minigame");
-    openModal("🎮 " + t("gameTitle"), `<div id="jg-root"></div>`, (el) => {
-      const g = JumpGame.mount(el.querySelector("#jg-root"), {
-        t, avatar: () => G.user.avatar, dayLeft: G.user.gameLeft,
-        onStart: () => API.gameStart(),
-        onFinish: async (run, m) => {
-          const r = await API.gameFinish(run, m);
-          if (r.user) setUser(r.user);
-          if (r.top) { renderRank(r.top); World.rankTop = r.top[0] || null; }
-          if (r.rank) setTimeout(() => toast(t("rankNew", { n: r.rank })), 600);
-          return r;
-        },
-      });
-      const box = document.createElement("div"); box.className = "jg-rank"; box.id = "jg-rank";
-      box.innerHTML = `<h3>${esc(t("rankTitle"))}</h3><div class="rk-list"><p class="rk-empty">…</p></div>`;
-      fortuneBox(el.querySelector("#jg-root"));
-      el.querySelector("#jg-root").appendChild(box);
-      API.gameTop().then((r) => renderRank(r.top || [])).catch(() => renderRank([]));
-      G.modalCleanup = () => { g.destroy(); G.gameOpen = false; BGM.play(G.scene); };
+    openModal("🎮 " + t("bGame"), `<div id="gw-root"></div>`, (el) => {
+      let cur = null;
+      const root = el.querySelector("#gw-root");
+      const stop = () => { if (cur) { cur.destroy(); cur = null; } };
+      G.modalCleanup = () => { stop(); G.gameOpen = false; BGM.play(G.scene); };
+      const setTitle = (s2) => ($("#modal-title").textContent = s2);
+      function menu() {
+        stop(); setTitle("🎮 " + t("bGame"));
+        document.querySelector("#modal .modal").classList.remove("up");
+        root.innerHTML = `<p class="gw-intro">${esc(t("gwIntro"))}</p><div class="gw-menu">
+          <button class="gw-card jump" data-g="jump"><span class="gw-ico">🏃</span><b>${esc(t("gameTitle"))}</b><small>${esc(t("gwJump"))}</small></button>
+          <button class="gw-card up" data-g="up"><span class="gw-ico">⬆️</span><b>${esc(t("upTitle"))}</b><small>${esc(t("gwUp"))}</small></button>
+          <button class="gw-card ft" data-g="fortune"><span class="gw-ico">🔮</span><b>${esc(t("ftBtn").replace(/^🔮\s*/, ""))}</b><small>${esc(t("gwFortune"))}</small></button></div>
+          <p class="gw-day">🪙 ${esc(t("gameDayLeft", { n: G.user.gameLeft ?? 600 }))}</p>`;
+        root.querySelectorAll("[data-g]").forEach((b) => b.addEventListener("click", () => go(b.dataset.g)));
+      }
+      const backBtn = () => `<p class="gw-back"><button class="btn sm" id="gw-back">◀ ${esc(t("gwBack"))}</button></p>`;
+      function go(g) {
+        stop();
+        if (g === "fortune") {
+          setTitle(t("ftTitle"));
+          root.innerHTML = backBtn() + `<div id="gw-play"></div>`;
+          root.querySelector("#gw-back").addEventListener("click", menu);
+          fortuneBox(root.querySelector("#gw-play"), true);
+          return;
+        }
+        const up = g === "up";
+        setTitle((up ? "⬆️ " : "🏃 ") + t(up ? "upTitle" : "gameTitle"));
+        document.querySelector("#modal .modal").classList.toggle("up", up);
+        root.innerHTML = backBtn() + `<div id="gw-play"></div><div id="jg-rank" class="jg-rank"><h3>${esc(t(up ? "upRankTitle" : "rankTitle"))}</h3><div class="rk-list"><p class="rk-empty">…</p></div></div>`;
+        root.querySelector("#gw-back").addEventListener("click", menu);
+        const Game = up ? UpGame : JumpGame;
+        cur = Game.mount(root.querySelector("#gw-play"), {
+          t, avatar: () => G.user.avatar, dayLeft: G.user.gameLeft,
+          onStart: () => API.gameStart(g),
+          onFinish: async (run, m) => {
+            const r = await API.gameFinish(run, m);
+            if (r.user) setUser(r.user);
+            if (r.top) { renderRank(r.top); World.rankTops = World.rankTops || {}; World.rankTops[g] = r.top[0] || null; }
+            if (r.rank) setTimeout(() => toast(t("rankNew", { n: r.rank })), 600);
+            return r;
+          },
+        });
+        API.gameTop(g).then((r) => renderRank(r.top || [])).catch(() => renderRank([]));
+      }
+      if (pick) go(pick); else menu();
     }, true);
     document.querySelector("#modal .modal").classList.add("game");
   }
