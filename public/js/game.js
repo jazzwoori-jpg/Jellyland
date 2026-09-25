@@ -652,11 +652,32 @@
       const g = JumpGame.mount(el.querySelector("#jg-root"), {
         t, avatar: () => G.user.avatar,
         onStart: () => API.gameStart(),
-        onFinish: async (run, m) => { const r = await API.gameFinish(run, m); if (r.user) setUser(r.user); return r; },
+        onFinish: async (run, m) => {
+          const r = await API.gameFinish(run, m);
+          if (r.user) setUser(r.user);
+          if (r.top) renderRank(r.top);
+          if (r.rank) setTimeout(() => toast(t("rankNew", { n: r.rank })), 600);
+          return r;
+        },
       });
+      const box = document.createElement("div"); box.className = "jg-rank"; box.id = "jg-rank";
+      box.innerHTML = `<h3>${esc(t("rankTitle"))}</h3><div class="rk-list"><p class="rk-empty">…</p></div>`;
+      el.querySelector("#jg-root").appendChild(box);
+      API.gameTop().then((r) => renderRank(r.top || [])).catch(() => renderRank([]));
       G.modalCleanup = () => { g.destroy(); G.gameOpen = false; BGM.play(G.scene); };
     }, true);
     document.querySelector("#modal .modal").classList.add("game");
+  }
+
+  // 랭킹 TOP 10
+  function renderRank(top) {
+    const list = document.querySelector("#jg-rank .rk-list"); if (!list) return;
+    if (!top.length) { list.innerHTML = `<p class="rk-empty">${esc(t("rankEmpty"))}</p>`; return; }
+    const medal = ["🥇", "🥈", "🥉"];
+    list.innerHTML = top.map((e, i) => `<div class="rk-row${G.user && e.id === G.user.id ? " me" : ""}${e.role === "artist" ? " host" : ""}">
+      <span class="rk-no">${medal[i] || i + 1}</span><canvas width="32" height="26" data-av='${esc(JSON.stringify(e.avatar || null))}'></canvas>
+      <b>${e.role === "artist" ? "✦ " : ""}${esc(e.name)}</b><span class="rk-m">${Number(e.m).toLocaleString()} m</span></div>`).join("");
+    list.querySelectorAll("canvas[data-av]").forEach((c) => { try { Avatar.face(c.getContext("2d"), JSON.parse(c.dataset.av), 32, 26); } catch {} });
   }
 
   // ---------------- 방명록 ----------------

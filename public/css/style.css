@@ -388,3 +388,14 @@ body.touch .gb-form textarea { font-size: 16px; }
 .jg-wrap { display: flex; flex-direction: column; gap: 8px; align-items: center; }
 .jg { width: 100%; max-width: 860px; aspect-ratio: 360 / 170; image-rendering: pixelated; border: 3px solid var(--ink); border-radius: 8px; touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; background: #bfe6ff; }
 .jg-help { display: flex; flex-direction: column; gap: 2px; font-size: 12px; text-align: center; opacity: .8; }
+.jg-rank { width: 100%; max-width: 520px; border: 3px solid var(--ink); border-radius: 10px; background: #fffaf2; padding: 8px 12px 10px; }
+.jg-rank h3 { margin: 2px 0 8px; text-align: center; font-size: 15px; }
+.rk-row { display: grid; grid-template-columns: 34px 36px 1fr auto; align-items: center; gap: 6px; padding: 3px 6px; border-radius: 6px; }
+.rk-row:nth-child(odd) { background: #f5eefc; }
+.rk-row.me { background: #fff3a8; outline: 2px solid #f2c14e; }
+.rk-row.host b { color: #2882e6; }
+.rk-row canvas { width: 32px; height: 26px; image-rendering: pixelated; background: var(--pink2); border-radius: 4px; }
+.rk-no { text-align: center; font-weight: bold; font-size: 15px; }
+.rk-row b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.rk-m { font-weight: bold; color: #7a3fc0; font-size: 13px; }
+.rk-empty { text-align: center; opacity: .7; margin: 6px 0; font-size: 13px; }
