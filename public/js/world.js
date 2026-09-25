@@ -441,17 +441,34 @@
     // 테이블
     const table = (tx, ty) => { const [c, s] = cv(30, 22); s.fillStyle = "rgba(40,30,20,.25)"; s.fillRect(3, 17, 26, 5); s.fillStyle = OUT; s.fillRect(0, 0, 30, 12); s.fillRect(13, 10, 4, 10); s.fillStyle = "#fff8ea"; s.fillRect(1, 1, 28, 9); s.fillStyle = "#ff8fb8"; s.fillRect(10, 3, 4, 4); s.fillStyle = "#ffd34d"; s.fillRect(17, 4, 3, 3); objects.push({ y: ty + 20, x: tx, draw: (cc) => cc.drawImage(c, tx, ty) }); colliders.push([tx, ty + 4, 30, 14]); };
     table(80, 240); table(530, 240); table(120, 170); table(490, 170);
-    // 방명록 (조젤리에게 남기는 글)
-    const gb = (() => { const [c, s] = cv(30, 34); s.fillStyle = "rgba(40,30,20,.25)"; s.fillRect(4, 29, 24, 5); s.fillStyle = OUT; s.fillRect(12, 14, 6, 18); s.fillRect(6, 29, 18, 4); s.fillStyle = "#8f5a34"; s.fillRect(13, 15, 4, 16); s.fillStyle = OUT; s.fillRect(0, 2, 30, 14); s.fillStyle = "#a77ce0"; s.fillRect(1, 3, 28, 12); s.fillStyle = "#fffaf2"; s.fillRect(3, 4, 11, 9); s.fillRect(16, 4, 11, 9); s.fillStyle = "#c9b8e8"; for (let i = 0; i < 3; i++) { s.fillRect(5, 6 + i * 2, 7, 1); s.fillRect(18, 6 + i * 2, 7, 1); } s.fillStyle = "#d8434e"; s.fillRect(14, 0, 2, 6); return c; })();
-    objects.push({ y: 146, x: 470, draw: (c) => c.drawImage(gb, 455, 114) });
-    colliders.push([457, 130, 26, 16]);
+    // 방명록 게시판 (큰 보드) — 입구 왼쪽, 들어오자마자 보이는 곳
+    const gbBoard = (() => {
+      const BW = 96, BH = 70;
+      const [c, s] = cv(BW, BH);
+      s.fillStyle = "rgba(40,30,20,.25)"; s.fillRect(8, BH - 6, BW - 12, 6);
+      s.fillStyle = OUT; s.fillRect(14, 44, 6, BH - 8); s.fillRect(BW - 20, 44, 6, BH - 8);
+      s.fillStyle = "#8f5a34"; s.fillRect(15, 45, 4, BH - 10); s.fillRect(BW - 19, 45, 4, BH - 10);
+      s.fillStyle = OUT; s.fillRect(0, 6, BW, 44);
+      s.fillStyle = "#a77ce0"; s.fillRect(2, 8, BW - 4, 40);
+      s.fillStyle = "#c3a2f0"; s.fillRect(2, 8, BW - 4, 3);
+      s.fillStyle = "#f2c14e"; s.fillRect(2, 45, BW - 4, 3);
+      s.fillStyle = "#fffaf2"; s.fillRect(6, 20, BW - 12, 24);
+      // 붙어 있는 쪽지들
+      [["#ff9fc8", 9, 23], ["#9fe8ff", 30, 25], ["#fff3a8", 51, 22], ["#c3f0c8", 72, 24]].forEach(([col, x0, y0]) => { s.fillStyle = OUT; s.fillRect(x0 - 1, y0 - 1, 17, 16); s.fillStyle = col; s.fillRect(x0, y0, 15, 14); s.fillStyle = "rgba(43,29,42,.35)"; for (let k = 0; k < 3; k++) s.fillRect(x0 + 2, y0 + 3 + k * 3, 11, 1); s.fillStyle = "#d8434e"; s.fillRect(x0 + 6, y0 - 2, 3, 3); });
+      // 제목판
+      s.fillStyle = OUT; s.fillRect(18, 0, BW - 36, 18); s.fillStyle = "#d8434e"; s.fillRect(19, 1, BW - 38, 16);
+      s.font = `bold 11px ${FONT}`; s.textAlign = "center"; s.textBaseline = "middle"; s.fillStyle = "#fff"; s.fillText("✎ " + T("gbBoard"), BW / 2, 10);
+      return c;
+    })();
+    objects.push({ y: 400, x: 440, draw: (c) => c.drawImage(gbBoard, 392, 332) });
+    colliders.push([400, 376, 80, 26]);
     [[20, 100, "#ff8fb8"], [608, 100, "#b58cff"], [20, 390, "#ffd34d"], [608, 390, "#ff8fb8"]].forEach(([px, py, col]) => { const sp = flowerPot(col); objects.push({ y: py + 16, x: px, draw: (c) => c.drawImage(sp, px - 7, py) }); colliders.push([px - 7, py + 6, 14, 10]); });
 
     const collide = (px, py) => colliders.some(([a, b, w, h]) => px > a && px < a + w && py > b && py < b + h);
     return {
-      id: "lounge", W, H, ground: g, objects, colliders: [], zones: [{ id: "exit", x: 290, y: 388, w: 60, h: 32, label: T("zExit") }, { id: "guestbook", x: 450, y: 146, w: 40, h: 26, label: T("zGuestbook") }], seats: [],
+      id: "lounge", W, H, ground: g, objects, colliders: [], zones: [{ id: "exit", x: 290, y: 388, w: 60, h: 32, label: T("zExit") }, { id: "guestbook", x: 390, y: 396, w: 100, h: 24, label: T("zGuestbook") }, { id: "guestbook", x: 352, y: 370, w: 40, h: 40, label: T("zGuestbook") }], seats: [],
       walkable: (px, py) => px > 10 && px < W - 10 && py > 92 && py < H - 4 && !collide(px, py),
-      spawn: { x: 320, y: 380 }, artist: null, icons: [{ x: 470, y: 112, icon: "📖" }],
+      spawn: { x: 320, y: 380 }, artist: null, icons: [{ x: 440, y: 330, icon: "✍️" }], signs: [{ x: 440, y: 322, key: "gbSign" }],
     };
   }
 

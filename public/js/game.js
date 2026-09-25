@@ -95,6 +95,7 @@
     if (!G.scene) return;
     $("#mm-label").textContent = G.scene === "plaza" ? t("mapPlaza") : t("mapLounge");
     $("#chat-title").textContent = G.scene === "plaza" ? t("chatPlaza") : t("chatLounge");
+    $("#btn-gb").classList.toggle("hidden", G.scene !== "lounge");
   }
 
   function blocked(x, y) {
@@ -191,8 +192,10 @@
     }
     const len = Math.hypot(vx, vy);
     const wasMoving = p.moving;
+    if (p.vx === undefined) { p.vx = 0; p.vy = 0; }
     p.moving = len > 0.05;
     if (p.moving) G.lastInput = Date.now();
+    if (!p.moving) { p.vx = 0; p.vy = 0; }
     if (p.moving !== wasMoving && G.mode === "world") kickSync(); // 출발·정지 순간 바로 알림
     if (p.moving) {
       if (len > 1) { vx /= len; vy /= len; }
@@ -203,16 +206,30 @@
       if (!blockedFeet(p.x, ny)) p.y = ny;
       p.dir = Math.abs(vx) > Math.abs(vy) ? (vx > 0 ? "right" : "left") : vy > 0 ? "down" : "up";
       p.t += dt;
+      // 실제 이동 속도 (다른 사람 화면에서 미리 예측해 움직이도록 함께 보냄)
+      p.vx = p.vx * 0.5 + ((p.x - ox) / dt) * 0.5; p.vy = p.vy * 0.5 + ((p.y - oy) / dt) * 0.5;
       if (G.target && Math.hypot(p.x - ox, p.y - oy) < 0.01) { p.stuck = (p.stuck || 0) + dt; if (p.stuck > 0.35) { G.target = null; G.pendingZone = null; p.stuck = 0; } } else p.stuck = 0;
     }
-    // 다른 플레이어: 받은 위치까지 실제 걷는 속도로 부드럽게 이동 (뚝뚝 끊김 방지)
+    // 다른 플레이어: 마지막 위치 + 이동 속도로 "지금 있을 곳"을 예측해서 따라감 → 지연이 거의 안 느껴짐
+    const nowMs = Date.now();
     for (const o of G.others.values()) {
-      const dx = o.x - o.rx, dy = o.y - o.ry, d = Math.hypot(dx, dy);
-      if (d > 160) { o.rx = o.x; o.ry = o.y; o.walking = false; continue; }
-      const sp = Math.max(92, d * 2.2) * dt;
-      if (d <= sp) { o.rx = o.x; o.ry = o.y; } else { o.rx += (dx / d) * sp; o.ry += (dy / d) * sp; }
-      o.walking = d > 0.8;
-      if (o.walking) { o.t = (o.t || 0) + dt; o.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up"; }
+      let tx = o.x, ty = o.y;
+      const moving = !o.seat && (o.vx || o.vy);
+      if (moving) {
+        const el = Math.min(800, (o.age || 0) + (nowMs - (o.recv || nowMs))) / 1000;
+        const px = o.x + o.vx * el, py = o.y + o.vy * el;
+        if (!blockedFeet(px, py)) { tx = px; ty = py; }
+      }
+      const dx = tx - o.rx, dy = ty - o.ry, d = Math.hypot(dx, dy);
+      if (d > 160) { o.rx = tx; o.ry = ty; o.walking = false; continue; }
+      const sp = Math.max(moving ? Math.hypot(o.vx, o.vy) : 80, d * 5) * dt;
+      if (d <= sp) { o.rx = tx; o.ry = ty; } else { o.rx += (dx / d) * sp; o.ry += (dy / d) * sp; }
+      o.walking = moving || d > 1.2;
+      if (o.walking) {
+        o.t = (o.t || 0) + dt;
+        const hx = moving ? o.vx : dx, hy = moving ? o.vy : dy;
+        o.dir = Math.abs(hx) > Math.abs(hy) ? (hx > 0 ? "right" : "left") : hy > 0 ? "down" : "up";
+      }
     }
     updateNPCs(dt);
     const w = scene();
@@ -309,6 +326,7 @@
       ctx.font = `16px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(ic.icon, X, Y + 1);
     }
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    for (const sg of w.signs || []) drawBubble(sx(sg.x), sy(sg.y) - 22 - Math.sin(G.t / 280) * 3, t(sg.key), "#fff3a8");
     const now = Date.now();
     for (const c of chars) {
       const X = sx(c.x), Y = sy(c.y - (c.sit ? 33 : 42));
@@ -360,14 +378,14 @@
     ctx.restore();
   }
   const wrapCache = new Map();
-  function drawBubble(X, Y, text) {
+  function drawBubble(X, Y, text, bg) {
     ctx.font = `12px ${FONT}`;
     let lines = wrapCache.get(text);
     if (!lines) { lines = wrapPx(text, 150).slice(0, 3); if (wrapCache.size > 200) wrapCache.clear(); wrapCache.set(text, lines); }
     const w = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 16, h = lines.length * 16 + 8;
     const x = X - w / 2, y = Y - h;
     ctx.fillStyle = "#3a2530"; ctx.fillRect(x - 2, y - 2, w + 4, h + 4); ctx.fillRect(X - 4, Y, 8, 6);
-    ctx.fillStyle = "#fff"; ctx.fillRect(x, y, w, h); ctx.fillRect(X - 2, Y, 4, 4);
+    ctx.fillStyle = bg || "#fff"; ctx.fillRect(x, y, w, h); ctx.fillRect(X - 2, Y, 4, 4);
     ctx.fillStyle = "#3a2530"; lines.forEach((l, i) => ctx.fillText(l, X, y + 12 + i * 16));
   }
   // 말풍선 줄바꿈 (영어는 단어 단위, 한/일은 글자 단위)
@@ -447,7 +465,8 @@
   }
 
   // ---------------- 모달 콘텐츠 ----------------
-  function openModal(title, html, onMount) {
+  function openModal(title, html, onMount, wide) {
+    document.querySelector("#modal .modal").classList.toggle("wide", !!wide);
     $("#modal-close-big").textContent = t("close");
     $("#modal-title").textContent = title;
     $("#modal-body").innerHTML = html;
@@ -520,9 +539,10 @@
   // ---------------- 방명록 ----------------
   const fmtTime = (ts) => { const d = new Date(ts), z = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}.${z(d.getMonth() + 1)}.${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`; };
   async function openGuestbook(page = 0) {
-    openModal("📖 " + t("gbTitle"), `<p style="margin-top:0">${esc(t("gbIntro"))}</p>
-      <form class="gb-form" id="gb-form"><textarea id="gb-text" maxlength="300" rows="3" placeholder="${esc(t("gbPh"))}"></textarea>
-      <div class="gb-row"><span id="gb-count">0/300</span><button class="btn pink" type="submit">${esc(t("gbWrite"))}</button></div><div class="err" id="gb-err"></div></form>
+    openModal("📖 " + t("gbTitle"), `<div class="gb-write"><h3>${esc(t("gbWriteTitle"))}</h3><p>${esc(t("gbIntro"))}</p>
+      <form class="gb-form" id="gb-form"><textarea id="gb-text" maxlength="300" rows="4" placeholder="${esc(t("gbPh"))}"></textarea>
+      <div class="gb-row"><span id="gb-count">0/300</span><button class="btn pink" type="submit">${esc(t("gbWrite"))}</button></div><div class="err" id="gb-err"></div></form></div>
+      <h3 class="gb-list-title">${esc(t("gbListTitle"))}</h3>
       <div class="gb-list" id="gb-list"><p class="gb-empty">…</p></div><div class="gb-pager" id="gb-pager"></div>`, (el) => {
       const ta = el.querySelector("#gb-text");
       ta.addEventListener("input", () => (el.querySelector("#gb-count").textContent = ta.value.length + "/300"));
@@ -535,7 +555,7 @@
         finally { btn.disabled = false; }
       });
       loadGb(page);
-    });
+    }, true);
   }
   async function loadGb(page) {
     const list = $("#gb-list"), pager = $("#gb-pager");
@@ -564,6 +584,7 @@
     openModal(t("guideTitle"), `<ul class="guide">${t("guide").map((g) => `<li>${g}</li>`).join("")}</ul>`);
   }
   $("#btn-help").addEventListener("click", openGuide);
+  $("#btn-gb").addEventListener("click", () => openGuestbook());
 
   // ---------------- 언어 ----------------
   function langButtons(el, current, onPick) {
@@ -610,8 +631,11 @@
   let syncBusy = false, syncTimer = null, lastSync = 0, lastSent = "";
   function nextSyncDelay() {
     if (document.hidden) return 15000;
-    const active = G.player.moving || G.others.size > 0 || Date.now() - G.lastInput < 4000;
-    return active ? 900 : 5000;
+    let othersMoving = false;
+    for (const o of G.others.values()) if (o.vx || o.vy) { othersMoving = true; break; }
+    if (G.player.moving || othersMoving) return 450;              // 누군가 움직이는 중: 빠르게
+    if (G.others.size > 0 || Date.now() - G.lastInput < 4000) return 1200; // 주변에 사람만 있을 때
+    return 5000;                                                   // 혼자 가만히: 드물게
   }
   function scheduleSync(ms) { clearTimeout(syncTimer); syncTimer = setTimeout(doSync, ms ?? nextSyncDelay()); }
   function kickSync() { if (Date.now() - lastSync > 250) scheduleSync(0); }
@@ -620,9 +644,9 @@
     syncBusy = true; lastSync = Date.now();
     const room = G.scene;
     try {
-      const r = await API.sync({ scene: room, x: Math.round(G.player.x), y: Math.round(G.player.y), dir: G.player.dir, seat: G.seat, since: G.chat.since });
+      const r = await API.sync({ scene: room, x: Math.round(G.player.x), y: Math.round(G.player.y), dir: G.player.dir, seat: G.seat, vx: Math.round(G.player.vx || 0), vy: Math.round(G.player.vy || 0), since: G.chat.since });
       if (room !== G.scene) return;
-      applyOthers(r.others || []);
+      applyOthers(r.others || [], r.now);
       if (!API.demo) { G.online = r.online || 1; $("#online").textContent = t("online", { n: G.online }); }
       applyChat(r.messages || [], r.notice);
     } catch (e) {
@@ -631,12 +655,14 @@
       }
     } finally { syncBusy = false; scheduleSync(); }
   }
-  function applyOthers(list) {
+  function applyOthers(list, serverNow) {
     const now = Date.now();
     for (const o of list) {
       const ex = G.others.get(o.id);
-      if (ex) Object.assign(ex, { x: o.x, y: o.y, dir: o.dir, name: o.name, avatar: o.avatar, role: o.role, seen: now });
-      else G.others.set(o.id, { ...o, rx: o.x, ry: o.y, seen: now });
+      const upd = { x: o.x, y: o.y, dir: o.dir, name: o.name, avatar: o.avatar, role: o.role, seat: o.seat || null,
+        vx: o.vx || 0, vy: o.vy || 0, age: serverNow ? Math.max(0, serverNow - o.ts) : 0, recv: now, seen: now };
+      if (ex) Object.assign(ex, upd);
+      else G.others.set(o.id, { ...upd, id: o.id, rx: o.x, ry: o.y });
     }
     // 잠깐 응답에서 빠져도 바로 사라지지 않게 8초 유지 (깜빡임 방지)
     for (const [id, o] of G.others) if (now - o.seen > 8000) G.others.delete(id);

@@ -339,3 +339,19 @@ body.touch .gb-form textarea { font-size: 16px; }
   .gb-item .no { display: none; }
   .gb-item .who { grid-area: who; } .gb-item .when { grid-area: when; } .gb-item .txt { grid-area: txt; }
 }
+
+/* ================= v8: 방명록 크게 ================= */
+.modal.wide { width: min(1040px, 100%); }
+.gb-write { background: linear-gradient(#fff6d8, #fff3c4); border: 3px solid var(--ink); border-radius: 8px; padding: 14px 16px; box-shadow: 0 4px 0 rgba(43,29,42,.25); }
+.gb-write h3 { margin: 0 0 4px; font-size: 20px; color: #d8434e; }
+.gb-write p { margin: 0 0 10px; font-size: 14px; }
+.gb-form textarea { font-size: 16px; min-height: 96px; border-color: #a77ce0; }
+.gb-form .btn.pink { font-size: 17px; padding: 10px 26px; }
+.gb-list-title { margin: 18px 0 8px; font-size: 18px; color: #8459c2; }
+.gb-head, .gb-item { font-size: 15px; padding: 10px 12px; grid-template-columns: 56px 150px 1fr 140px; }
+.gb-head { font-size: 13px; }
+.gb-item .when { font-size: 12px; }
+.gb-item .who canvas { width: 32px; height: 26px; }
+#btn-gb { background: linear-gradient(#ffe38a, #f2c14e); animation: gbpulse 1.6s ease-in-out infinite; }
+@keyframes gbpulse { 50% { transform: scale(1.06); } }
+@media (max-width: 600px) { .gb-item { grid-template-columns: 1fr auto; } .gb-write h3 { font-size: 17px; } }
