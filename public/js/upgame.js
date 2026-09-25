@@ -11,6 +11,7 @@
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', sans-serif";
   const OUT = "#3a2530";
 
+  const snd = (n) => { try { window.SFX && window.SFX[n](); } catch {} };
   function mount(root, opts) {
     const t = opts.t;
     root.innerHTML = `<div class="ug-wrap"><canvas class="ug" width="${W * R}" height="${H * R}"></canvas>
@@ -69,7 +70,7 @@
     window.addEventListener("keydown", kd, true); window.addEventListener("keyup", ku, true);
 
     function start() {
-      S.state = "run"; S.vy = JUMP;
+      S.state = "run"; S.vy = JUMP; snd("jump");
       opts.onStart && opts.onStart().then((r) => { if (!S) return; S.run = r && r.run; if (r && r.dayLeft != null) { dayLeft = r.dayLeft; S.cap = Math.min(200, dayLeft); S.coins = Math.min(S.coins, S.cap); } }).catch(() => {});
     }
     async function finish() {
@@ -115,17 +116,17 @@
           if (p.broken) continue;
           if (prevY <= p.y + 1 && S.y >= p.y && S.x > p.x - 6 && S.x < p.x + PW + 6) {
             if (p.type === "r") { // 빨간 발판: 부서짐 (튀어오르지 않음)
-              p.broken = true;
+              p.broken = true; snd("crack");
               for (let i = 0; i < 10; i++) S.fx.push({ x: p.x + Math.random() * PW, y: p.y + 4, vx: (Math.random() - 0.5) * 120, vy: -Math.random() * 80, g: 500, life: 0.8, col: i % 2 ? "#e0344a" : "#ff8f9f", s: 3 });
               continue;
             }
             S.y = p.y;
             if (p.type === "p") {
-              S.vy = SUPER;
+              S.vy = SUPER; snd("superJump");
               S.pops.push({ x: S.x, y: S.y - 40, text: "SUPER JUMP!", life: 1, col: "#ff4f9a" });
               for (let i = 0; i < 18; i++) S.fx.push({ x: S.x, y: S.y, vx: (Math.random() - 0.5) * 200, vy: -Math.random() * 220, g: 300, life: 0.9, col: ["#ff9fc8", "#fff3a8", "#ffffff"][i % 3], s: 2 });
             } else {
-              S.vy = JUMP;
+              S.vy = JUMP; snd("jump");
               for (let i = 0; i < 5; i++) S.fx.push({ x: S.x + (Math.random() - 0.5) * 16, y: S.y, vx: (Math.random() - 0.5) * 60, vy: -Math.random() * 40, g: 200, life: 0.35, col: "#d9ffd0", s: 2 });
             }
             p.squash = 0.15;
@@ -145,10 +146,10 @@
       const ms = Math.floor(heightM() / 100);
       while (S.milestone < ms) {
         S.milestone++;
-        if (S.coins < S.cap) { S.coins = Math.min(S.cap, S.coins + 5); S.pops.push({ x: S.x + 14, y: S.y - 50, text: S.coins >= S.cap ? t("gameMax") : "+5 🪙", life: 1.1, col: "#c98a2c" }); }
+        if (S.coins < S.cap) { S.coins = Math.min(S.cap, S.coins + 5); snd("coin"); S.pops.push({ x: S.x + 14, y: S.y - 50, text: S.coins >= S.cap ? t("gameMax") : "+5 🪙", life: 1.1, col: "#c98a2c" }); }
       }
       // 떨어지면 끝
-      if (S.y > S.cam + H + 30) finish();
+      if (S.y > S.cam + H + 30) { snd("laugh"); finish(); }
     }
 
     // ---------- 그리기 ----------

@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "18"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "24"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -144,6 +144,7 @@
     if (KEYMAP[e.code]) { G.keys.add(KEYMAP[e.code]); G.target = null; e.preventDefault(); }
     if (e.code === "KeyE" || e.code === "Space") { interact(); e.preventDefault(); }
     if (e.code === "Enter") { openChat(); $("#chat-input").focus(); e.preventDefault(); }
+    if (e.code === "KeyP") { takeScreenshot(); e.preventDefault(); }
   });
   window.addEventListener("keyup", (e) => { if (KEYMAP[e.code]) G.keys.delete(KEYMAP[e.code]); });
   window.addEventListener("blur", () => G.keys.clear());
@@ -874,14 +875,16 @@
       let cur = null;
       const root = el.querySelector("#gw-root");
       const stop = () => { if (cur) { cur.destroy(); cur = null; } };
-      G.modalCleanup = () => { stop(); G.gameOpen = false; BGM.play(G.scene); };
+      G.modalCleanup = () => { stop(); Chip.stop(); G.gameOpen = false; BGM.play(G.scene); };
       const setTitle = (s2) => ($("#modal-title").textContent = s2);
       function menu() {
         stop(); setTitle("🎮 " + t("bGame"));
+        Chip.stop(); BGM.play("minigame"); // 선택 화면: 미니게임 BGM
         document.querySelector("#modal .modal").classList.remove("up");
         root.innerHTML = `<p class="gw-intro">${esc(t("gwIntro"))}</p><div class="gw-menu">
           <button class="gw-card jump" data-g="jump"><span class="gw-ico">🏃</span><b>${esc(t("gameTitle"))}</b><small>${esc(t("gwJump"))}</small></button>
           <button class="gw-card up" data-g="up"><span class="gw-ico">⬆️</span><b>${esc(t("upTitle"))}</b><small>${esc(t("gwUp"))}</small></button>
+          <button class="gw-card lucky" data-g="slot"><span class="gw-ico">🎰</span><b>${esc(t("slTitle"))}</b><small>${esc(t("gwSlot"))}</small></button>
           <button class="gw-card ft" data-g="fortune"><span class="gw-ico">🔮</span><b>${esc(t("ftBtn").replace(/^🔮\s*/, ""))}</b><small>${esc(t("gwFortune"))}</small></button></div>
           <p class="gw-day">🪙 ${esc(t("gameDayLeft", { n: G.user.gameLeft ?? 600 }))}</p>`;
         root.querySelectorAll("[data-g]").forEach((b) => b.addEventListener("click", () => go(b.dataset.g)));
@@ -889,11 +892,23 @@
       const backBtn = () => `<p class="gw-back"><button class="btn sm" id="gw-back">◀ ${esc(t("gwBack"))}</button></p>`;
       function go(g) {
         stop();
+        BGM.stop(); Chip.play(g); // 게임마다 전용 BGM (광장·미니게임 BGM 은 끔)
         if (g === "fortune") {
           setTitle(t("ftTitle"));
           root.innerHTML = backBtn() + `<div id="gw-play"></div>`;
           root.querySelector("#gw-back").addEventListener("click", menu);
           fortuneBox(root.querySelector("#gw-play"), true);
+          return;
+        }
+        if (g === "slot") {
+          setTitle("🎰 " + t("slTitle"));
+          root.innerHTML = backBtn() + `<div id="gw-play"></div>`;
+          root.querySelector("#gw-back").addEventListener("click", menu);
+          cur = LuckyJelly.mount(root.querySelector("#gw-play"), {
+            t, toast, coins: () => G.user.coins | 0, left: () => (G.user.slotLeft ?? 20),
+            onSpin: async () => { const r = await API.slotSpin(); G.user.coins = (r.user.coins | 0) - (r.payout | 0); G.user.slotLeft = r.user.slotLeft; renderCoins(); G._slotUser = r.user; return r; },
+            onResult: () => { if (G._slotUser) { setUser(G._slotUser); G._slotUser = null; } },
+          });
           return;
         }
         const up = g === "up";
@@ -1111,6 +1126,60 @@
       (el) => { el.querySelector("#guide-install").addEventListener("click", openInstall); el.querySelector("#guide-profile").addEventListener("click", openProfile); });
   }
   $("#btn-help").addEventListener("click", openGuide);
+  // ---------------- 📸 스크린샷 ----------------
+  // 컴퓨터: PNG 파일로 바로 저장 (브라우저의 다운로드 폴더 — 바탕화면으로 바꾸는 법은 안내창에)
+  // 휴대폰: 공유 창을 띄워 "이미지 저장"(아이폰) / "갤러리·포토에 저장"(안드로이드) 한 번에 선택
+  function shotCanvas() {
+    const src = $("#game"), c = document.createElement("canvas");
+    c.width = src.width; c.height = src.height;
+    const x = c.getContext("2d");
+    x.drawImage(src, 0, 0);
+    // 워터마크
+    const k = src.width / VW, d = new Date(), z = (n) => String(n).padStart(2, "0");
+    const label = `JELLY LAND ♪  ${d.getFullYear()}.${z(d.getMonth() + 1)}.${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`;
+    x.font = `bold ${Math.round(13 * k)}px ${FONT}`; x.textAlign = "right"; x.textBaseline = "bottom";
+    const tw = x.measureText(label).width, pad = 8 * k;
+    x.fillStyle = "rgba(58,37,48,.6)"; x.fillRect(c.width - tw - pad * 3, c.height - 26 * k - pad, tw + pad * 2, 22 * k);
+    x.fillStyle = "#fff"; x.fillText(label, c.width - pad * 2, c.height - pad - 7 * k);
+    return c;
+  }
+  function shutter() {
+    const f = $("#shot-flash"); f.classList.remove("on"); void f.offsetWidth; f.classList.add("on");
+    try { const A = window.AudioContext || window.webkitAudioContext; const a = shutter.ctx || (shutter.ctx = new A()); a.resume && a.resume();
+      const b = a.createBuffer(1, a.sampleRate * 0.12, a.sampleRate), dd = b.getChannelData(0); for (let i = 0; i < dd.length; i++) dd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / dd.length, 3);
+      const s2 = a.createBufferSource(), g = a.createGain(); g.gain.value = 0.25; s2.buffer = b; s2.connect(g).connect(a.destination); s2.start(); } catch {}
+  }
+  function takeScreenshot() {
+    if (G.mode !== "world") return;
+    shutter();
+    let url;
+    try { url = shotCanvas().toDataURL("image/png"); } catch { return toast(t("shotFail")); }
+    const d = new Date(), z = (n) => String(n).padStart(2, "0");
+    const name = `JELLYLAND_${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}.png`;
+    if (IS_TOUCH) {
+      // 휴대폰: 공유 창 → 사진첩/갤러리에 저장 (버튼을 누른 순간 바로 열어야 해서 동기로 파일을 만듦)
+      try {
+        const bin = atob(url.split(",")[1]), arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        const file = new File([arr], name, { type: "image/png" });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          navigator.share({ files: [file], title: "JELLY LAND" }).then(() => toast(t("shotSaved"))).catch((e) => { if (e && e.name !== "AbortError") showShot(url, name); });
+          return;
+        }
+      } catch {}
+      return showShot(url, name);
+    }
+    // 컴퓨터: 바로 파일로 저장
+    const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    toast(t("shotPC"));
+  }
+  function showShot(url, name) {
+    openModal("📸 " + t("shotTitle"), `<div class="shot-view"><img src="${url}" alt="screenshot"><p>${esc(t(IS_TOUCH ? "shotHoldSave" : "shotPCHelp"))}</p>
+      <a class="btn pink" href="${url}" download="${esc(name)}">📥 ${esc(t("shotDownload"))}</a></div>`, null, true);
+  }
+  $("#btn-shot").addEventListener("click", takeScreenshot);
+  $("#btn-shot").title = "📸";
+
   function bgmBtn() { $("#btn-bgm").textContent = BGM.on ? "🔊" : "🔇"; $("#btn-bgm").title = t("bgm"); }
   $("#btn-bgm").addEventListener("click", () => { BGM.toggle(); bgmBtn(); });
   bgmBtn();
