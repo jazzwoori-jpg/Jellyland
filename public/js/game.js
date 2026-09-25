@@ -554,6 +554,14 @@
     for (const [id, o] of G.others) if (now - o.seen > 8000) G.others.delete(id);
   }
   document.addEventListener("visibilitychange", () => { if (!document.hidden) kickSync(); });
+  // 채팅은 5분이 지나면 화면에서 사라짐
+  const CHAT_TTL = 5 * 60 * 1000;
+  setInterval(() => {
+    const cut = Date.now() - CHAT_TTL;
+    const keep = [];
+    for (const m of G.chat.msgs) { if (m.ts < cut && !m.pending) { m.el && m.el.remove(); } else keep.push(m); }
+    G.chat.msgs = keep;
+  }, 10000);
 
   // ---------------- 채팅 (광장 / 팬 라운지, 자동 번역) ----------------
   function resetChat() {
@@ -569,6 +577,7 @@
     const first = G.chat.since === 0;
     for (const m of messages) {
       G.chat.since = Math.max(G.chat.since, m.ts);
+      if (m.ts < Date.now() - CHAT_TTL) continue;
       if (G.chat.seen.has(m.key)) continue;
       G.chat.seen.add(m.key);
       // 내가 보낸 메시지(이미 화면에 먼저 표시됨)면 번역본으로 교체만

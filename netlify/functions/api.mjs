@@ -24,6 +24,8 @@ const err = (code, status = 400) => json({ error: code, code }, status);
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const LANGS = ["ko", "en", "ja"];
 const ROOMS = ["plaza", "lounge"];
+const CHAT_TTL = 5 * 60 * 1000; // 채팅은 5분 뒤 사라짐
+const keyTs = (k) => +k.split("/")[2].split("-")[0];
 const b64u = (buf) => Buffer.from(buf).toString("base64url");
 
 // ---- 서명 키: 환경변수 JWT_SECRET 우선, 없으면 Blobs에 자동 생성·저장 ----
@@ -202,7 +204,7 @@ export default async (req) => {
       let messages = [];
       if (last.ts > since) {
         const { blobs } = await cs.list({ prefix: `m/${scene}/` });
-        const fresh = blobs.map((b) => b.key).sort().slice(-50).filter((k) => +k.split("/")[2].split("-")[0] >= since);
+        const fresh = blobs.map((b) => b.key).sort().slice(-50).filter((k) => keyTs(k) >= since && keyTs(k) > now - CHAT_TTL);
         messages = (await Promise.all(fresh.map((k) => cs.get(k, { type: "json" }).then((m) => m && { ...m, key: k })))).filter(Boolean);
       }
       await Promise.all(writes);
@@ -269,7 +271,7 @@ export default async (req) => {
         const { blobs } = await cs.list({ prefix: `m/${room}/` });
         const keys = blobs.map((b) => b.key).sort().slice(-50);
         // since 이후 메시지만 가져옴 (키에 시간이 들어 있음)
-        const fresh = keys.filter((k) => +k.split("/")[2].split("-")[0] >= since); // 같은 ms 메시지 누락 방지 (중복은 화면에서 걸러냄)
+        const fresh = keys.filter((k) => keyTs(k) >= since && keyTs(k) > Date.now() - CHAT_TTL); // 5분 지난 메시지는 제외
         const msgs = (await Promise.all(fresh.map((k) => cs.get(k, { type: "json" }).then((m) => m && { ...m, key: k })))).filter(Boolean);
         const notice = await cs.get(`notice/${room}`, { type: "json" });
         return json({ messages: msgs, notice: notice || null });
@@ -290,6 +292,12 @@ export default async (req) => {
         const key = `m/${room}/${String(ts).padStart(15, "0")}-${crypto.randomBytes(3).toString("hex")}`;
         const m = { id: user.id, name: me.nickname || "?", role: me.role, text, lang, tr, ts };
         await cs.setJSON(key, m);
+        // 5분 지난 메시지 정리 (저장 공간 절약)
+        try {
+          const { blobs } = await cs.list({ prefix: `m/${room}/` });
+          const old = blobs.map((b) => b.key).filter((k) => keyTs(k) < ts - CHAT_TTL).slice(0, 30);
+          await Promise.all(old.map((k) => cs.delete(k)));
+        } catch {}
         const lst = (await cs.get("last/" + room, { type: "json" })) || {};
         await cs.setJSON("last/" + room, { ts, notice: lst.notice || null });
         return json({ message: { ...m, key } });
