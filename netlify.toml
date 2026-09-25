@@ -5,3 +5,14 @@
 
 [functions]
   node_bundler = "esbuild"
+
+# 배경음악 · 이미지는 1주일 동안 브라우저에 저장 (다시 받지 않아 빠르고 데이터 절약)
+[[headers]]
+  for = "/audio/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+
+[[headers]]
+  for = "/img/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"

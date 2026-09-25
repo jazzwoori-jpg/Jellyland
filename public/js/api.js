@@ -41,7 +41,8 @@
   };
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
   const fail = (code, s = 400) => { throw mkErr(code, s); };
-  const pub = (u) => ({ id: u.id, email: u.email, nickname: u.nickname, avatar: u.avatar, lang: u.lang || "ko", role: u.role || "fan" });
+  const pub = (u) => ({ id: u.id, email: u.email, nickname: u.nickname, avatar: u.avatar, lang: u.lang || "ko", role: u.role || "fan", coins: u.coins | 0, inv: u.inv || [], daily: u.lastDaily || null });
+  const kstDay = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
   async function mock(path, opts = {}) {
     const b = opts.body || {};
@@ -71,6 +72,25 @@
       ls.set("jl_demo_users", users);
       return { user: pub(me) };
     }
+    const save = () => ls.set("jl_demo_users", users);
+    if (route === "daily") {
+      const gained = {};
+      if (!me.welcomed) { me.welcomed = true; me.coins = (me.coins | 0) + 100; gained.welcome = 100; }
+      if (me.lastDaily !== kstDay()) { me.lastDaily = kstDay(); me.coins = (me.coins | 0) + 100; gained.daily = 100; }
+      save(); return { user: pub(me), gained };
+    }
+    if (route === "shop/buy") {
+      const it = (window.JELLY_SHOP || []).find((x) => x.id === b.item); if (!it) fail("notfound", 404);
+      me.inv = me.inv || []; if (me.inv.includes(it.id)) return { user: pub(me) };
+      if ((me.coins | 0) < it.price) fail("coins");
+      me.coins -= it.price; me.inv.push(it.id); save(); return { user: pub(me) };
+    }
+    if (route === "game/start") return { run: Date.now() + ".demo" };
+    if (route === "game/finish") {
+      const coins = Math.min(200, Math.floor((+b.m || 0) / 100) * 5);
+      me.coins = (me.coins | 0) + coins; if ((+b.m | 0) > (me.best | 0)) me.best = +b.m | 0; save();
+      return { user: pub(me), coins, best: me.best | 0 };
+    }
     if (route === "settings") { if (b.lang) me.lang = b.lang; ls.set("jl_demo_users", users); return { user: pub(me) }; }
     if (route === "presence") return { others: [], online: 1 };
     if (route === "sync") {
@@ -85,7 +105,10 @@
       if (m === "POST") {
         const text = String(b.text || "").trim().slice(0, 300); if (!text) fail("msg");
         const e = { id: me.id, name: me.nickname, role: me.role || "fan", avatar: me.avatar, text, ts: Date.now(), key: "g" + Date.now() };
-        all.push(e); ls.set("jl_demo_gb", all); return { entry: e };
+        all.push(e); ls.set("jl_demo_gb", all);
+        const d = kstDay(); if (me.gbDay !== d) { me.gbDay = d; me.gbCount = 0; }
+        let coins = 0; if ((me.gbCount | 0) < 3) { me.gbCount = (me.gbCount | 0) + 1; me.coins = (me.coins | 0) + 50; coins = 50; }
+        save(); return { entry: e, coins, user: pub(me) };
       }
       if (m === "DELETE") { ls.set("jl_demo_gb", all.filter((e) => e.key !== q.get("key"))); return { ok: true }; }
     }
@@ -152,6 +175,10 @@
     gbList: (page) => call("guestbook?page=" + (page || 0)),
     gbWrite: (text) => call("guestbook", { method: "POST", body: { text } }),
     gbDelete: (key) => call("guestbook?key=" + encodeURIComponent(key), { method: "DELETE" }),
+    daily: () => call("daily", { method: "POST", body: {} }),
+    buy: (item) => call("shop/buy", { method: "POST", body: { item } }),
+    gameStart: () => call("game/start", { method: "POST", body: {} }),
+    gameFinish: (run, m) => call("game/finish", { method: "POST", body: { run, m } }),
     chatDelete: (key) => call("chat?key=" + encodeURIComponent(key), { method: "DELETE" }),
   };
 })();

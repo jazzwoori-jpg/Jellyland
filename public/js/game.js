@@ -90,6 +90,7 @@
     buildMinimap();
     updateSceneLabels();
     resetChat();
+    if (G.mode === "world" && !G.gameOpen) BGM.play(id);
   }
   function updateSceneLabels() {
     if (!G.scene) return;
@@ -460,13 +461,17 @@
     if (id === "cinema") return openCinema();
     if (id === "profile") return openProfile();
     if (id === "guide") return openGuide();
+    if (id === "shop") return openShop();
+    if (id === "game") return openGame();
     if (id === "lounge") { await fade(true); setScene("lounge"); await fade(false); toast(t("enteredLounge")); return; }
     if (id === "exit") { const b = G.worlds.plaza.buildings.find((x) => x.id === "lounge"); await fade(true); setScene("plaza", { x: b.door.x, y: b.door.y + 22, dir: "down" }); await fade(false); }
   }
 
   // ---------------- 모달 콘텐츠 ----------------
   function openModal(title, html, onMount, wide) {
+    if (G.modalCleanup) { const f = G.modalCleanup; G.modalCleanup = null; try { f(); } catch {} }
     document.querySelector("#modal .modal").classList.toggle("wide", !!wide);
+    document.querySelector("#modal .modal").classList.remove("game");
     $("#modal-close-big").textContent = t("close");
     $("#modal-title").textContent = title;
     $("#modal-body").innerHTML = html;
@@ -475,7 +480,10 @@
     G.modalOpen = true; G.keys.clear(); G.joy.x = G.joy.y = 0;
     onMount && onMount($("#modal-body"));
   }
-  function closeModal() { $("#modal").classList.add("hidden"); $("#modal-body").innerHTML = ""; G.modalOpen = false; }
+  function closeModal() {
+    if (G.modalCleanup) { const f = G.modalCleanup; G.modalCleanup = null; try { f(); } catch {} }
+    $("#modal").classList.add("hidden"); $("#modal-body").innerHTML = ""; G.modalOpen = false;
+  }
   $("#modal-close").addEventListener("click", closeModal);
   $("#modal-close-big").addEventListener("click", closeModal);
   $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
@@ -536,6 +544,121 @@
     </div></div>`;
     openModal("🎹 " + t("zProfile"), html, (el) => el.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => runZone(b.dataset.go))));
   }
+  // ---------------- 젤리코인 ----------------
+  const SHOP = window.JELLY_SHOP || [];
+  const isHost = () => !!(G.user && G.user.role === "artist");
+  const owns = (it) => isHost() || !!(G.user && (G.user.inv || []).includes(it.id));
+  const shopItem = (kind, idx) => SHOP.find((x) => x.kind === kind && x.idx === idx);
+  const kstDay = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  function setUser(u) { if (!u) return; G.user = { ...G.user, ...u }; refreshMe(); }
+  function renderCoins() {
+    const el = $("#coin-pill"); if (!el || !G.user) return;
+    const n = G.user.coins | 0, old = +el.dataset.n || 0;
+    el.textContent = "🪙 " + n.toLocaleString();
+    if (n > old && el.dataset.n !== undefined) { el.classList.remove("bump"); void el.offsetWidth; el.classList.add("bump"); }
+    el.dataset.n = n;
+    const sc = $("#shop-coins"); if (sc) sc.textContent = n.toLocaleString();
+  }
+  let dailyBusy = false;
+  async function checkDaily() {
+    if (!G.user || G.mode !== "world" || dailyBusy) return;
+    if (G.user.daily === kstDay() && G.user.welcomedChecked) return;
+    dailyBusy = true;
+    try {
+      const r = await API.daily();
+      setUser(r.user); G.user.welcomedChecked = true;
+      const msgs = [];
+      if (r.gained && r.gained.welcome) msgs.push(t("coinWelcome", { n: r.gained.welcome }));
+      if (r.gained && r.gained.daily) msgs.push(t("coinDaily", { n: r.gained.daily }));
+      msgs.forEach((m, i) => setTimeout(() => toast(m), 2600 + i * 2500));
+    } catch {} finally { dailyBusy = false; }
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && G.user && G.user.daily !== kstDay()) checkDaily(); });
+  $("#coin-pill").addEventListener("click", () => toast(`🪙 ${t("myCoins")}: ${(G.user.coins | 0).toLocaleString()}`));
+
+  // ---------------- 🛍️ 젤리젤리샵 ----------------
+  let shopTab = "all";
+  function previewAv(it) {
+    const av = { ...(G.user.avatar || Avatar.random()) };
+    av[it.kind] = it.idx;
+    if (it.kind === "outfit" && av.wand) av.wand = av.wand; // 마법봉은 그대로
+    return av;
+  }
+  function openShop() {
+    const html = `<div class="shop-top"><div class="coin-big">🪙 <b id="shop-coins">${(G.user.coins | 0).toLocaleString()}</b> <small>${esc(t("coinName"))}</small></div>
+      <p>${esc(t("shopIntro"))}</p><p class="shop-how">${esc(t("shopHow"))}</p></div>
+      <div class="chips shop-tabs">${["all", "hair", "outfit", "wand"].map((k) => `<button class="chip ${k === shopTab ? "on" : ""}" data-k="${k}">${esc(t({ all: "kAll", hair: "kHair", outfit: "kOutfit", wand: "kWand" }[k]))}</button>`).join("")}</div>
+      <div class="shop-grid" id="shop-grid"></div>`;
+    openModal("🛍️ " + t("bShop"), html, (el) => {
+      el.querySelectorAll(".shop-tabs .chip").forEach((b) => b.addEventListener("click", () => { shopTab = b.dataset.k; el.querySelectorAll(".shop-tabs .chip").forEach((x) => x.classList.toggle("on", x === b)); renderShop(); }));
+      renderShop();
+    }, true);
+  }
+  function renderShop() {
+    const grid = $("#shop-grid"); if (!grid) return;
+    const av = G.user.avatar || {};
+    const list = SHOP.filter((it) => shopTab === "all" || it.kind === shopTab);
+    grid.innerHTML = list.map((it) => {
+      const own = owns(it), on = (av[it.kind] | 0) === it.idx;
+      const tier = it.price >= 12000 ? "t4" : it.price >= 5000 ? "t3" : it.price >= 1200 ? "t2" : "t1";
+      const btn = !own ? `<button class="btn sm pink buy ${(G.user.coins | 0) < it.price ? "poor" : ""}" data-act="buy">🪙 ${it.price.toLocaleString()} ${esc(t("buy"))}</button>`
+        : on ? (it.kind === "wand" ? `<button class="btn sm" data-act="off">${esc(t("unequip"))}</button>` : `<button class="btn sm on" disabled>${esc(t("equipped"))}</button>`)
+        : `<button class="btn sm grape" data-act="wear">${esc(t("equip"))}</button>`;
+      return `<div class="shop-item ${tier}${own ? " own" : ""}" data-id="${it.id}">
+        <span class="kind">${esc(t({ hair: "kHair", outfit: "kOutfit", wand: "kWand" }[it.kind]))}</span>${own ? `<span class="owned">${esc(t("owned"))}</span>` : ""}
+        <canvas width="96" height="96"></canvas><b>${esc(L(it.name))}</b><span class="price">🪙 ${it.price.toLocaleString()}</span>${btn}</div>`;
+    }).join("");
+    grid.querySelectorAll(".shop-item").forEach((card) => {
+      const it = SHOP.find((x) => x.id === card.dataset.id);
+      const c = card.querySelector("canvas"), x = c.getContext("2d");
+      x.imageSmoothingEnabled = false;
+      const pv = previewAv(it);
+      let dirI = 0;
+      const drawPv = () => { x.clearRect(0, 0, 96, 96); x.drawImage(Avatar.sprite(pv, ["down", "right", "up", "left"][dirI % 4], 0), 0, 0, 96, 96); };
+      drawPv();
+      c.addEventListener("click", () => { dirI++; drawPv(); });
+      const b = card.querySelector("[data-act]");
+      if (!b) return;
+      b.addEventListener("click", async () => {
+        const act = b.dataset.act;
+        if (act === "buy") {
+          if ((G.user.coins | 0) < it.price) return toast(t("e_coins"));
+          if (!b.classList.contains("sure")) { b.classList.add("sure"); b.textContent = t("buySure") + " 🪙" + it.price.toLocaleString(); setTimeout(() => { if (b.isConnected && b.classList.contains("sure")) { b.classList.remove("sure"); b.textContent = `🪙 ${it.price.toLocaleString()} ${t("buy")}`; } }, 3500); return; }
+          b.disabled = true;
+          try { const r = await API.buy(it.id); setUser(r.user); toast(t("bought", { name: L(it.name) })); await wear(it); }
+          catch (e) { toast(e.message); }
+          renderShop();
+          return;
+        }
+        b.disabled = true;
+        try { await wear(it, act === "off"); } catch (e) { toast(e.message); }
+        renderShop();
+      });
+    });
+  }
+  async function wear(it, off) {
+    const av = { ...(G.user.avatar || Avatar.random()) };
+    av[it.kind] = off ? 0 : it.idx;
+    const u = await API.saveAvatar(G.user.nickname, av);
+    setUser(u); kickSync();
+    if (!off) toast(t("wearing", { name: L(it.name) }));
+  }
+
+  // ---------------- 🎮 젤리게임월드: 점프점프 젤리월드 ----------------
+  function openGame() {
+    G.gameOpen = true;
+    BGM.play("minigame");
+    openModal("🎮 " + t("gameTitle"), `<div id="jg-root"></div>`, (el) => {
+      const g = JumpGame.mount(el.querySelector("#jg-root"), {
+        t, avatar: () => G.user.avatar,
+        onStart: () => API.gameStart(),
+        onFinish: async (run, m) => { const r = await API.gameFinish(run, m); if (r.user) setUser(r.user); return r; },
+      });
+      G.modalCleanup = () => { g.destroy(); G.gameOpen = false; BGM.play(G.scene); };
+    }, true);
+    document.querySelector("#modal .modal").classList.add("game");
+  }
+
   // ---------------- 방명록 ----------------
   const fmtTime = (ts) => { const d = new Date(ts), z = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}.${z(d.getMonth() + 1)}.${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`; };
   async function openGuestbook(page = 0) {
@@ -550,7 +673,7 @@
         e.preventDefault();
         const text = ta.value.trim(); if (!text) return;
         const btn = e.target.querySelector("button"); btn.disabled = true;
-        try { await API.gbWrite(text); ta.value = ""; el.querySelector("#gb-count").textContent = "0/300"; toast(t("gbDone")); loadGb(0); }
+        try { const r = await API.gbWrite(text); if (r.user) setUser(r.user); if (r.coins) setTimeout(() => toast(t("coinGb", { n: r.coins })), 900); ta.value = ""; el.querySelector("#gb-count").textContent = "0/300"; toast(t("gbDone")); loadGb(0); }
         catch (err) { el.querySelector("#gb-err").textContent = err.message; }
         finally { btn.disabled = false; }
       });
@@ -569,7 +692,7 @@
           <span class="who"><canvas width="32" height="26" data-av='${esc(JSON.stringify(e.avatar || null))}'></canvas><b>${e.role === "artist" ? "✦ " : ""}${esc(e.name)}</b></span>
           <span class="txt">${esc(e.text).replace(/\n/g, "<br>")}</span>
           <span class="when">${fmtTime(e.ts)}${G.user && (G.user.role === "artist" || G.user.id === e.id) ? ` <button class="gb-del" title="${esc(t("del"))}">✕</button>` : ""}</span></div>`).join("");
-      list.querySelectorAll("canvas[data-av]").forEach((c) => { try { const av = JSON.parse(c.dataset.av); const x = c.getContext("2d"); x.imageSmoothingEnabled = false; x.drawImage(Avatar.sprite(av, "down", 0), 0, 0, 32, 26, 0, 0, 32, 26); } catch {} });
+      list.querySelectorAll("canvas[data-av]").forEach((c) => { try { const av = JSON.parse(c.dataset.av); const x = c.getContext("2d"); x.imageSmoothingEnabled = false; Avatar.face(x, av, 32, 26); } catch {} });
       list.querySelectorAll(".gb-del").forEach((b) => b.addEventListener("click", async () => {
         const key = b.closest(".gb-item").dataset.key;
         try { await API.gbDelete(key); loadGb(page); } catch (e) { toast(e.message); }
@@ -584,6 +707,9 @@
     openModal(t("guideTitle"), `<ul class="guide">${t("guide").map((g) => `<li>${g}</li>`).join("")}</ul>`);
   }
   $("#btn-help").addEventListener("click", openGuide);
+  const bgmBtn = () => { $("#btn-bgm").textContent = BGM.on ? "🔊" : "🔇"; $("#btn-bgm").title = t("bgm"); };
+  $("#btn-bgm").addEventListener("click", () => { BGM.toggle(); bgmBtn(); });
+  bgmBtn();
   $("#btn-gb").addEventListener("click", () => openGuestbook());
 
   // ---------------- 언어 ----------------
@@ -798,12 +924,15 @@
   }
   function renderCreator() {
     chipRow("gender", [{ v: "f", name: t("female") }, { v: "m", name: t("male") }], "gender");
-    chipRow("hair", t("hairs").map((n) => ({ name: n })), "hair");
+    const shopName = (kind, i) => { const it = shopItem(kind, i); return it ? L(it.name) : ""; };
+    chipRow("hair", Avatar.HAIRS.map((_, i) => ({ name: t("hairs")[i] || shopName("hair", i) })), "hair");
+    if (draft.avatar.wand === undefined) draft.avatar.wand = 0;
+    chipRow("wand", Avatar.WANDS.map((_, i) => ({ name: i ? shopName("wand", i) : t("wandNone") })), "wand");
     chipRow("eye", Avatar.EYES.map((c, i) => ({ c, name: t("eyes")[i] })), "eye", "sw");
     chipRow("hairColor", Avatar.HAIR_COLORS.map((c, i) => ({ ...c, name: t("hairColors")[i] })), "hairColor", "sw");
     chipRow("skin", Avatar.SKINS.map((c, i) => ({ ...c, name: t("skins")[i] })), "skin", "sw");
     const isHost = G.user && G.user.role === "artist";
-    const outs = Avatar.OUTFITS.map((o, i) => ({ i, name: t("outfits")[i] || o.id, col: o.overall || (o.top === "#f7f5ff" ? o.skirt : o.top), host: !!o.host }));
+    const outs = Avatar.OUTFITS.map((o, i) => ({ i, name: t("outfits")[i] || shopName("outfit", i) || o.id, col: o.overall || (o.top === "#f7f5ff" ? o.skirt : o.top), host: !!o.host }));
     chipRow("outfit", outs, "outfit");
     // 호스트 전용 의상: 호스트가 아니면 잠금 표시
     $("#o-outfit").querySelectorAll(".chip").forEach((el, idx) => {
@@ -812,13 +941,22 @@
       if (!isHost) { el.disabled = true; el.title = t("hostOnly"); }
     });
     if (!isHost && outs[draft.avatar.outfit] && outs[draft.avatar.outfit].host) draft.avatar.outfit = 0;
+    // 젤리젤리샵 아이템: 산 것만 고를 수 있음
+    [["hair", "#o-hair"], ["outfit", "#o-outfit"], ["wand", "#o-wand"]].forEach(([kind, sel]) => {
+      $(sel).querySelectorAll(".chip").forEach((el, idx) => {
+        const it = shopItem(kind, idx); if (!it) return;
+        el.classList.add("shop-only");
+        if (!owns(it)) { el.disabled = true; el.title = t("shopLock"); el.insertAdjacentHTML("beforeend", `<small>🛍️ ${esc(t("shopLock"))}</small>`); if ((draft.avatar[kind] | 0) === idx) draft.avatar[kind] = 0; }
+        else el.insertAdjacentHTML("beforeend", "<small>✦</small>");
+      });
+    });
   }
   const DIRS = ["down", "right", "up", "left"];
   function drawPreview() {
     const c = $("#preview"), x = c.getContext("2d");
-    x.clearRect(0, 0, 32, 40);
+    x.clearRect(0, 0, 48, 50);
     const now = performance.now();
-    Avatar.draw(x, draft.avatar, 16, 39, DIRS[Math.floor(now / 1400) % 4], [1, 0, 3, 0][Math.floor(now / 160) % 4]);
+    Avatar.draw(x, draft.avatar, 24, 47, DIRS[Math.floor(now / 1400) % 4], [1, 0, 3, 0][Math.floor(now / 160) % 4]);
   }
   function openCreator(editing) {
     if (G.mode !== "world") G.mode = "creator";
@@ -886,8 +1024,9 @@
     $("#me-name").textContent = G.user.nickname + (G.user.role === "artist" ? " 👑" : "");
     const c = $("#me-face"), x = c.getContext("2d");
     x.clearRect(0, 0, c.width, c.height); x.imageSmoothingEnabled = false;
-    x.drawImage(Avatar.sprite(G.user.avatar, "down", 0), 0, 0, 32, 26, 0, 0, c.width, c.height);
+    Avatar.face(x, G.user.avatar, c.width, c.height);
     $("#chat-opts").classList.toggle("hidden", G.user.role !== "artist");
+    renderCoins();
     $("#online").textContent = API.demo ? t("demoSolo") : G.online > 1 ? t("online", { n: G.online }) : t("onlineShort");
   }
 
@@ -903,9 +1042,11 @@
     setScene("plaza");
     await fade(false);
     toast(t("welcome", { name: G.user.nickname }));
+    BGM.play(G.scene);
+    checkDaily();
   }
   function logout() {
-    API.logout(); G.user = null; G.mode = "title"; G.others.clear();
+    API.logout(); G.user = null; G.mode = "title"; G.others.clear(); BGM.stop();
     closeModal();
     $("#hud").classList.add("hidden"); $("#creator").classList.add("hidden");
     $("#title").classList.remove("hidden");
@@ -923,7 +1064,7 @@
     requestAnimationFrame(loop);
   }
 
-  window.__jelly = { G, runZone: (z) => runZone(z) };
+  window.__jelly = { G, runZone: (z) => runZone(z), closeModal: () => closeModal() };
   // ---------------- 시작 ----------------
   (async function boot() {
     I.apply();

@@ -286,8 +286,8 @@ body.touch .modal { max-height: calc(var(--vh, 100vh) - 24px - env(safe-area-ins
 .opt h4::before { content: '✦ '; color: var(--gold); }
 .me-card canvas { width: 40px; height: 33px; background: #e8dcfa; }
 .stage { background: repeating-conic-gradient(#efe4f7 0 25%, #e2d3f3 0 50%) 0 0 / 24px 24px; }
-.stage canvas { width: 176px; height: 220px; }
-@media (max-width: 640px) { .stage canvas { width: 128px; height: 160px; } }
+.stage canvas { width: 192px; height: 200px; }
+@media (max-width: 640px) { .stage canvas { width: 144px; height: 150px; } }
 #notice { background: #fff4c8; }
 
 /* 앨범 기록관 v2 */
@@ -355,3 +355,36 @@ body.touch .gb-form textarea { font-size: 16px; }
 #btn-gb { background: linear-gradient(#ffe38a, #f2c14e); animation: gbpulse 1.6s ease-in-out infinite; }
 @keyframes gbpulse { 50% { transform: scale(1.06); } }
 @media (max-width: 600px) { .gb-item { grid-template-columns: 1fr auto; } .gb-write h3 { font-size: 17px; } }
+
+/* ---------- 젤리코인 · 젤리젤리샵 · 미니게임 ---------- */
+.coin-pill { background: #fff3a8 !important; color: #7a4a00; font-weight: bold; }
+.coin-pill.bump { animation: coinbump .6s ease; }
+@keyframes coinbump { 0% { transform: scale(1); } 30% { transform: scale(1.25) rotate(-4deg); background: #ffe066; } 100% { transform: scale(1); } }
+.chip.shop-only { border-color: #ff7fae; }
+.chip.shop-only small { font-size: 10px; opacity: .8; }
+.chip:disabled { opacity: .5; cursor: not-allowed; }
+.shop-top { text-align: center; margin-bottom: 8px; }
+.shop-top p { margin: 4px 0; }
+.shop-how { font-size: 12px; opacity: .75; }
+.coin-big { display: inline-block; background: #fff3a8; border: 3px solid var(--ink); border-radius: 20px; padding: 4px 16px; font-size: 20px; box-shadow: 0 3px 0 var(--ink); margin-bottom: 6px; }
+.coin-big small { font-size: 12px; }
+.shop-tabs { justify-content: center; margin: 8px 0 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+.shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.shop-item { position: relative; border: 3px solid var(--ink); border-radius: 10px; background: #fff; padding: 22px 8px 10px; display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
+.shop-item canvas { width: 96px; height: 96px; image-rendering: pixelated; cursor: pointer; background: repeating-conic-gradient(#f7f1ff 0 25%, #efe6fb 0 50%) 0 0 / 16px 16px; border-radius: 8px; }
+.shop-item b { font-size: 13px; line-height: 1.3; min-height: 2.6em; display: flex; align-items: center; }
+.shop-item .price { font-size: 12px; color: #9a6a00; font-weight: bold; }
+.shop-item .kind { position: absolute; top: 4px; left: 6px; font-size: 10px; background: var(--pink2); border-radius: 8px; padding: 1px 6px; }
+.shop-item .owned { position: absolute; top: 4px; right: 6px; font-size: 10px; background: #c3f0c8; border-radius: 8px; padding: 1px 6px; }
+.shop-item .btn { width: 100%; justify-content: center; }
+.shop-item .btn.poor { filter: grayscale(.6); opacity: .75; }
+.shop-item .btn.sure { background: #d8434e; }
+.shop-item .btn.on { background: #c3f0c8; }
+.shop-item.t2 { border-color: #a77ce0; }
+.shop-item.t3 { border-color: #f2c14e; background: linear-gradient(#fffdf2, #fff); box-shadow: 0 0 0 2px #fff3a8; }
+.shop-item.t4 { border-color: #ff7fae; background: linear-gradient(135deg, #fff0f7, #f1ecff, #eafcff); box-shadow: 0 0 0 2px #ffc2dc, 0 0 14px rgba(255, 127, 174, .55); animation: shine 2.4s ease-in-out infinite; }
+@keyframes shine { 50% { box-shadow: 0 0 0 2px #c3a2f0, 0 0 20px rgba(167, 124, 224, .7); } }
+.modal.game { width: min(900px, 100%); }
+.jg-wrap { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.jg { width: 100%; max-width: 860px; aspect-ratio: 360 / 170; image-rendering: pixelated; border: 3px solid var(--ink); border-radius: 8px; touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; background: #bfe6ff; }
+.jg-help { display: flex; flex-direction: column; gap: 2px; font-size: 12px; text-align: center; opacity: .8; }
