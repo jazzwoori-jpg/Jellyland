@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "15"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "16"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -281,7 +281,7 @@
   function render() {
     const w = scene();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = w.id === "plaza" ? "#3f7f3a" : "#2a2230";
+    ctx.fillStyle = w.id === "plaza" ? "#4a4458" : "#2a2230";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     const k = S * dpr;
     ctx.setTransform(k, 0, 0, k, -G.cam.x * k, -G.cam.y * k);
@@ -311,6 +311,7 @@
         if (c.artist || c.admin) drawSparkles(c.x, c.y, G.t, c.admin);
       } else o.draw(ctx, G.t);
     }
+    drawFx(Math.min(0.05, (performance.now() - (G.fxT || performance.now())) / 1000)); G.fxT = performance.now();
     if (G.target) { ctx.fillStyle = "rgba(255,127,174,.8)"; const r = 3 + (Math.floor(G.t / 150) % 2); ctx.fillRect(G.target.x - r, G.target.y - 1, r * 2, 2); ctx.fillRect(G.target.x - 1, G.target.y - r, 2, r * 2); }
 
     // ---- 화면 해상도 오버레이 (이름표, 말풍선, 아이콘) ----
@@ -347,6 +348,7 @@
       if (c.artist && !c.id && G.scene === "plaza" && Math.floor(G.t / 4000) % 3 === 0) drawBubble(X, Y - 14, t("artistHello"));
       if (c.npc && c.npc.say && c.npc.sayUntil > G.t) drawBubble(X, Y - 14, c.npc.say);
     }
+    drawBanner();
     if (G.mode === "world" && G.t - (G.mmT || 0) > 120) { G.mmT = G.t; drawMinimapFrame(); } // 지도는 초당 8번만 (폰 부담 줄이기)
   }
   // 아티스트(조젤리) 전용: 영롱한 푸른 빛 오라 + 반짝이
@@ -458,6 +460,59 @@
     G.seat = st.id; G.seatObj = st; G.target = null; G.pendingZone = null;
     G.player.x = st.x; G.player.y = st.y; G.player.dir = st.dir; G.player.moving = false;
     G.zone = null; kickSync();
+    if (st.id === "throne" && G.user.role === "artist") {
+      celebrate(st);
+      // 모두에게 공지: "Jo Jelly 등장!" (자동 번역) — 너무 자주 올라가지 않게 5분에 한 번
+      let last = 0; try { last = +localStorage.getItem("jl_throne_notice") || 0; } catch {}
+      if (Date.now() - last > 5 * 60 * 1000) {
+        try { localStorage.setItem("jl_throne_notice", String(Date.now())); } catch {}
+        API.chatSend("plaza", "👑 Jo Jelly 등장! 👑", true).then((r) => { if (r && r.notice) { G.chat.notice = r.notice; renderNotice(); } }).catch(() => {});
+      }
+    }
+  }
+  // ---------------- 👑 호스트 등장: 빵빠레 + 폭죽 + 배너 ----------------
+  G.fx = [];
+  function celebrate(st) {
+    const w = scene(); if (!w || w.id !== "plaza") return;
+    try { Piano.fanfare(); } catch {}
+    const cx = st.x, cy = st.y - 20;
+    const cols = ["#ff5f9f", "#ffd34d", "#7fe3ff", "#a77ce0", "#8fe07a", "#ffffff", "#ff9f43"];
+    const burst = (bx, by, n, col2) => { for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2 + Math.random() * 0.2, sp = 50 + Math.random() * 70; G.fx.push({ x: bx, y: by, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1.2 + Math.random() * 0.6, max: 1.8, col: i % 3 ? col2 : "#ffffff", s: Math.random() < 0.3 ? 3.5 : 2.5, g: 40 }); } };
+    for (let k = 0; k < 9; k++) {
+      setTimeout(() => {
+        const bx = cx + (Math.random() - 0.5) * 150, by = cy - 50 - Math.random() * 70;
+        // 올라가는 불꽃 꼬리
+        for (let j = 0; j < 8; j++) G.fx.push({ x: bx + (Math.random() - 0.5) * 2, y: by + 60 + j * 5, vx: 0, vy: -140, life: 0.35 - j * 0.03, max: 0.4, col: "#fff3a8", s: 2.5, g: 0 });
+        setTimeout(() => burst(bx, by, 46, cols[k % cols.length]), 380);
+      }, k * 450 + (k === 0 ? 0 : Math.random() * 200));
+    }
+    // 의자 주변 반짝이 분수
+    for (let k = 0; k < 40; k++) setTimeout(() => { for (const sx of [-26, 26]) G.fx.push({ x: cx + sx, y: cy + 16, vx: sx * 0.6 + (Math.random() - 0.5) * 30, vy: -90 - Math.random() * 60, life: 1, max: 1, col: cols[(Math.random() * cols.length) | 0], s: 2.5, g: 140 }); }, k * 90);
+    G.banner = { text: t("joEnter"), until: performance.now() + 4500 };
+  }
+  function drawFx(dt) {
+    if (!G.fx.length) return;
+    for (const f of G.fx) { f.x += f.vx * dt; f.y += f.vy * dt; f.vy += f.g * dt; f.vx *= 0.985; f.life -= dt; }
+    G.fx = G.fx.filter((f) => f.life > 0);
+    ctx.save(); ctx.globalCompositeOperation = "lighter";
+    for (const f of G.fx) { ctx.globalAlpha = Math.max(0, Math.min(1, f.life / (f.max * 0.6))); ctx.fillStyle = f.col; ctx.fillRect(f.x - f.s / 2, f.y - f.s / 2, f.s, f.s); }
+    ctx.restore();
+  }
+  function drawBanner() {
+    const b = G.banner; if (!b) return;
+    const left = b.until - performance.now(); if (left <= 0) { G.banner = null; return; }
+    const a = Math.min(1, left / 600, (4500 - left) / 300);
+    ctx.save(); ctx.globalAlpha = a;
+    const size = Math.min(44, VW / 12);
+    ctx.font = `bold ${size}px ${FONT}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    const Y = VH * 0.28 + Math.sin(performance.now() / 200) * 3, tw = ctx.measureText(b.text).width + 50;
+    const g = ctx.createLinearGradient(VW / 2 - tw / 2, 0, VW / 2 + tw / 2, 0);
+    g.addColorStop(0, "#ff7fae"); g.addColorStop(0.5, "#a77ce0"); g.addColorStop(1, "#5fb8ff");
+    ctx.fillStyle = "#3a2530"; ctx.fillRect(VW / 2 - tw / 2 - 4, Y - size * 0.8 - 4, tw + 8, size * 1.6 + 8);
+    ctx.fillStyle = g; ctx.fillRect(VW / 2 - tw / 2, Y - size * 0.8, tw, size * 1.6);
+    ctx.fillStyle = "#3a2530"; ctx.fillText(b.text, VW / 2 + 3, Y + 3);
+    ctx.fillStyle = "#fff"; ctx.fillText(b.text, VW / 2, Y);
+    ctx.restore();
   }
   function standUp() {
     const st = G.seatObj; G.seat = null; G.seatObj = null;
@@ -1061,6 +1116,7 @@
       const ex = G.others.get(o.id);
       const upd = { x: o.x, y: o.y, dir: o.dir, name: o.name, avatar: o.avatar, role: o.role, seat: o.seat || null,
         vx: o.vx || 0, vy: o.vy || 0, age: serverNow ? Math.max(0, serverNow - o.ts) : 0, recv: now, seen: now };
+      if (ex && o.role === "artist" && upd.seat === "throne" && ex.seat !== "throne") { const st = (scene().seats || []).find((x) => x.id === "throne"); if (st) celebrate(st); }
       if (ex) Object.assign(ex, upd);
       else G.others.set(o.id, { ...upd, id: o.id, rx: o.x, ry: o.y });
     }

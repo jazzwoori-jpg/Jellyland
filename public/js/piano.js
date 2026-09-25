@@ -217,5 +217,33 @@
     };
   }
   function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
-  window.Piano = { mount, strike, playSeq };
+  // 🎺 빵빠레 (호스트가 공주 의자에 앉을 때) — 금관 느낌 합성음 + 드럼 롤 + 심벌
+  function brass(f, t, len, vol) {
+    const c = actx;
+    const o1 = c.createOscillator(), o2 = c.createOscillator(), g = c.createGain(), lp = c.createBiquadFilter();
+    o1.type = "sawtooth"; o2.type = "square"; o1.frequency.value = f; o2.frequency.value = f * 1.003;
+    lp.type = "lowpass"; lp.frequency.setValueAtTime(f * 1.5, t); lp.frequency.linearRampToValueAtTime(f * 6, t + 0.06); lp.frequency.exponentialRampToValueAtTime(f * 3, t + len);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.03); g.gain.setValueAtTime(vol * 0.8, t + Math.max(0.05, len - 0.08)); g.gain.exponentialRampToValueAtTime(0.0008, t + len + 0.25);
+    const vib = c.createOscillator(), vg = c.createGain(); vib.frequency.value = 5.5; vg.gain.value = f * 0.006; vib.connect(vg); vg.connect(o1.frequency); vg.connect(o2.frequency);
+    o1.connect(lp); o2.connect(lp); lp.connect(g).connect(master);
+    [o1, o2, vib].forEach((o) => { o.start(t); o.stop(t + len + 0.3); });
+  }
+  function noise(t, len, vol, freqHz, type) {
+    const c = actx, b = c.createBuffer(1, Math.floor(c.sampleRate * len), c.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const s = c.createBufferSource(); s.buffer = b; const f = c.createBiquadFilter(); f.type = type || "bandpass"; f.frequency.value = freqHz; const g = c.createGain();
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0008, t + len);
+    s.connect(f).connect(g).connect(master); s.start(t);
+  }
+  function fanfare() {
+    const c = ctx(); if (!c) return;
+    const t0 = c.currentTime + 0.05, n = (m) => 440 * Math.pow(2, (m - 69) / 12), v = 0.13;
+    // 따따따 따~안! 따 따~아~안!
+    const seq = [[0, [67], 0.12], [0.15, [67], 0.12], [0.3, [67], 0.12], [0.45, [72, 76, 79], 0.55], [1.05, [70, 74, 77], 0.16], [1.25, [72, 76, 79, 84], 1.3]];
+    for (const [dt, notes, len] of seq) for (const m of notes) brass(n(m), t0 + dt, len, v / Math.sqrt(notes.length) * 1.4);
+    for (let i = 0; i < 12; i++) noise(t0 + 0.4 + i * 0.05, 0.06, 0.12 + i * 0.01, 1800, "bandpass"); // 스네어 롤
+    noise(t0 + 1.25, 1.6, 0.25, 7000, "highpass"); // 심벌
+    noise(t0 + 0.45, 0.4, 0.3, 120, "lowpass"); noise(t0 + 1.25, 0.6, 0.35, 110, "lowpass"); // 팀파니
+  }
+  window.Piano = { mount, strike, playSeq, fanfare };
 })();
