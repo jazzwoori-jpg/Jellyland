@@ -289,6 +289,8 @@ export default async (req) => {
     // ---------- 이하 로그인 필요 ----------
     const user = await auth(req);
     if (!user) return err("auth", 401);
+    // 👑 호스트는 코인이 항상 100만 이상
+    if (roleOf(user.email) === "artist" && (user.coins | 0) < 1000000) { user.coins = 1000000; await store("jl-users").setJSON(userKey(user.email), user); }
     const me = publicUser(user);
     const saveUser = () => store("jl-users").setJSON(userKey(user.email), user);
 
@@ -399,8 +401,8 @@ export default async (req) => {
     }
 
     // ---------- 🎰 럭키젤리! ----------
-    // 참가비 20코인 · 하루 20번 · 확률 (10만 분율): Jelly! 3개 1/300 → 100배 · Jelly! 2개 1/100 → 10배 · 사과 3개 1/20 → 3배 · 하트 3개 1/20 → 3배
-    //                  별 1개 이상 40% → 참가비 돌려받음 · 나머지(약 49%) → 참가비 잃음
+    // 참가비 20코인 · 하루 20번 · 확률 (10만 분율): Jelly! 3개 1/300 → 100배 · Jelly! 2개 1/100 → 10배 · 사과 3개 1/16 → 3배 · 하트 3개 1/16 → 3배
+    //                  별 1개 이상 40% → 참가비 돌려받음 · 나머지(약 46%) → 참가비 잃음
     if (route === "slot/spin" && method === "POST") {
       const BET = 20, SLOT_PER_DAY = 20;
       if (user.slotDay !== kstDay()) { user.slotDay = kstDay(); user.slotCount = 0; }
@@ -414,9 +416,9 @@ export default async (req) => {
       let outcome, reels, mult;
       if (r < 333) { outcome = "jackpot"; mult = 100; reels = [J, J, J]; }
       else if (r < 1333) { outcome = "jelly2"; mult = 10; reels = shuffle([J, J, pick([A, Hh, ...OTHERS])]); }
-      else if (r < 6333) { outcome = "apple"; mult = 3; reels = [A, A, A]; }
-      else if (r < 11333) { outcome = "heart"; mult = 3; reels = [Hh, Hh, Hh]; }
-      else if (r < 51333) { // 별: 1~2개 + 나머지 (Jelly! 는 최대 1개, 같은 그림 3개는 안 나오게)
+      else if (r < 7583) { outcome = "apple"; mult = 3; reels = [A, A, A]; }
+      else if (r < 13833) { outcome = "heart"; mult = 3; reels = [Hh, Hh, Hh]; }
+      else if (r < 53833) { // 별: 1~2개 + 나머지 (Jelly! 는 최대 1개, 같은 그림 3개는 안 나오게)
         outcome = "star"; mult = 1;
         const stars = crypto.randomInt(10) < 8 ? 1 : 2;
         const rest = []; while (rest.length < 3 - stars) { const c = pick([J, A, Hh, ...OTHERS]); if (c === J && rest.includes(J)) continue; rest.push(c); }
@@ -519,6 +521,24 @@ export default async (req) => {
         if (!target) return err("notfound", 404);
         await sendMail(target.id, m);
         return json({ ok: true, sent: 1 });
+      }
+      // 🪙 코인 지급·회수·설정 (관리자 본인 포함 누구에게나)
+      if (route === "admin/coins" && method === "POST") {
+        const target = (await allUsers()).find((u) => u.id === body.id);
+        if (!target) return err("notfound", 404);
+        const amt = Math.floor(+body.amount || 0), mode = body.mode === "set" ? "set" : "add";
+        if (!Number.isFinite(amt)) return err("msg");
+        const before = target.coins | 0;
+        let after = mode === "set" ? amt : before + amt;
+        after = Math.max(0, Math.min(100000000, after));
+        const tk = target._key; delete target._key;
+        target.coins = after;
+        if (roleOf(target.email) === "artist") target.coins = Math.max(1000000, after);
+        await us.setJSON(tk, target);
+        const diff = target.coins - before;
+        if (diff > 0 && target.id !== user.id) { try { await sendMail(target.id, { ts: Date.now(), from: me.nickname || "관리자", fromRole: me.role, text: `🎁 젤리코인 ${diff.toLocaleString()}개를 선물로 받았어요!`, read: false, gift: diff }); } catch {} }
+        if (target.id === user.id) user.coins = target.coins;
+        return json({ ok: true, id: target.id, coins: target.coins, diff, user: target.id === user.id ? publicUser(target) : undefined });
       }
       if (route === "admin/delete" && method === "POST") {
         const target = (await allUsers()).find((u) => u.id === body.id);
