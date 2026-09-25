@@ -111,7 +111,7 @@
     build();
     const keyEl = (m) => keysEl.querySelector(`.pn-k[data-m="${m}"]`);
     // ---- 녹음 (음표 [시작ms, 건반, 길이ms] 목록으로 저장 — 파일이 아주 작아요) ----
-    const REC_MS = 10000;
+    const REC_MS = 5000; // 녹음 최대 5초
     let rec = null, recNotes = null, recTimer = null, stopPlay = null;
     const now = () => performance.now();
     function recOn(m) {

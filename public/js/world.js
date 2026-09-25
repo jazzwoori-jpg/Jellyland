@@ -308,7 +308,7 @@
     objects.push({ y: RY, x: RX, draw: (c) => c.drawImage(recB, RX - 40, RY - 44) });
     colliders.push([RX - 24, RY - 8, 48, 10]);
     // 랭킹 1위 게시판 (젤리게임월드 옆)
-    const BX = 860, BY = 668;
+    const BX = 866, BY = 770; // 젤리게임월드 바로 왼쪽, 건물 앞면과 같은 선
     objects.push({ y: BY, x: BX, draw: (c, t) => drawRankBoard(c, BX, BY, t) });
     colliders.push([BX - 56, BY - 14, 112, 16]);
 
@@ -351,16 +351,16 @@
     colliders.push([560, 900, 18, 14], [702, 900, 18, 14]);
 
     // 안내 게시판
-    const board = boardSprite();
-    objects.push({ y: 806, x: 560, draw: (c) => c.drawImage(board, 540, 780) });
-    colliders.push([542, 796, 36, 10]);
+    const board = boardSprite(T("zGuide"));
+    objects.push({ y: 812, x: 532, draw: (c) => c.drawImage(board, 492, 748) });
+    colliders.push([498, 798, 70, 12]);
 
     const zones = [
       ...buildings.map((b) => ({ id: b.id, x: b.door.x - 20, y: b.door.y - 8, w: 40, h: 26, label: b.name })),
       { id: "piano", x: PX - 34, y: PY + 6, w: 68, h: 30, label: T("zPiano") },
       { id: "recboard", x: RX - 30, y: RY + 2, w: 60, h: 30, label: T("recBoard") },
       { id: "rankboard", x: BX - 50, y: BY + 2, w: 100, h: 30, label: T("rankBoardZ") },
-      { id: "guide", x: 530, y: 800, w: 60, h: 26, label: T("zGuide") },
+      { id: "guide", x: 494, y: 810, w: 76, h: 26, label: T("zGuide") },
     ];
 
     return {
@@ -370,7 +370,7 @@
       artist: null, // 조젤리 NPC 는 없앰 (피아노를 직접 연주)
       piano: { x: PX, y: PY - 10, front: { x: PX, y: PY + 20 } },
       clickables: [{ x: RX, y: RY - 20, r: 24, go: "recboard", front: { x: RX, y: RY + 16 } }, { x: BX, y: BY - 50, r: 56, go: "rankboard", front: { x: BX, y: BY + 16 } }],
-      icons: [...buildings.map((b) => ({ x: b.x + b.w / 2 + 2, y: b.y - 4, icon: b.icon, label: b.name })), { x: PX, y: PY - 34, icon: "🎹" }, { x: RX, y: RY - 48, icon: "📼" }, { x: BX, y: BY - 104, icon: "🏆" }],
+      icons: [...buildings.map((b) => ({ x: b.x + b.w / 2 + 2, y: b.y - 4, icon: b.icon, label: b.name })), { x: PX, y: PY - 34, icon: "🎹" }, { x: RX, y: RY - 48, icon: "📼" }, { x: BX, y: BY - 122, icon: "🏆" }, { x: 532, y: 744, icon: "ℹ️" }],
       npcArea: [300, 300, 700, 500],
     };
   }
@@ -424,7 +424,8 @@
     c.fillStyle = "#f2c14e"; c.fillRect(x0 + 1, y0 + 1, W - 2, H - 20);
     c.fillStyle = "#fff3a8"; c.fillRect(x0 + 1, y0 + 1, W - 2, 3);
     c.fillStyle = "#fffaf2"; c.fillRect(x0 + 5, y0 + 18, W - 10, H - 40);
-    c.font = `bold 10px ${FONT}`; c.textAlign = "center"; c.textBaseline = "middle";
+    c.textAlign = "center"; c.textBaseline = "middle";
+    let fs = 10; c.font = `bold ${fs}px ${FONT}`; while (c.measureText(T("rankBoard")).width > W - 10 && fs > 6) { fs--; c.font = `bold ${fs}px ${FONT}`; }
     c.fillStyle = OUT; c.fillText(T("rankBoard"), bx, y0 + 10);
     const top = window.World.rankTop;
     const cy0 = y0 + 18;
@@ -468,13 +469,24 @@
     x.fillStyle = "#ffd34d"; x.fillRect(12, 8, 4, 4); x.fillRect(144, 8, 4, 4);
     return c;
   }
-  function boardSprite() {
-    const [c, x] = cv(40, 30);
-    x.fillStyle = "rgba(40,30,20,.25)"; x.fillRect(4, 26, 34, 4);
-    x.fillStyle = OUT; x.fillRect(8, 16, 3, 12); x.fillRect(29, 16, 3, 12); x.fillRect(0, 0, 40, 20);
-    x.fillStyle = "#c98b5a"; x.fillRect(1, 1, 38, 18); x.fillStyle = "#fff8ea"; x.fillRect(4, 3, 14, 12); x.fillRect(21, 4, 15, 9);
-    x.fillStyle = "#ff8fb8"; x.fillRect(6, 5, 10, 2); x.fillStyle = "#9d7cf0"; x.fillRect(23, 6, 11, 2);
-    x.fillStyle = "#e0405a"; x.fillRect(10, 2, 2, 2); x.fillRect(28, 3, 2, 2);
+  // 입구 안내판 (크게 + "안내" 머리판)
+  function boardSprite(title) {
+    const [c, x] = cv(80, 66);
+    x.fillStyle = "rgba(40,30,20,.25)"; x.fillRect(6, 58, 72, 7);
+    x.fillStyle = OUT; x.fillRect(12, 40, 5, 24); x.fillRect(63, 40, 5, 24);
+    x.fillStyle = "#8f5a34"; x.fillRect(13, 41, 3, 22); x.fillRect(64, 41, 3, 22);
+    x.fillStyle = OUT; x.fillRect(0, 10, 80, 38);
+    x.fillStyle = "#c98b5a"; x.fillRect(1, 11, 78, 36); x.fillStyle = "#e0a877"; x.fillRect(1, 11, 78, 2);
+    x.fillStyle = "#fff8ea"; x.fillRect(5, 22, 32, 22); x.fillRect(41, 22, 34, 22);
+    x.fillStyle = "#ff8fb8"; x.fillRect(8, 26, 26, 2); x.fillStyle = "#c9b8a8"; for (let i = 0; i < 4; i++) x.fillRect(8, 31 + i * 3, 22 - (i % 2) * 6, 1);
+    x.fillStyle = "#9d7cf0"; x.fillRect(44, 26, 28, 2); x.fillStyle = "#c9b8a8"; for (let i = 0; i < 4; i++) x.fillRect(44, 31 + i * 3, 24 - (i % 2) * 8, 1);
+    x.fillStyle = "#e0405a"; x.fillRect(19, 21, 3, 3); x.fillRect(56, 21, 3, 3);
+    // 머리판: ℹ 안내
+    x.fillStyle = OUT; x.fillRect(10, 0, 60, 18); x.fillStyle = "#2f7f95"; x.fillRect(11, 1, 58, 16); x.fillStyle = "#5fb8c9"; x.fillRect(11, 1, 58, 2);
+    x.fillStyle = "#fff"; x.beginPath(); x.arc(20, 9, 5, 0, Math.PI * 2); x.fill(); x.fillStyle = "#3a8ea0"; x.fillRect(19, 8, 2, 5); x.fillRect(19, 5, 2, 2);
+    x.font = `bold 10px ${FONT}`; x.textAlign = "center"; x.textBaseline = "middle"; x.fillStyle = "#fff";
+    let fs = 10; while (x.measureText(title).width > 42 && fs > 6) { fs--; x.font = `bold ${fs}px ${FONT}`; }
+    x.fillStyle = OUT; x.fillText(title, 47, 10.5); x.fillStyle = "#fff"; x.fillText(title, 46, 9.5);
     return c;
   }
   function drawFountain(c, x, y, t) {

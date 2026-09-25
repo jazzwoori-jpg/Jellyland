@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "14"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "15"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -695,8 +695,8 @@
         <button class="btn rec-play" title="▶">▶</button>
         <canvas width="32" height="26" data-av='${esc(JSON.stringify(e.avatar || null))}'></canvas>
         <div class="rec-info"><b>${e.role === "artist" ? "✦ " : e.role === "admin" ? "★ " : ""}${esc(e.name)}</b>${e.title ? ` <span class="rec-title">「${esc(e.title)}」</span>` : ""}<br>
-          <small>🎵 ${e.notes.length} · ⏱ ${(Math.min(10000, e.len + 500) / 1000).toFixed(1)}s · ${fmtTime(e.ts)}</small></div>
-        ${G.user && (staff(G.user.role) || G.user.id === e.id) ? `<button class="gb-del" title="${esc(t("del"))}">✕</button>` : ""}</div>`).join("");
+          <small>🎵 ${e.notes.length} · ⏱ ${(Math.min(5000, e.len + 500) / 1000).toFixed(1)}s · ${fmtTime(e.ts)}</small></div>
+        ${G.user && staff(G.user.role) ? `<button class="gb-del" title="${esc(t("del"))}">✕</button>` : ""}</div>`).join("");
       list.querySelectorAll("canvas[data-av]").forEach((c) => { try { const av = JSON.parse(c.dataset.av); if (av) Avatar.face(c.getContext("2d"), av, 32, 26); } catch {} });
       list.querySelectorAll(".rec-item").forEach((row, i) => {
         const e = r.entries[i], btn = row.querySelector(".rec-play");

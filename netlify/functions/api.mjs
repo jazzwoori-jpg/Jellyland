@@ -56,7 +56,7 @@ const SHOP = {
 const WELCOME_COINS = 100, DAILY_COINS = 100, GB_COINS = 50;
 const GAME_MAX = 200, GAME_DAY_MAX = 600, GAME_STEP_M = 100, GAME_STEP_COINS = 5; // 한 판 최대 200 · 하루 최대 600
 const MAIL_MAX = 60;
-const REC_PER_DAY = 3, REC_MAX_MS = 10000, REC_MAX_NOTES = 400;
+const REC_PER_DAY = 3, REC_MAX_MS = 5000, REC_MAX_NOTES = 300, REC_TTL = 7 * 24 * 3600 * 1000; // 하루 3개 · 5초 · 1주일 뒤 자동 삭제
 // 미니게임 속도 공식 (public/js/minigame.js 와 같음): 속도 = min(400, 150 + 4·t) px/s, 10px = 1m
 function maxMeters(sec) {
   const tc = (400 - 150) / 4;
@@ -383,7 +383,11 @@ export default async (req) => {
       const rs = store("jl-rec");
       if (method === "GET") {
         const { blobs } = await rs.list({ prefix: "r/" });
-        const keys = blobs.map((b) => b.key).sort().reverse();
+        const cut = Date.now() - REC_TTL;
+        const recTs = (k) => +k.split("/").pop().split("-")[0];
+        const old = blobs.map((b) => b.key).filter((k) => recTs(k) < cut);
+        if (old.length) await Promise.all(old.slice(0, 40).map((k) => rs.delete(k).catch(() => {}))); // 1주일 지난 녹음 정리
+        const keys = blobs.map((b) => b.key).filter((k) => recTs(k) >= cut).sort().reverse();
         const page = Math.max(0, +url.searchParams.get("page") || 0);
         const entries = (await Promise.all(keys.slice(page * 15, page * 15 + 15).map((k) => rs.get(k, { type: "json" }).then((e) => e && { ...e, key: k })))).filter(Boolean);
         const today = kstDay();
@@ -415,7 +419,7 @@ export default async (req) => {
         if (!key.startsWith("r/")) return err("forbidden", 400);
         const e = await rs.get(key, { type: "json" });
         if (!e) return json({ ok: true });
-        if (!isStaff(me.role) && e.id !== user.id) return err("forbidden", 403);
+        if (!isStaff(me.role)) return err("forbidden", 403); // 호스트·관리자만 삭제
         await rs.delete(key);
         return json({ ok: true });
       }
