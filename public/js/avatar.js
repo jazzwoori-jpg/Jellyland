@@ -25,7 +25,9 @@
   ];
   const EYES = ["#6b7fd6", "#8a5a3c", "#9b5fd6", "#3fa46a", "#d8434e"];
   // 0~5 기본 · 6~9 젤리젤리샵 판매
-  const HAIRS = ["twin", "longwave", "bob", "short", "pony", "spiky", "buns", "heartlong", "bigbow", "galaxy"];
+  // 10~13: 추가 무료 헤어 (빡빡머리 · 투블럭 · 올백 · 가르마펌)
+  const HAIRS = ["twin", "longwave", "bob", "short", "pony", "spiky", "buns", "heartlong", "bigbow", "galaxy", "buzz", "twoblock", "slick", "partperm"];
+  const NEW_HAIRS = ["buzz", "twoblock", "slick", "partperm"];
   // 옷 — 스프라이트 시트의 마법소녀 복장이 기본
   const OUTFITS = [
     { id: "magic", top: "#a77ce0", topS: "#8459c2", skirt: "#a77ce0", skirtS: "#8459c2", frill: "#ffffff", sleeve: "#ffffff", cape: "#d8434e", capeS: "#ad2d3a",
@@ -271,6 +273,31 @@
       if (back) E(hx, hyy + 1, 8.5, 7, of.top);
       else if (side) { E(hx - 3, hyy, 6, 7, of.top); }
       else { for (let x = hx - 6; x <= hx + 6; x++) R(x, hyy - 1, 1, x % 3 ? 2 : 3, hc.c); P(hx + 3, hyy - 3, "#d8434e"); P(hx + 4, hyy - 3, "#3fa46a"); P(hx + 5, hyy - 3, "#e0344a"); }
+    } else if (NEW_HAIRS.includes(hair)) {
+      const shaved = mix(hc.c, sk.c, 0.45), shavedS = mix(hc.s, sk.c, 0.35);
+      if (hair === "buzz") { // 빡빡머리: 두피에 짧게 깎은 머리 결
+        if (back) { E(hx, hyy - 1, 7.8, 7.4, shaved); for (let i = -6; i <= 6; i += 2) for (let j = -6; j <= 4; j += 3) P(hx + i + (j & 1), hyy + j, shavedS); }
+        else if (side) { E(hx - 1, hyy - 3, 7.4, 3.8, shaved); R(hx - 8, hyy - 3, 3, 6, shaved); for (let i = -6; i <= 4; i += 2) P(hx + i, hyy - 5 + (i & 1), shavedS); }
+        else { E(hx, hyy - 3.6, 7.8, 3.4, shaved); for (let i = -6; i <= 6; i += 2) P(hx + i, hyy - 5 + ((i / 2) & 1), shavedS); R(hx - 3, hyy - 6, 4, 1, mix(shaved, "#ffffff", 0.3)); }
+      } else if (hair === "twoblock") { // 투블럭: 옆은 짧게, 윗머리는 풍성하게 앞으로
+        if (back) { E(hx, hyy - 2, 8.5, 6.5, hc.c); R(hx - 8, hyy + 2, 17, 4, shaved); for (let i = -6; i <= 6; i += 3) R(hx + i, hyy - 5, 1, 5, hc.s); }
+        else if (side) { E(hx - 1, hyy - 5, 8.3, 4.6, hc.c); R(hx - 8, hyy - 2, 3, 6, shaved); for (let i = 0; i < 6; i++) R(hx + 1 + i, hyy - 1, 1, 1 + (i % 2), hc.c); R(hx - 5, hyy - 8, 5, 1, hc.l); }
+        else { E(hx, hyy - 5, 8.8, 4.6, hc.c); R(hx - 4, hyy - 9, 5, 1, hc.l); for (let x = hx - 6; x <= hx + 5; x++) R(x, hyy - 1, 1, x < hx ? 2 : 1, hc.c); R(hx - 9, hyy - 3, 2, 5, shaved); R(hx + 8, hyy - 3, 2, 5, shaved); }
+      } else if (hair === "slick") { // 올백: 이마가 드러나게 뒤로 넘긴 머리
+        if (back) { E(hx, hyy - 1, 8.4, 8, hc.c); for (let i = -6; i <= 6; i += 2) R(hx + i, hyy - 6, 1, 11, hc.s); }
+        else if (side) { E(hx - 2, hyy - 4, 7.8, 5, hc.c); E(hx - 5, hyy, 4.5, 5, hc.c); for (let i = 0; i < 3; i++) R(hx - 7 + i * 3, hyy - 7, 2, 1, hc.l); }
+        else { E(hx, hyy - 5, 8.4, 3.8, hc.c); for (let i = -6; i <= 6; i += 3) R(hx + i, hyy - 8, 1, 4, hc.s); R(hx - 3, hyy - 8, 4, 1, hc.l); R(hx - 9, hyy - 4, 2, 4, hc.c); R(hx + 8, hyy - 4, 2, 4, hc.c); }
+      } else { // 가르마펌: 가운데 가르마 + 볼륨 웨이브
+        if (back) { E(hx, hyy - 1, 9, 8.6, hc.c); for (let i = -6; i <= 6; i += 3) for (let j = -5; j <= 5; j += 4) P(hx + i + ((j / 4) & 1), hyy + j, hc.s); }
+        else if (side) { E(hx - 1, hyy - 4, 8.6, 5.4, hc.c); E(hx - 4, hyy, 5.8, 6.6, hc.c); for (let i = 0; i < 5; i++) R(hx + 1 + i, hyy - 1 + (i % 2), 1, 2, hc.c); R(hx - 6, hyy - 8, 5, 1, hc.l); }
+        else {
+          E(hx, hyy - 4.5, 9.2, 5.4, hc.c);
+          for (let k = 0; k < 6; k++) { R(hx - 1 - k, hyy - 1 + Math.floor(k / 2), 1, 2, hc.c); R(hx + 1 + k, hyy - 1 + Math.floor(k / 2), 1, 2, hc.c); } // 양쪽으로 갈라진 앞머리
+          R(hx, hyy - 8, 1, 7, hc.s); // 가르마
+          R(hx - 10, hyy - 3, 2, 7, hc.c); R(hx + 9, hyy - 3, 2, 7, hc.c); P(hx - 10, hyy + 4, hc.s); P(hx + 10, hyy + 4, hc.s);
+          R(hx - 5, hyy - 9, 3, 1, hc.l); R(hx + 3, hyy - 9, 3, 1, hc.l);
+        }
+      }
     } else if (back) {
       E(hx, hyy - 1, 8.5, 8.5, hc.c); for (let i = -6; i <= 6; i += 3) R(hx + i, hyy - 3, 1, 9, hc.s); R(hx - 3, hyy - 8, 5, 1, hc.l);
     } else if (side) {

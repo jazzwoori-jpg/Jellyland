@@ -36,6 +36,7 @@
       else if (S.jumps < 2) { S.vy = JUMP2; S.jumps = 2; puff(PX, S.y, "#ffd1e6"); }
     }
     const onKey = (e) => {
+      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
       if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") { e.preventDefault(); e.stopPropagation(); if (!e.repeat) press(); }
     };
     const onPtr = (e) => { e.preventDefault(); press(); };

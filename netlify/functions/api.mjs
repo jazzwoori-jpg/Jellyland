@@ -14,6 +14,7 @@
 //   POST /api/game/start            ← 점프점프 젤리월드 시작
 //   POST /api/game/finish {run, m}  ← 결과 제출 (100m 마다 5코인, 한 판 최대 200코인)
 //   GET  /api/game/top              ← 점프점프 젤리월드 랭킹 TOP 10
+//   GET  /api/rec?page · POST /api/rec {notes, title} · DELETE /api/rec?key  ← 🎹 "젤리에게 들려줘!" 피아노 녹음 게시판 (하루 3개, 10초)
 //   GET  /api/mail  · POST /api/mail/read · DELETE /api/mail?ts=  ← 내 쪽지함
 //   GET  /api/admin/users · POST /api/admin/mail {to, text} · POST /api/admin/delete {id}  ← 관리자 전용 회원관리
 import { getStore } from "@netlify/blobs";
@@ -55,6 +56,7 @@ const SHOP = {
 const WELCOME_COINS = 100, DAILY_COINS = 100, GB_COINS = 50;
 const GAME_MAX = 200, GAME_DAY_MAX = 600, GAME_STEP_M = 100, GAME_STEP_COINS = 5; // 한 판 최대 200 · 하루 최대 600
 const MAIL_MAX = 60;
+const REC_PER_DAY = 3, REC_MAX_MS = 5000, REC_MAX_NOTES = 300, REC_TTL = 7 * 24 * 3600 * 1000; // 하루 3개 · 5초 · 1주일 뒤 자동 삭제
 // 미니게임 속도 공식 (public/js/minigame.js 와 같음): 속도 = min(400, 150 + 4·t) px/s, 10px = 1m
 function maxMeters(sec) {
   const tc = (400 - 150) / 4;
@@ -249,7 +251,7 @@ export default async (req) => {
       const mine = cur[tp.id];
       const entry = {
         id: tp.id, name: tp.n, avatar: tp.a, role,
-        x: Math.round(+body.x || 0), y: Math.round(+body.y || 0), dir: clean(body.dir, 5), seat: clean(body.seat, 12) || null,
+        x: Math.round(+body.x || 0), y: Math.round(+body.y || 0), dir: clean(body.dir, 5), seat: (clean(body.seat, 12) === "throne" && role !== "artist" ? null : clean(body.seat, 12)) || null, // 공주 의자는 호스트만
         vx: Math.max(-200, Math.min(200, Math.round(+body.vx || 0))), vy: Math.max(-200, Math.min(200, Math.round(+body.vy || 0))), ts: now,
       };
       // 위치가 그대로이고 최근에 저장했다면 쓰기를 건너뜀 (비용 절약)
@@ -290,7 +292,7 @@ export default async (req) => {
       user.nickname = nickname;
       const isHost = me.role === "artist";
       const owns = (kind, idx) => { const it = shopItemFor(kind, idx); return !it || isHost || (user.inv || []).includes(it[0]); };
-      let outfit = n(a.outfit, 16), hair = n(a.hair), wand = n(a.wand, 4);
+      let outfit = n(a.outfit, 16), hair = n(a.hair, 13), wand = n(a.wand, 4);
       if (HOST_OUTFITS.includes(outfit) && !isHost) outfit = 0; // 호스트 전용 의상은 호스트만
       if (!owns("outfit", outfit)) outfit = 0;                  // 샵 아이템은 산 사람만
       if (!owns("hair", hair)) hair = 0;
@@ -374,6 +376,53 @@ export default async (req) => {
     if (route === "game/top" && method === "GET") {
       const top = (await store("jl-game").get("top", { type: "json" })) || [];
       return json({ top, best: user.best | 0 });
+    }
+
+    // ---------- 🎹 젤리에게 들려줘! (피아노 녹음 게시판) ----------
+    if (route === "rec") {
+      const rs = store("jl-rec");
+      if (method === "GET") {
+        const { blobs } = await rs.list({ prefix: "r/" });
+        const cut = Date.now() - REC_TTL;
+        const recTs = (k) => +k.split("/").pop().split("-")[0];
+        const old = blobs.map((b) => b.key).filter((k) => recTs(k) < cut);
+        if (old.length) await Promise.all(old.slice(0, 40).map((k) => rs.delete(k).catch(() => {}))); // 1주일 지난 녹음 정리
+        const keys = blobs.map((b) => b.key).filter((k) => recTs(k) >= cut).sort().reverse();
+        const page = Math.max(0, +url.searchParams.get("page") || 0);
+        const entries = (await Promise.all(keys.slice(page * 15, page * 15 + 15).map((k) => rs.get(k, { type: "json" }).then((e) => e && { ...e, key: k })))).filter(Boolean);
+        const today = kstDay();
+        return json({ entries, total: keys.length, left: isStaff(me.role) ? 99 : user.recDay === today ? Math.max(0, REC_PER_DAY - (user.recCount | 0)) : REC_PER_DAY });
+      }
+      if (method === "POST") {
+        const today = kstDay();
+        if (user.recDay !== today) { user.recDay = today; user.recCount = 0; }
+        if (!isStaff(me.role) && (user.recCount | 0) >= REC_PER_DAY) return err("recDaily", 429);
+        // 음표 목록만 저장: [시작ms, 건반(midi), 길이ms]
+        const raw = Array.isArray(body.notes) ? body.notes.slice(0, REC_MAX_NOTES) : [];
+        const notes = [];
+        for (const n of raw) {
+          if (!Array.isArray(n)) continue;
+          const t0 = Math.round(+n[0]), m = Math.round(+n[1]), d = Math.round(+n[2]);
+          if (!(t0 >= 0 && t0 <= REC_MAX_MS && m >= 21 && m <= 108)) continue;
+          notes.push([t0, m, Math.max(30, Math.min(REC_MAX_MS + 3000, d || 300))]);
+        }
+        if (!notes.length) return err("recEmpty");
+        const ts = Date.now();
+        const key = `r/${String(ts).padStart(15, "0")}-${crypto.randomBytes(3).toString("hex")}`;
+        const e = { id: user.id, name: me.nickname || "?", role: me.role, avatar: me.avatar, title: clean(body.title, 30), notes, len: Math.min(REC_MAX_MS, Math.max(...notes.map((n) => n[0]))), ts };
+        user.recCount = (user.recCount | 0) + 1;
+        await Promise.all([rs.setJSON(key, e), saveUser()]);
+        return json({ entry: { ...e, key }, left: isStaff(me.role) ? 99 : REC_PER_DAY - user.recCount });
+      }
+      if (method === "DELETE") {
+        const key = url.searchParams.get("key") || "";
+        if (!key.startsWith("r/")) return err("forbidden", 400);
+        const e = await rs.get(key, { type: "json" });
+        if (!e) return json({ ok: true });
+        if (!isStaff(me.role)) return err("forbidden", 403); // 호스트·관리자만 삭제
+        await rs.delete(key);
+        return json({ ok: true });
+      }
     }
 
     // ---------- ✉️ 쪽지함 ----------

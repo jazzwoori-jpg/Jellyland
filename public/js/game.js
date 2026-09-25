@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "12"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "15"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -156,6 +156,8 @@
     const w = scene();
     // 건물 클릭 → 문 앞으로 이동 후 입장
     if (w.buildings) for (const b of w.buildings) if (p.x > b.x && p.x < b.x + b.w && p.y > b.y && p.y < b.y + b.h + 6) { G.target = { x: b.door.x, y: b.door.y + 6 }; G.pendingZone = b.id; return; }
+    if (w.clickables) for (const ck of w.clickables) if (Math.hypot(p.x - ck.x, p.y - ck.y) < ck.r) { G.target = { ...ck.front }; G.pendingZone = ck.go; return; }
+    if (w.piano && Math.abs(p.x - w.piano.x) < 26 && p.y > w.piano.y - 26 && p.y < w.piano.y + 16) { G.target = { ...w.piano.front }; G.pendingZone = "piano"; return; }
     if (w.artist && Math.hypot(p.x - w.artist.x, p.y - 18 - w.artist.y) < 22) { G.target = { x: w.artist.x + 10, y: w.artist.y + 26 }; G.pendingZone = "profile"; return; }
     G.target = p; G.pendingZone = null;
   });
@@ -242,7 +244,7 @@
     if (G.mode === "world" && G.seat) zone = G.standZone || (G.standZone = { id: "stand", label: t("actStand") });
     else if (G.mode === "world" && !zone && w.seats) {
       let best = null, bd = 26;
-      for (const st of w.seats) { const d = Math.hypot(p.x - st.ax, p.y - st.ay); if (d < bd && !seatTaken(st.id)) { bd = d; best = st; } }
+      for (const st of w.seats) { if (st.hostOnly && G.user.role !== "artist") continue; const d = Math.hypot(p.x - st.ax, p.y - st.ay); if (d < bd && !seatTaken(st.id)) { bd = d; best = st; } }
       if (best) zone = best.zone || (best.zone = { id: "seat", seat: best, label: t("actSit") });
     }
     if (zone !== G.zone) { G.zone = zone; renderPrompt(); }
@@ -268,7 +270,7 @@
   function renderPrompt() {
     const pr = $("#prompt"), z = G.zone;
     if (!z) return pr.classList.add("hidden");
-    const act = z.id === "exit" || z.id === "seat" || z.id === "stand" ? "" : z.id === "profile" || z.id === "guide" || z.id === "guestbook" ? t("actView") : t("actEnter");
+    const act = z.id === "exit" || z.id === "seat" || z.id === "stand" ? "" : z.id === "piano" ? t("actPlay") : z.id === "recboard" || z.id === "rankboard" || z.id === "profile" || z.id === "guide" || z.id === "guestbook" ? t("actView") : t("actEnter");
     pr.innerHTML = `<kbd>E</kbd>${esc(z.label)} ${esc(act)}`;
     pr.classList.remove("hidden");
   }
@@ -472,6 +474,9 @@
     if (id === "profile") return openProfile();
     if (id === "guide") return openGuide();
     if (id === "shop") return openShop();
+    if (id === "piano") return openPiano(G.scene === "plaza");
+    if (id === "recboard") return openRecBoard();
+    if (id === "rankboard") return openRankBoard();
     if (id === "game") return openGame();
     if (id === "lounge") { await fade(true); setScene("lounge"); await fade(false); toast(t("enteredLounge")); return; }
     if (id === "exit") { const b = G.worlds.plaza.buildings.find((x) => x.id === "lounge"); await fade(true); setScene("plaza", { x: b.door.x, y: b.door.y + 22, dir: "down" }); await fade(false); }
@@ -481,7 +486,7 @@
   function openModal(title, html, onMount, wide) {
     if (G.modalCleanup) { const f = G.modalCleanup; G.modalCleanup = null; try { f(); } catch {} }
     document.querySelector("#modal .modal").classList.toggle("wide", !!wide);
-    document.querySelector("#modal .modal").classList.remove("game");
+    document.querySelector("#modal .modal").classList.remove("game", "piano");
     $("#modal-close-big").textContent = t("close");
     $("#modal-title").textContent = title;
     $("#modal-body").innerHTML = html;
@@ -499,9 +504,9 @@
   $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
 
   function openGallery() {
-    const html = `<p style="margin-top:0">${esc(t("galleryIntro"))}</p>
+    const html = `<p style="margin-top:0">${esc(t("galleryIntro"))} <button class="btn sm grape" data-go="profile">${esc(t("seeProfile"))}</button></p>
       <div class="gallery">${CFG.photos.map((p, i) => `<div class="polaroid" data-i="${i}"><img src="${esc(p.src)}" alt="${esc(L(p.caption))}" loading="lazy"><p>${esc(L(p.caption))}</p></div>`).join("")}</div>`;
-    openModal("📷 " + t("bGallery"), html, (el) => el.querySelectorAll(".polaroid").forEach((d) => d.addEventListener("click", () => {
+    openModal("📷 " + t("bGallery"), html, (el) => { el.querySelector("[data-go=profile]").addEventListener("click", openProfile); el.querySelectorAll(".polaroid").forEach((d) => d.addEventListener("click", () => {
       const i = +d.dataset.i, p = CFG.photos[i], n = CFG.photos.length;
       openModal("📷 " + t("bGallery"), `<div class="lightbox"><img src="${esc(p.src)}" alt=""><p>${esc(L(p.caption))} <small>(${i + 1}/${n})</small></p>
         <p class="lb-nav"><button class="btn sm" id="prev">◀</button><button class="btn sm" id="back">${esc(t("back"))}</button><button class="btn sm" id="next">▶</button></p></div>`, (e2) => {
@@ -510,7 +515,7 @@
         e2.querySelector("#prev").addEventListener("click", () => go(i - 1));
         e2.querySelector("#next").addEventListener("click", () => go(i + 1));
       });
-    })));
+    })); });
   }
   function openGalleryAt(i) { openGallery(); $("#modal-body").querySelector(`.polaroid[data-i="${i}"]`).click(); }
   function openAlbums() {
@@ -654,6 +659,105 @@
     if (!off) toast(t("wearing", { name: L(it.name) }));
   }
 
+  // ---------------- 🎹 피아노 연주 ----------------
+  function openPiano(recordable) {
+    BGM.stop(); // 연주하는 동안 배경음악은 잠시 멈춤
+    openModal(t("pianoTitle"), `<div id="pn-root"></div>`, (el) => {
+      const pn = Piano.mount(el.querySelector("#pn-root"), {
+        t, lang: I.lang, record: !!recordable,
+        onPost: async (notes, title) => { try { const r = await API.recPost(notes, title); toast(t("recDone")); return r; } catch (e) { toast(e.message); throw e; } },
+        onBoard: () => openRecBoard(),
+      });
+      G.modalCleanup = () => { pn.destroy(); BGM.play(G.scene); };
+      if (recordable) API.recList(0).then((r) => { const x = el.querySelector(".rc-left"); if (x) x.textContent = t("recLeft", { n: r.left > 3 ? "∞" : r.left }); }).catch(() => {});
+    }, true);
+    document.querySelector("#modal .modal").classList.add("piano");
+  }
+
+  // ---------------- 📼 젤리에게 들려줘! (피아노 녹음 게시판) ----------------
+  let recStop = null;
+  function openRecBoard(page = 0) {
+    BGM.stop();
+    openModal("📼 " + t("recBoard"), `<p class="rec-intro">${esc(t("recBoardIntro"))}</p>
+      <div class="rec-list" id="rec-list"><p class="gb-empty">…</p></div><div class="gb-pager" id="rec-pager"></div>
+      <p style="text-align:center"><button class="btn sm pink" id="rec-go-piano">🎹 ${esc(t("recGoPiano"))}</button></p>`, (el) => {
+      el.querySelector("#rec-go-piano").addEventListener("click", () => openPiano(true));
+      G.modalCleanup = () => { if (recStop) { recStop(); recStop = null; } BGM.play(G.scene); };
+      loadRec(page);
+    }, true);
+  }
+  async function loadRec(page) {
+    const list = $("#rec-list"), pager = $("#rec-pager"); if (!list) return;
+    try {
+      const r = await API.recList(page);
+      if (!r.entries.length) { list.innerHTML = `<p class="gb-empty">${esc(t("recEmptyList"))}</p>`; pager.innerHTML = ""; return; }
+      list.innerHTML = r.entries.map((e, i) => `<div class="rec-item${e.role === "artist" ? " host" : ""}" data-key="${esc(e.key)}">
+        <button class="btn rec-play" title="▶">▶</button>
+        <canvas width="32" height="26" data-av='${esc(JSON.stringify(e.avatar || null))}'></canvas>
+        <div class="rec-info"><b>${e.role === "artist" ? "✦ " : e.role === "admin" ? "★ " : ""}${esc(e.name)}</b>${e.title ? ` <span class="rec-title">「${esc(e.title)}」</span>` : ""}<br>
+          <small>🎵 ${e.notes.length} · ⏱ ${(Math.min(5000, e.len + 500) / 1000).toFixed(1)}s · ${fmtTime(e.ts)}</small></div>
+        ${G.user && staff(G.user.role) ? `<button class="gb-del" title="${esc(t("del"))}">✕</button>` : ""}</div>`).join("");
+      list.querySelectorAll("canvas[data-av]").forEach((c) => { try { const av = JSON.parse(c.dataset.av); if (av) Avatar.face(c.getContext("2d"), av, 32, 26); } catch {} });
+      list.querySelectorAll(".rec-item").forEach((row, i) => {
+        const e = r.entries[i], btn = row.querySelector(".rec-play");
+        btn.addEventListener("click", () => {
+          const playing = btn.classList.contains("on");
+          if (recStop) { recStop(); recStop = null; }
+          if (playing) return;
+          btn.classList.add("on"); btn.textContent = "⏹";
+          recStop = Piano.playSeq(e.notes, null, () => { btn.classList.remove("on"); btn.textContent = "▶"; });
+        });
+        const del = row.querySelector(".gb-del");
+        if (del) del.addEventListener("click", async () => { try { await API.recDelete(e.key); loadRec(page); } catch (x) { toast(x.message); } });
+      });
+      const pages = Math.ceil(r.total / 15);
+      pager.innerHTML = pages > 1 ? Array.from({ length: pages }, (_, i) => `<button class="chip ${i === page ? "on" : ""}" data-p="${i}">${i + 1}</button>`).join("") : "";
+      pager.querySelectorAll("[data-p]").forEach((b) => b.addEventListener("click", () => { if (recStop) { recStop(); recStop = null; } loadRec(+b.dataset.p); }));
+    } catch (x) { list.innerHTML = `<p class="gb-empty">${esc(x.message)}</p>`; }
+  }
+
+  // ---------------- 🏆 랭킹 1위 게시판 ----------------
+  async function refreshRankTop() {
+    if (!G.user) return;
+    try { const r = await API.gameTop(); World.rankTop = (r.top && r.top[0]) || null; } catch {}
+  }
+  setInterval(() => { if (G.mode === "world" && G.scene === "plaza" && !document.hidden) refreshRankTop(); }, 60000);
+  function openRankBoard() {
+    openModal(t("rankTitle"), `<div id="jg-rank" class="jg-rank rank-modal"><div class="rk-list"><p class="rk-empty">…</p></div></div>
+      <p style="text-align:center"><button class="btn sm pink" id="rk-go-game">🎮 ${esc(t("gameTitle"))}</button></p>`, (el) => {
+      el.querySelector("#rk-go-game").addEventListener("click", openGame);
+      API.gameTop().then((r) => { renderRank(r.top || []); World.rankTop = (r.top && r.top[0]) || null; }).catch(() => renderRank([]));
+    });
+  }
+
+  // ---------------- 🔮 오늘의 운세 ----------------
+  function fortuneBox(el) {
+    const box = document.createElement("div"); box.className = "ft-box";
+    let saved = ""; try { saved = localStorage.getItem("jl_birth") || ""; } catch {}
+    box.innerHTML = `<button class="btn pink ft-open">${esc(t("ftBtn"))}</button>
+      <div class="ft-form hidden"><label>${esc(t("ftBirth"))}</label><input type="date" class="inp ft-date" min="1900-01-01" max="${Fortune.today()}" value="${esc(saved)}"><button class="btn grape ft-go">${esc(t("ftGo"))}</button></div>
+      <div class="ft-result hidden"></div>`;
+    el.appendChild(box);
+    const form = box.querySelector(".ft-form"), res = box.querySelector(".ft-result"), inp = box.querySelector(".ft-date");
+    box.querySelector(".ft-open").addEventListener("click", () => { form.classList.toggle("hidden"); res.classList.add("hidden"); if (!form.classList.contains("hidden")) box.scrollIntoView({ block: "nearest", behavior: "smooth" }); });
+    box.querySelector(".ft-go").addEventListener("click", () => {
+      const v = inp.value;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return toast(t("ftNeed"));
+      try { localStorage.setItem("jl_birth", v); } catch {}
+      const f = Fortune.make(v, I.lang);
+      const star = (n) => "★".repeat(n) + "☆".repeat(5 - n);
+      res.innerHTML = `<h3>${esc(t("ftTitle"))}</h3><p class="ft-for">${esc(t("ftFor", { date: Fortune.today(), sign: f.sign, animal: f.animal }))}</p>
+        <p class="ft-msg">${esc(f.msg)}</p>
+        <div class="ft-grid"><span>${esc(t("ftTotal"))}</span><b>${star(f.total)}</b><span>${esc(t("ftLove"))}</span><b>${star(f.love)}</b>
+        <span>${esc(t("ftMoney"))}</span><b>${star(f.money)}</b><span>${esc(t("ftHealth"))}</span><b>${star(f.health)}</b></div>
+        <div class="ft-lucky"><div><small>${esc(t("ftLuckyColor"))}</small><b><i style="background:${f.color}"></i>${esc(f.colorName)}</b></div>
+        <div><small>${esc(t("ftLuckyNum"))}</small><b>${f.num}</b></div><div><small>${esc(t("ftLuckySong"))}</small><b>🎹 ${esc(f.song)}</b></div></div>`;
+      res.classList.remove("hidden"); form.classList.add("hidden");
+      box.querySelector(".ft-open").textContent = t("ftAgain");
+      res.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  }
+
   // ---------------- 🎮 젤리게임월드: 점프점프 젤리월드 ----------------
   function openGame() {
     G.gameOpen = true;
@@ -665,13 +769,14 @@
         onFinish: async (run, m) => {
           const r = await API.gameFinish(run, m);
           if (r.user) setUser(r.user);
-          if (r.top) renderRank(r.top);
+          if (r.top) { renderRank(r.top); World.rankTop = r.top[0] || null; }
           if (r.rank) setTimeout(() => toast(t("rankNew", { n: r.rank })), 600);
           return r;
         },
       });
       const box = document.createElement("div"); box.className = "jg-rank"; box.id = "jg-rank";
       box.innerHTML = `<h3>${esc(t("rankTitle"))}</h3><div class="rk-list"><p class="rk-empty">…</p></div>`;
+      fortuneBox(el.querySelector("#jg-root"));
       el.querySelector("#jg-root").appendChild(box);
       API.gameTop().then((r) => renderRank(r.top || [])).catch(() => renderRank([]));
       G.modalCleanup = () => { g.destroy(); G.gameOpen = false; BGM.play(G.scene); };
@@ -866,8 +971,8 @@
   }
 
   function openGuide() {
-    openModal(t("guideTitle"), `<ul class="guide">${t("guide").map((g) => `<li>${g}</li>`).join("")}</ul><p style="text-align:center"><button class="btn sm pink" id="guide-install">${esc(t("installHelp"))}</button></p>`,
-      (el) => el.querySelector("#guide-install").addEventListener("click", openInstall));
+    openModal(t("guideTitle"), `<ul class="guide">${t("guide").map((g) => `<li>${g}</li>`).join("")}</ul><p style="text-align:center"><button class="btn sm grape" id="guide-profile">${esc(t("seeProfile"))}</button> <button class="btn sm pink" id="guide-install">${esc(t("installHelp"))}</button></p>`,
+      (el) => { el.querySelector("#guide-install").addEventListener("click", openInstall); el.querySelector("#guide-profile").addEventListener("click", openProfile); });
   }
   $("#btn-help").addEventListener("click", openGuide);
   function bgmBtn() { $("#btn-bgm").textContent = BGM.on ? "🔊" : "🔇"; $("#btn-bgm").title = t("bgm"); }
@@ -1094,7 +1199,7 @@
   function renderCreator() {
     chipRow("gender", [{ v: "f", name: t("female") }, { v: "m", name: t("male") }], "gender");
     const shopName = (kind, i) => { const it = shopItem(kind, i); return it ? L(it.name) : ""; };
-    chipRow("hair", Avatar.HAIRS.map((_, i) => ({ name: t("hairs")[i] || shopName("hair", i) })), "hair");
+    chipRow("hair", Avatar.HAIRS.map((_, i) => ({ name: t("hairs")[i] || shopName("hair", i) || t("hairsMore")[i - 10] || "?" })), "hair");
     if (draft.avatar.wand === undefined) draft.avatar.wand = 0;
     chipRow("wand", Avatar.WANDS.map((_, i) => ({ name: i ? shopName("wand", i) : t("wandNone") })), "wand");
     chipRow("eye", Avatar.EYES.map((c, i) => ({ c, name: t("eyes")[i] })), "eye", "sw");
@@ -1215,6 +1320,7 @@
     BGM.play(G.scene);
     checkDaily();
     loadMail(true);
+    refreshRankTop();
     setTimeout(maybeInstallPopup, 5500);
   }
   function logout() {

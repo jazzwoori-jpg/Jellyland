@@ -182,7 +182,7 @@
   function buildPlaza() {
     const W = 1280, H = 960;
     const CX = 640, CY = 500;
-    const gardens = [[420, 380], [860, 380], [420, 650], [860, 650]];
+    const gardens = [[420, 380], [860, 380], [420, 650]]; // 젤리게임월드 옆 화단(860,650)은 랭킹 게시판 자리로
     const buildings = [
       { id: "gallery", name: T("bGallery"), x: 250, y: 118, w: 190, h: 130, roof: "#d8434e", wall: "#fffaf2", trim: "#c98b5a", icon: "📷" },
       { id: "albums", name: T("bAlbums"), x: 840, y: 118, w: 190, h: 130, roof: "#a77ce0", wall: "#fffaf2", trim: "#a86d42", icon: "💿" },
@@ -291,9 +291,26 @@
     }
 
     // 피아노 (무대 중앙)
+    // 무대: 피아노(왼쪽) · 호스트 전용 공주 의자(가운데) · "젤리에게 들려줘!" 게시판(오른쪽)
+    const PX = CX - 64, PY = CY + 2;
     const piano = pianoSprite();
-    objects.push({ y: CY + 6, x: CX, draw: (c) => c.drawImage(piano, CX - 22, CY - 30) });
-    colliders.push([CX - 22, CY - 14, 44, 20]);
+    objects.push({ y: PY + 6, x: PX, draw: (c) => c.drawImage(piano, PX - 22, PY - 30) });
+    colliders.push([PX - 22, PY - 14, 44, 20]);
+    const seats = [];
+    const TX = CX, TY = CY - 2; // 의자 앉는 자리
+    const [thB, thF] = throneSprites();
+    objects.push({ y: TY - 8, x: TX, draw: (c) => c.drawImage(thB, TX - 24, TY - 52) });
+    objects.push({ y: TY + 8, x: TX, draw: (c) => c.drawImage(thF, TX - 24, TY - 14) });
+    colliders.push([TX - 20, TY - 14, 40, 18]);
+    seats.push({ id: "throne", x: TX, y: TY + 1, dir: "down", ax: TX, ay: TY + 22, hostOnly: true });
+    const RX = CX + 64, RY = CY + 2;
+    const recB = recBoardSprite(T("recBoard"));
+    objects.push({ y: RY, x: RX, draw: (c) => c.drawImage(recB, RX - 40, RY - 44) });
+    colliders.push([RX - 24, RY - 8, 48, 10]);
+    // 랭킹 1위 게시판 (젤리게임월드 옆)
+    const BX = 866, BY = 770; // 젤리게임월드 바로 왼쪽, 건물 앞면과 같은 선
+    objects.push({ y: BY, x: BX, draw: (c, t) => drawRankBoard(c, BX, BY, t) });
+    colliders.push([BX - 56, BY - 14, 112, 16]);
 
     // 분수 (북쪽)
     const FX = 640, FY = 215;
@@ -317,7 +334,6 @@
       colliders.push([lx - 3, ly - 3, 6, 4]);
     });
     // 벤치 & 화분
-    const seats = [];
     [[462, 470], [818, 470], [462, 560], [818, 560]].forEach(([bx, by], i) => addBench(objects, colliders, seats, "b" + i, bx, by));
     // 테이블 세트 5개 (광장 바닥 위에 있는지 확인하고 배치)
     const hitC = (x0, y0, w, h) => colliders.some(([a, b, cw, ch]) => x0 < a + cw && x0 + w > a && y0 < b + ch && y0 + h > b) || bRects.some(([a, b, cw, ch]) => x0 < a + cw && x0 + w > a && y0 < b + ch + 20 && y0 + h > b);
@@ -335,24 +351,97 @@
     colliders.push([560, 900, 18, 14], [702, 900, 18, 14]);
 
     // 안내 게시판
-    const board = boardSprite();
-    objects.push({ y: 806, x: 560, draw: (c) => c.drawImage(board, 540, 780) });
-    colliders.push([542, 796, 36, 10]);
+    const board = boardSprite(T("zGuide"));
+    objects.push({ y: 812, x: 532, draw: (c) => c.drawImage(board, 492, 748) });
+    colliders.push([498, 798, 70, 12]);
 
     const zones = [
       ...buildings.map((b) => ({ id: b.id, x: b.door.x - 20, y: b.door.y - 8, w: 40, h: 26, label: b.name })),
-      { id: "profile", x: CX - 60, y: CY - 10, w: 120, h: 70, label: T("zProfile") },
-      { id: "guide", x: 530, y: 800, w: 60, h: 26, label: T("zGuide") },
+      { id: "piano", x: PX - 34, y: PY + 6, w: 68, h: 30, label: T("zPiano") },
+      { id: "recboard", x: RX - 30, y: RY + 2, w: 60, h: 30, label: T("recBoard") },
+      { id: "rankboard", x: BX - 50, y: BY + 2, w: 100, h: 30, label: T("rankBoardZ") },
+      { id: "guide", x: 494, y: 810, w: 76, h: 26, label: T("zGuide") },
     ];
 
     return {
       id: "plaza", W, H, ground: g, objects, colliders, zones, buildings, seats,
       walkable: (x, y) => isP(x | 0, y | 0),
       spawn: { x: 640, y: 840 },
-      artist: { x: 604, y: 506, dir: "down" },
-      icons: buildings.map((b) => ({ x: b.x + b.w / 2 + 2, y: b.y - 4, icon: b.icon, label: b.name })),
+      artist: null, // 조젤리 NPC 는 없앰 (피아노를 직접 연주)
+      piano: { x: PX, y: PY - 10, front: { x: PX, y: PY + 20 } },
+      clickables: [{ x: RX, y: RY - 20, r: 24, go: "recboard", front: { x: RX, y: RY + 16 } }, { x: BX, y: BY - 50, r: 56, go: "rankboard", front: { x: BX, y: BY + 16 } }],
+      icons: [...buildings.map((b) => ({ x: b.x + b.w / 2 + 2, y: b.y - 4, icon: b.icon, label: b.name })), { x: PX, y: PY - 34, icon: "🎹" }, { x: RX, y: RY - 48, icon: "📼" }, { x: BX, y: BY - 122, icon: "🏆" }, { x: 532, y: 744, icon: "ℹ️" }],
       npcArea: [300, 300, 700, 500],
     };
+  }
+
+  // 호스트 전용 공주 의자 (뒤: 등받이 · 앞: 방석 앞면 + 팔걸이 + 다리)
+  function throneSprites() {
+    const G1 = "#f2c14e", G2 = "#c9982c", G3 = "#fff3a8", V1 = "#ff6fa8", V2 = "#d84a86", V3 = "#ffb8d8";
+    const [bc, b] = cv(48, 60);
+    b.fillStyle = "rgba(40,30,20,.28)"; b.fillRect(6, 50, 40, 8);
+    // 등받이 (아치형 금테 + 핑크 벨벳)
+    const arch = (x0, y0, w, h, col) => { b.fillStyle = col; for (let yy = 0; yy < h; yy++) { const k = yy < 10 ? Math.round(Math.sqrt(100 - (10 - yy) * (10 - yy)) * (w / 2) / 10) : w / 2; b.fillRect(24 - k, y0 + yy, k * 2, 1); } };
+    arch(0, 6, 40, 38, OUT); arch(0, 7, 38, 36, G1); arch(0, 10, 30, 32, OUT); arch(0, 11, 28, 30, V1);
+    b.fillStyle = V2; for (let yy = 16; yy < 40; yy += 7) for (let xx = 13; xx < 36; xx += 7) b.fillRect(xx + ((yy / 7) % 2 ? 3 : 0), yy, 2, 2); // 단추 장식
+    b.fillStyle = V3; b.fillRect(14, 14, 3, 18);
+    b.fillStyle = G3; b.fillRect(8, 16, 2, 20); b.fillStyle = G2; b.fillRect(38, 16, 2, 22);
+    // 왕관 + 하트 보석
+    b.fillStyle = OUT; b.fillRect(15, 0, 18, 9); b.fillStyle = G1; b.fillRect(16, 3, 16, 5); for (const dx of [16, 22, 28]) b.fillRect(dx, 1, 4, 3);
+    b.fillStyle = "#d8434e"; b.fillRect(22, 4, 4, 3); b.fillStyle = "#6fb8ff"; b.fillRect(17, 5, 2, 2); b.fillStyle = "#8fe07a"; b.fillRect(29, 5, 2, 2);
+    b.fillStyle = "#ff3b7f"; b.fillRect(21, 24, 2, 2); b.fillRect(25, 24, 2, 2); b.fillRect(21, 26, 6, 2); b.fillRect(23, 28, 2, 2);
+    // 방석 윗면
+    b.fillStyle = OUT; b.fillRect(6, 40, 36, 12); b.fillStyle = V1; b.fillRect(7, 41, 34, 10); b.fillStyle = V3; b.fillRect(8, 41, 32, 2);
+    const [fc, f] = cv(48, 30);
+    // 방석 앞면 + 금색 테두리 + 팔걸이 + 다리
+    f.fillStyle = OUT; f.fillRect(6, 10, 36, 9); f.fillStyle = V2; f.fillRect(7, 11, 34, 6); f.fillStyle = G1; f.fillRect(7, 16, 34, 2);
+    f.fillStyle = G3; for (let xx = 9; xx < 40; xx += 5) f.fillRect(xx, 17, 2, 1);
+    for (const ax of [1, 39]) { f.fillStyle = OUT; f.fillRect(ax, 0, 8, 18); f.fillStyle = G1; f.fillRect(ax + 1, 1, 6, 16); f.fillStyle = G3; f.fillRect(ax + 1, 1, 6, 2); f.fillStyle = "#d8434e"; f.fillRect(ax + 3, 5, 2, 2); f.fillStyle = V1; f.fillRect(ax + 2, 9, 4, 5); }
+    f.fillStyle = OUT; for (const lx of [8, 36]) f.fillRect(lx, 18, 4, 10); f.fillStyle = G2; f.fillRect(9, 19, 2, 8); f.fillRect(37, 19, 2, 8);
+    return [bc, fc];
+  }
+  // "젤리에게 들려줘!" 녹음 게시판 (작은 입간판)
+  function recBoardSprite(title) {
+    const [c, x] = cv(80, 48);
+    x.fillStyle = "rgba(40,30,20,.25)"; x.fillRect(8, 42, 66, 5);
+    x.fillStyle = OUT; x.fillRect(16, 28, 4, 16); x.fillRect(60, 28, 4, 16); x.fillRect(0, 0, 80, 32);
+    x.fillStyle = "#4fc3b0"; x.fillRect(1, 1, 78, 30); x.fillStyle = "#8fe3cf"; x.fillRect(1, 1, 78, 3);
+    x.fillStyle = "#fff8ea"; x.fillRect(4, 15, 72, 13);
+    x.fillStyle = OUT; x.fillRect(7, 16, 16, 11); x.fillStyle = "#ffd34d"; x.fillRect(8, 17, 14, 9); x.fillStyle = OUT; x.fillRect(10, 20, 3, 3); x.fillRect(17, 20, 3, 3);
+    x.fillStyle = "#ff7fae"; for (let i = 0; i < 6; i++) x.fillRect(28 + i * 8, 18 + (i % 2) * 3, 4, 7 - (i % 2) * 3);
+    x.font = `bold 10px ${FONT}`; x.textAlign = "center"; x.textBaseline = "middle"; x.fillStyle = "#fff";
+    let fs = 10; while (x.measureText(title).width > 74 && fs > 6) { fs--; x.font = `bold ${fs}px ${FONT}`; }
+    x.fillText(title, 40, 8.5);
+    return c;
+  }
+  // 🏆 점프점프 랭킹 1위 게시판 — 1위가 바뀌면 자동으로 바뀜 (World.rankTop 을 게임에서 채워 줌)
+  function drawRankBoard(c, bx, by, t) {
+    const W = 116, H = 104, x0 = bx - W / 2, y0 = by - H - 6;
+    c.fillStyle = "rgba(40,30,20,.28)"; c.fillRect(x0 + 6, by - 4, W - 4, 8);
+    c.fillStyle = OUT; c.fillRect(x0 + 16, by - 30, 6, 30); c.fillRect(x0 + W - 22, by - 30, 6, 30);
+    c.fillStyle = "#8f5a34"; c.fillRect(x0 + 17, by - 29, 4, 28); c.fillRect(x0 + W - 21, by - 29, 4, 28);
+    c.fillStyle = OUT; c.fillRect(x0, y0, W, H - 18);
+    c.fillStyle = "#f2c14e"; c.fillRect(x0 + 1, y0 + 1, W - 2, H - 20);
+    c.fillStyle = "#fff3a8"; c.fillRect(x0 + 1, y0 + 1, W - 2, 3);
+    c.fillStyle = "#fffaf2"; c.fillRect(x0 + 5, y0 + 18, W - 10, H - 40);
+    c.textAlign = "center"; c.textBaseline = "middle";
+    let fs = 10; c.font = `bold ${fs}px ${FONT}`; while (c.measureText(T("rankBoard")).width > W - 10 && fs > 6) { fs--; c.font = `bold ${fs}px ${FONT}`; }
+    c.fillStyle = OUT; c.fillText(T("rankBoard"), bx, y0 + 10);
+    const top = window.World.rankTop;
+    const cy0 = y0 + 18;
+    if (top && top.avatar) {
+      // 반짝이는 배경 + 1위 캐릭터 크게 (2배)
+      const pulse = Math.sin(t / 300) * 0.5 + 0.5;
+      c.fillStyle = `rgba(255,211,77,${0.25 + pulse * 0.25})`; c.beginPath(); c.arc(bx, cy0 + 30, 24, 0, Math.PI * 2); c.fill();
+      c.imageSmoothingEnabled = false;
+      try { c.drawImage(Avatar.sprite(top.avatar, "down", 0), 0, 0, 48, 48, bx - 30, cy0 - 12, 60, 60); } catch {}
+      c.fillStyle = "#d8434e"; c.fillRect(bx - 38, cy0 + 2, 14, 12); c.fillStyle = "#fff"; c.font = `bold 9px ${FONT}`; c.fillText("1", bx - 31, cy0 + 8);
+      c.font = `bold 10px ${FONT}`; c.fillStyle = OUT;
+      const name = String(top.name || "?"); c.fillText(name.length > 12 ? name.slice(0, 11) + "…" : name, bx, y0 + H - 30);
+      c.fillStyle = "#7a3fc0"; c.font = `bold 9px ${FONT}`; c.fillText(`${Number(top.m).toLocaleString()} m`, bx, y0 + H - 22 + 2);
+    } else {
+      c.fillStyle = "#9a8a9a"; c.font = `10px ${FONT}`; c.fillText("?", bx, cy0 + 28);
+    }
   }
 
   function pianoSprite() {
@@ -380,13 +469,24 @@
     x.fillStyle = "#ffd34d"; x.fillRect(12, 8, 4, 4); x.fillRect(144, 8, 4, 4);
     return c;
   }
-  function boardSprite() {
-    const [c, x] = cv(40, 30);
-    x.fillStyle = "rgba(40,30,20,.25)"; x.fillRect(4, 26, 34, 4);
-    x.fillStyle = OUT; x.fillRect(8, 16, 3, 12); x.fillRect(29, 16, 3, 12); x.fillRect(0, 0, 40, 20);
-    x.fillStyle = "#c98b5a"; x.fillRect(1, 1, 38, 18); x.fillStyle = "#fff8ea"; x.fillRect(4, 3, 14, 12); x.fillRect(21, 4, 15, 9);
-    x.fillStyle = "#ff8fb8"; x.fillRect(6, 5, 10, 2); x.fillStyle = "#9d7cf0"; x.fillRect(23, 6, 11, 2);
-    x.fillStyle = "#e0405a"; x.fillRect(10, 2, 2, 2); x.fillRect(28, 3, 2, 2);
+  // 입구 안내판 (크게 + "안내" 머리판)
+  function boardSprite(title) {
+    const [c, x] = cv(80, 66);
+    x.fillStyle = "rgba(40,30,20,.25)"; x.fillRect(6, 58, 72, 7);
+    x.fillStyle = OUT; x.fillRect(12, 40, 5, 24); x.fillRect(63, 40, 5, 24);
+    x.fillStyle = "#8f5a34"; x.fillRect(13, 41, 3, 22); x.fillRect(64, 41, 3, 22);
+    x.fillStyle = OUT; x.fillRect(0, 10, 80, 38);
+    x.fillStyle = "#c98b5a"; x.fillRect(1, 11, 78, 36); x.fillStyle = "#e0a877"; x.fillRect(1, 11, 78, 2);
+    x.fillStyle = "#fff8ea"; x.fillRect(5, 22, 32, 22); x.fillRect(41, 22, 34, 22);
+    x.fillStyle = "#ff8fb8"; x.fillRect(8, 26, 26, 2); x.fillStyle = "#c9b8a8"; for (let i = 0; i < 4; i++) x.fillRect(8, 31 + i * 3, 22 - (i % 2) * 6, 1);
+    x.fillStyle = "#9d7cf0"; x.fillRect(44, 26, 28, 2); x.fillStyle = "#c9b8a8"; for (let i = 0; i < 4; i++) x.fillRect(44, 31 + i * 3, 24 - (i % 2) * 8, 1);
+    x.fillStyle = "#e0405a"; x.fillRect(19, 21, 3, 3); x.fillRect(56, 21, 3, 3);
+    // 머리판: ℹ 안내
+    x.fillStyle = OUT; x.fillRect(10, 0, 60, 18); x.fillStyle = "#2f7f95"; x.fillRect(11, 1, 58, 16); x.fillStyle = "#5fb8c9"; x.fillRect(11, 1, 58, 2);
+    x.fillStyle = "#fff"; x.beginPath(); x.arc(20, 9, 5, 0, Math.PI * 2); x.fill(); x.fillStyle = "#3a8ea0"; x.fillRect(19, 8, 2, 5); x.fillRect(19, 5, 2, 2);
+    x.font = `bold 10px ${FONT}`; x.textAlign = "center"; x.textBaseline = "middle"; x.fillStyle = "#fff";
+    let fs = 10; while (x.measureText(title).width > 42 && fs > 6) { fs--; x.font = `bold ${fs}px ${FONT}`; }
+    x.fillStyle = OUT; x.fillText(title, 47, 10.5); x.fillStyle = "#fff"; x.fillText(title, 46, 9.5);
     return c;
   }
   function drawFountain(c, x, y, t) {
@@ -496,11 +596,11 @@
 
     const collide = (px, py) => colliders.some(([a, b, w, h]) => px > a && px < a + w && py > b && py < b + h);
     return {
-      id: "lounge", W, H, ground: g, objects, colliders: [], zones: [{ id: "exit", x: 290, y: 388, w: 60, h: 32, label: T("zExit") }, { id: "guestbook", x: 118, y: 150, w: 108, h: 30, label: T("zGuestbook") }], seats,
+      id: "lounge", W, H, ground: g, objects, colliders: [], zones: [{ id: "exit", x: 290, y: 388, w: 60, h: 32, label: T("zExit") }, { id: "guestbook", x: 118, y: 150, w: 108, h: 30, label: T("zGuestbook") }, { id: "piano", x: 290, y: 132, w: 64, h: 22, label: T("zPiano") }], seats,
       walkable: (px, py) => px > 10 && px < W - 10 && py > 92 && py < H - 4 && !collide(px, py),
-      spawn: { x: 320, y: 380 }, artist: null, icons: [{ x: 172, y: 84, icon: "✍️" }], signs: [{ x: 172, y: 76, key: "gbSign" }],
+      spawn: { x: 320, y: 380 }, artist: null, piano: { x: 322, y: 118, front: { x: 322, y: 142 } }, icons: [{ x: 172, y: 84, icon: "✍️" }, { x: 322, y: 96, icon: "🎹" }], signs: [{ x: 172, y: 76, key: "gbSign" }],
     };
   }
 
-  window.World = { buildPlaza, buildLounge };
+  window.World = { buildPlaza, buildLounge, rankTop: null };
 })();
