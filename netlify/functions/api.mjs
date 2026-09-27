@@ -427,7 +427,7 @@ export default async (req) => {
       if (!t0 || sig !== (await runSig(t0, g))) return err("forbidden", 400);
       if ((user.lastRun || 0) >= t0) return json({ user: publicUser(user), coins: 0, dup: true, dayLeft: gameLeft() }); // 같은 판 중복 제출
       const sec = (Date.now() - t0) / 1000;
-      if (sec > 3600) return err("forbidden", 400);
+      if (sec > 12 * 3600) return err("forbidden", 400); // 한 판 최대 12시간 (예전 1시간 제한 때문에 긴 기록이 저장되지 않던 문제 수정)
       // 시간에 비해 너무 먼 거리(높이)는 인정 안 함 — 올라올라는 초당 최대 약 50m
       const m = Math.max(0, Math.min(+body.m || 0, g === "up" ? sec * 50 + 30 : maxMeters(sec) * 1.1 + 20));
       const left = gameLeft();

@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "26"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "27"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -867,6 +867,20 @@
   }
 
   // ---------------- 🎮 젤리게임월드: 점프점프 젤리월드 ----------------
+  // 기록 저장이 실패하면(인터넷 끊김 등) 휴대폰에 보관했다가 다음에 다시 보내요
+  function savePendingRun(run, m) { try { const a = JSON.parse(localStorage.getItem("jl_pending_runs") || "[]"); a.push({ run, m, uid: G.user.id }); localStorage.setItem("jl_pending_runs", JSON.stringify(a.slice(-10))); } catch {} }
+  async function flushPendingRuns() {
+    let a = []; try { a = JSON.parse(localStorage.getItem("jl_pending_runs") || "[]"); } catch {}
+    if (!a.length || !G.user) return;
+    const keep = [];
+    for (const p of a) {
+      if (p.uid !== G.user.id) { keep.push(p); continue; }
+      try { const r = await API.gameFinish(p.run, p.m); if (r.user) setUser(r.user); if (r.rank) toast(t("rankNew", { n: r.rank })); }
+      catch (e) { if (e.status !== 400 && e.status !== 403) keep.push(p); }
+    }
+    try { localStorage.setItem("jl_pending_runs", JSON.stringify(keep)); } catch {}
+    refreshRankTop();
+  }
   // 젤리게임월드: 게임 선택 → 점프점프 젤리월드 / 올라올라 / 오늘의 운세
   function openGame(pick) {
     G.gameOpen = true;
@@ -921,7 +935,9 @@
           t, avatar: () => G.user.avatar, dayLeft: G.user.gameLeft,
           onStart: () => API.gameStart(g),
           onFinish: async (run, m) => {
-            const r = await API.gameFinish(run, m);
+            let r;
+            try { r = await API.gameFinish(run, m); }
+            catch (e) { if (e.status !== 400 && e.status !== 403) { savePendingRun(run, m); toast(t("gameSaveLater")); } throw e; }
             if (r.user) setUser(r.user);
             if (r.top) { renderRank(r.top); World.rankTops = World.rankTops || {}; World.rankTops[g] = r.top[0] || null; }
             if (r.rank) setTimeout(() => toast(t("rankNew", { n: r.rank })), 600);
@@ -1588,6 +1604,7 @@
     checkDaily();
     loadMail(true);
     refreshRankTop();
+    flushPendingRuns();
     pushOnEnter();
     setTimeout(maybeInstallPopup, 5500);
   }
