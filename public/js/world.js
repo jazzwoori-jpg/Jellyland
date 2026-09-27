@@ -384,6 +384,7 @@
       { id: "recboard", x: RX - 30, y: RY + 2, w: 60, h: 30, label: T("recBoard") },
       { id: "rankboard", x: BX - 50, y: BY + 2, w: 100, h: 30, label: T("rankBoardZ") },
       { id: "guide", x: 494, y: 810, w: 76, h: 26, label: T("zGuide") },
+      { id: "fountain", x: FX - 34, y: FY + 20, w: 68, h: 26, label: T("zFountain") },
     ];
 
     return {
@@ -392,8 +393,9 @@
       spawn: { x: 640, y: 840 },
       artist: null, // 조젤리 NPC 는 없앰 (피아노를 직접 연주)
       piano: { x: PX, y: PY - 10, front: { x: PX, y: PY + 20 } },
-      clickables: [{ x: RX, y: RY - 20, r: 24, go: "recboard", front: { x: RX, y: RY + 16 } }, { x: BX, y: BY - 50, r: 56, go: "rankboard", front: { x: BX, y: BY + 16 } }],
-      icons: [...buildings.map((b) => ({ x: b.x + b.w / 2 + 2, y: b.y - 4, icon: b.icon, label: b.name })), { x: PX, y: PY - 34, icon: "🎹" }, { x: RX, y: RY - 48, icon: "📼" }, { x: BX, y: BY - 122, icon: "🏆" }, { x: 532, y: 744, icon: "ℹ️" }],
+      clickables: [{ x: RX, y: RY - 20, r: 24, go: "recboard", front: { x: RX, y: RY + 16 } }, { x: BX, y: BY - 50, r: 56, go: "rankboard", front: { x: BX, y: BY + 16 } }, { x: FX, y: FY - 6, r: 38, go: "fountain", front: { x: FX, y: FY + 32 } }],
+      icons: [...buildings.map((b) => ({ x: b.x + b.w / 2 + 2, y: b.y - 4, icon: b.icon, label: b.name })), { x: PX, y: PY - 34, icon: "🎹" }, { x: RX, y: RY - 48, icon: "📼" }, { x: BX, y: BY - 122, icon: "🏆" }, { x: 532, y: 744, icon: "ℹ️" }, { x: FX, y: FY - 40, icon: "🫧" }],
+      signs: [{ x: FX, y: FY + 56, key: "fountainSign", bg: "#e8dcfa", type: true }],
       npcArea: [300, 300, 700, 500],
     };
   }
@@ -591,6 +593,8 @@
     // 젤리 조각상
     ell(x, y - 26, 9, 8, OUT); ell(x, y - 26, 8, 7, "#ff8fb8"); c.fillStyle = "#ffd1e1"; c.fillRect(x - 4, y - 30, 3, 2);
     c.fillStyle = OUT; c.fillRect(x - 3, y - 27, 1, 2); c.fillRect(x + 2, y - 27, 1, 2);
+    // 수상한 보랏빛 기운이 스멀스멀
+    for (let i = 0; i < 10; i++) { const k = ((t / 1400 + i * 0.37) % 1), px = x + Math.sin(i * 2.3 + t / 700) * (10 + k * 22), py = y - 4 - k * 46; c.fillStyle = `rgba(${i % 2 ? "190,120,255" : "150,90,230"},${(0.75 * (1 - k)).toFixed(2)})`; c.fillRect(Math.round(px), Math.round(py), i % 3 ? 2 : 3, i % 3 ? 2 : 3); }
     // 물줄기
     c.fillStyle = "rgba(199,241,250,.9)";
     for (let i = 0; i < 6; i++) { const k = ((t / 90 + i * 3) % 18); c.fillRect(x - 12 - k * 0.6, y - 30 + k * 1.4, 2, 2); c.fillRect(x + 11 + k * 0.6, y - 30 + k * 1.4, 2, 2); }
@@ -681,6 +685,37 @@
       s.font = `bold 11px ${FONT}`; s.textAlign = "center"; s.textBaseline = "middle"; s.fillStyle = "#fff"; s.fillText("✎ " + T("gbBoard"), BW / 2, 10);
       return c;
     })();
+    // 🎨 "젤리에게 그려줘!" 그림 갤러리 — 피아노 무대 오른편 (방명록과 대칭)
+    const artBoard = (() => {
+      const BW = 96, BH = 70;
+      const [c, s] = cv(BW, BH);
+      s.fillStyle = "rgba(40,30,20,.25)"; s.fillRect(8, BH - 6, BW - 12, 6);
+      s.fillStyle = OUT; s.fillRect(14, 44, 6, BH - 8); s.fillRect(BW - 20, 44, 6, BH - 8);
+      s.fillStyle = "#8f5a34"; s.fillRect(15, 45, 4, BH - 10); s.fillRect(BW - 19, 45, 4, BH - 10);
+      s.fillStyle = OUT; s.fillRect(0, 6, BW, 44);
+      s.fillStyle = "#4fb3c9"; s.fillRect(2, 8, BW - 4, 40);
+      s.fillStyle = "#8fe0ef"; s.fillRect(2, 8, BW - 4, 3);
+      s.fillStyle = "#f2c14e"; s.fillRect(2, 45, BW - 4, 3);
+      // 액자 속 그림들
+      const pics = [["#ffd34d", (q) => { q.fillStyle = "#ff5a5a"; q.fillRect(4, 4, 6, 6); q.fillStyle = "#34c759"; q.fillRect(2, 11, 14, 2); }],
+        ["#9fe8ff", (q) => { q.fillStyle = "#ffcc00"; q.fillRect(9, 2, 5, 5); q.fillStyle = "#1c2e8c"; q.fillRect(2, 9, 14, 4); }],
+        ["#ffd1e1", (q) => { q.fillStyle = "#ff3b7a"; q.fillRect(4, 4, 3, 3); q.fillRect(9, 4, 3, 3); q.fillRect(5, 7, 6, 3); q.fillRect(7, 10, 2, 2); }],
+        ["#e8ffd8", (q) => { q.fillStyle = "#8e44ad"; q.fillRect(3, 3, 12, 2); q.fillStyle = "#007aff"; q.fillRect(3, 7, 9, 2); q.fillStyle = "#ff9500"; q.fillRect(3, 11, 11, 2); }]];
+      pics.forEach(([bg, paint], i) => {
+        const x0 = 7 + i * 21, y0 = 21;
+        s.fillStyle = OUT; s.fillRect(x0 - 2, y0 - 2, 22, 21); s.fillStyle = "#c98b5a"; s.fillRect(x0 - 1, y0 - 1, 20, 19);
+        s.fillStyle = bg; s.fillRect(x0 + 1, y0 + 1, 16, 15);
+        s.save(); s.translate(x0 + 1, y0 + 1); paint(s); s.restore();
+      });
+      s.fillStyle = OUT; s.fillRect(18, 0, BW - 36, 18); s.fillStyle = "#ff7fae"; s.fillRect(19, 1, BW - 38, 16);
+      s.textAlign = "center"; s.textBaseline = "middle"; s.fillStyle = "#fff";
+      let fs = 11; s.font = `bold ${fs}px ${FONT}`; while (s.measureText(T("artBoard")).width > BW - 44 && fs > 6) { fs--; s.font = `bold ${fs}px ${FONT}`; }
+      s.fillText(T("artBoard"), BW / 2, 10);
+      return c;
+    })();
+    const ABX = 420, ABY = 86;
+    objects.push({ y: ABY + 68, x: ABX + 48, draw: (c) => c.drawImage(artBoard, ABX, ABY) });
+    colliders.push([ABX + 8, ABY + 44, 80, 24]);
     const GBX = 124, GBY = 86;
     objects.push({ y: GBY + 68, x: GBX + 48, draw: (c) => c.drawImage(gbBoard, GBX, GBY) });
     colliders.push([GBX + 8, GBY + 44, 80, 24]);
@@ -688,11 +723,112 @@
 
     const collide = (px, py) => colliders.some(([a, b, w, h]) => px > a && px < a + w && py > b && py < b + h);
     return {
-      id: "lounge", W, H, ground: g, objects, colliders: [], zones: [{ id: "exit", x: 290, y: 388, w: 60, h: 32, label: T("zExit") }, { id: "guestbook", x: 118, y: 150, w: 108, h: 30, label: T("zGuestbook") }, { id: "piano", x: 290, y: 132, w: 64, h: 22, label: T("zPiano") }], seats,
+      id: "lounge", W, H, ground: g, objects, colliders: [], zones: [{ id: "exit", x: 290, y: 388, w: 60, h: 32, label: T("zExit") }, { id: "guestbook", x: 118, y: 150, w: 108, h: 30, label: T("zGuestbook") }, { id: "piano", x: 290, y: 132, w: 64, h: 22, label: T("zPiano") }, { id: "art", x: 414, y: 150, w: 108, h: 30, label: T("zArt") }], seats,
       walkable: (px, py) => px > 10 && px < W - 10 && py > 92 && py < H - 4 && !collide(px, py),
-      spawn: { x: 320, y: 380 }, artist: null, piano: { x: 322, y: 118, front: { x: 322, y: 142 } }, icons: [{ x: 172, y: 84, icon: "✍️" }, { x: 322, y: 96, icon: "🎹" }], signs: [{ x: 172, y: 76, key: "gbSign" }],
+      spawn: { x: 320, y: 380 }, artist: null, piano: { x: 322, y: 118, front: { x: 322, y: 142 } }, icons: [{ x: 172, y: 84, icon: "✍️" }, { x: 322, y: 96, icon: "🎹" }, { x: 468, y: 84, icon: "🎨" }], signs: [{ x: 172, y: 76, key: "gbSign" }, { x: 468, y: 76, key: "artSign" }],
+      clickables: [{ x: 468, y: 120, r: 40, go: "art", front: { x: 468, y: 164 } }, { x: 172, y: 120, r: 40, go: "guestbook", front: { x: 172, y: 164 } }],
     };
   }
 
-  window.World = { buildPlaza, buildLounge, rankTops: {} };
+  // ---------------- 🫧 분수대 속 바닷속 (보물상자) ----------------
+  function chestSprites() {
+    const mk = (open) => {
+      const [c, x] = cv(40, 40);
+      x.fillStyle = "rgba(10,30,50,.35)"; x.fillRect(3, 34, 36, 5);
+      // 몸통
+      x.fillStyle = OUT; x.fillRect(2, 18, 36, 18);
+      x.fillStyle = "#9a5b2e"; x.fillRect(3, 19, 34, 16); x.fillStyle = "#b8743e"; x.fillRect(3, 19, 34, 3);
+      x.fillStyle = "#f2c14e"; x.fillRect(3, 26, 34, 3); x.fillRect(8, 19, 3, 16); x.fillRect(29, 19, 3, 16);
+      if (!open) {
+        x.fillStyle = OUT; x.fillRect(2, 6, 36, 14); x.fillStyle = "#b8743e"; x.fillRect(3, 7, 34, 12); x.fillStyle = "#d18b4f"; x.fillRect(3, 7, 34, 3);
+        x.fillStyle = "#f2c14e"; x.fillRect(8, 7, 3, 12); x.fillRect(29, 7, 3, 12); x.fillRect(3, 16, 34, 3);
+        x.fillStyle = OUT; x.fillRect(16, 14, 8, 10); x.fillStyle = "#ffe07a"; x.fillRect(17, 15, 6, 8); x.fillStyle = OUT; x.fillRect(19, 17, 2, 4);
+      } else {
+        // 열린 뚜껑 + 반짝이는 코인
+        x.fillStyle = OUT; x.fillRect(2, 0, 36, 10); x.fillStyle = "#7a4522"; x.fillRect(3, 1, 34, 8); x.fillStyle = "#f2c14e"; x.fillRect(8, 1, 3, 8); x.fillRect(29, 1, 3, 8);
+        x.fillStyle = "#ffe07a"; x.fillRect(4, 14, 32, 6); x.fillStyle = "#fff3a8"; [[7, 13], [14, 12], [22, 13], [29, 12], [18, 15]].forEach(([a, b]) => x.fillRect(a, b, 4, 3));
+        x.fillStyle = "#ff8fb8"; x.fillRect(12, 14, 3, 3); x.fillStyle = "#7fe3ff"; x.fillRect(25, 14, 3, 3);
+      }
+      return c;
+    };
+    return [mk(false), mk(true)];
+  }
+  function buildSea() {
+    const W = 640, H = 420;
+    const [g, x] = cv(W, H);
+    // 물 (위는 밝고 아래로 갈수록 깊은 파랑)
+    for (let yy = 0; yy < H; yy++) {
+      const k = yy / H;
+      x.fillStyle = `rgb(${Math.round(70 - 50 * k)},${Math.round(175 - 95 * k)},${Math.round(225 - 70 * k)})`;
+      x.fillRect(0, yy, W, 1);
+    }
+    // 수면 물결
+    for (let xx = 0; xx < W; xx += 2) { const h = 3 + Math.round(Math.sin(xx / 14) * 2); x.fillStyle = "#bff0ff"; x.fillRect(xx, 0, 2, h); x.fillStyle = "#8fdcf5"; x.fillRect(xx, h, 2, 2); }
+    // 모래 바닥
+    const r = rng(33);
+    for (let xx = 0; xx < W; xx++) {
+      const top = H - 58 + Math.round(Math.sin(xx / 37) * 6 + Math.sin(xx / 13) * 2);
+      for (let yy = top; yy < H; yy++) { x.fillStyle = yy === top ? "#f7e2a8" : r() < 0.08 ? "#d9b977" : r() < 0.5 ? "#ecd08f" : "#e5c885"; x.fillRect(xx, yy, 1, 1); }
+    }
+    // 조개 · 불가사리
+    [[70, 392, "#ff9fc8"], [190, 404, "#ffd34d"], [520, 398, "#ff7f7f"], [590, 410, "#fff3a8"], [330, 406, "#bfe9ff"]].forEach(([sx, sy, col], i) => {
+      x.fillStyle = OUT; x.fillRect(sx - 1, sy - 1, 9, 7); x.fillStyle = col; x.fillRect(sx, sy, 7, 5); x.fillStyle = "rgba(255,255,255,.6)"; x.fillRect(sx + 1 + (i % 2) * 3, sy + 1, 2, 3);
+    });
+    const objects = [], colliders = [];
+    // 바위
+    const rock = (rx, ry, rw, rh) => {
+      objects.push({ y: ry + rh, x: rx, draw: (c) => {
+        c.fillStyle = OUT; c.fillRect(rx - 1, ry + 3, rw + 2, rh - 2); c.fillRect(rx + 3, ry - 1, rw - 6, 5);
+        c.fillStyle = "#5d6b82"; c.fillRect(rx, ry + 3, rw, rh - 3); c.fillRect(rx + 3, ry, rw - 6, 4);
+        c.fillStyle = "#7d8ca3"; c.fillRect(rx + 3, ry + 1, rw - 10, 3); c.fillStyle = "#46526a"; c.fillRect(rx, ry + rh - 4, rw, 3);
+        c.fillStyle = "#6fc28a"; c.fillRect(rx + 4, ry + 2, 4, 2); c.fillRect(rx + rw - 10, ry + 5, 3, 2);
+      } });
+      colliders.push([rx, ry + rh - 10, rw, 10]);
+    };
+    rock(46, 336, 64, 32); rock(540, 314, 52, 30); rock(236, 362, 34, 16);
+    // 해초 (살랑살랑)
+    [[30, 392], [140, 382], [270, 390], [370, 396], [480, 386], [610, 390], [120, 378], [580, 380], [210, 384]].forEach(([sx, sy], i) => {
+      const hgt = 30 + (i * 7) % 22, col = i % 3 === 0 ? "#3fa36b" : i % 3 === 1 ? "#5cc48a" : "#2f8a5a";
+      objects.push({ y: sy, x: sx, anim: true, draw: (c, t) => {
+        for (let k = 0; k < hgt; k += 2) { const sw = Math.round(Math.sin(t / 500 + i + k / 9) * (k / 10)); c.fillStyle = OUT; c.fillRect(sx + sw - 1, sy - k - 2, 5, 3); c.fillStyle = col; c.fillRect(sx + sw, sy - k - 2, 3, 2); }
+      } });
+    });
+    // 보물상자
+    const [chC, chO] = chestSprites();
+    const CX = 440, CY = 352;
+    const sea = { chestOpen: false, locked: false };
+    objects.push({ y: CY, x: CX, anim: true, draw: (c, t) => {
+      c.drawImage(sea.chestOpen ? chO : chC, CX - 20, CY - 36);
+      if (!sea.chestOpen && !sea.locked) { const a = (Math.sin(t / 250) + 1) / 2; c.fillStyle = `rgba(255,243,168,${0.25 + a * 0.5})`; [[-24, -30], [22, -24], [-4, -44]].forEach(([dx, dy], j) => c.fillRect(CX + dx + ((t / 200 + j) % 2 | 0), CY + dy, 2, 2)); }
+    } });
+    colliders.push([CX - 18, CY - 16, 36, 14]);
+    // 물고기 · 물방울 · 빛줄기 (맨 위에 그림)
+    const fish = [[0, 110, "#ffb347", 26], [1, 190, "#ff7fae", 34], [2, 262, "#7fe3ff", 22], [3, 150, "#ffe07a", 40], [4, 300, "#b58cff", 30]];
+    objects.push({ y: 99999, x: 0, anim: true, draw: (c, t) => {
+      // 빛줄기
+      c.save(); c.globalAlpha = 0.08;
+      for (let k = 0; k < 7; k++) { const bx = 30 + k * 96 + Math.sin(t / 2000 + k) * 16; c.fillStyle = "#ffffff"; c.beginPath(); c.moveTo(bx, 0); c.lineTo(bx + 26, 0); c.lineTo(bx + 70, H); c.lineTo(bx + 30, H); c.fill(); }
+      c.restore();
+      for (const [i, fy, col, sp] of fish) {
+        const dir = i % 2 ? -1 : 1, span = W + 60, p = ((t / 1000) * sp + i * 137) % span;
+        const fx = dir > 0 ? p - 30 : W + 30 - p, yy = fy + Math.sin(t / 400 + i) * 4;
+        c.fillStyle = OUT; c.fillRect(fx - 7, yy - 3, 14, 7); c.fillStyle = col; c.fillRect(fx - 6, yy - 2, 12, 5);
+        c.fillStyle = OUT; c.fillRect(fx - dir * 9 - 2, yy - 3, 4, 7); c.fillStyle = col; c.fillRect(fx - dir * 9 - 1, yy - 2, 2, 5);
+        c.fillStyle = "#fff"; c.fillRect(fx + dir * 3 - 1, yy - 1, 2, 2); c.fillStyle = OUT; c.fillRect(fx + dir * 3, yy - 1, 1, 1);
+      }
+      c.fillStyle = "rgba(220,250,255,.75)";
+      for (let k = 0; k < 26; k++) { const bx = (k * 53) % W + Math.sin(t / 700 + k) * 4, by = H - ((t / 1000) * (20 + (k % 5) * 6) + k * 71) % (H + 20); const s = k % 3 ? 2 : 3; c.fillRect(bx, by, s, s); }
+    } });
+    const collide = (px, py) => colliders.some(([a, b, w, h]) => px > a && px < a + w && py > b && py < b + h);
+    return {
+      id: "sea", W, H, ground: g, objects, colliders: [], sea,
+      zones: [{ id: "chest", x: CX - 30, y: CY - 8, w: 60, h: 28, label: T("zChest") }, { id: "surface", x: 270, y: 36, w: 100, h: 30, label: T("zSurface") }],
+      walkable: (px, py) => px > 12 && px < W - 12 && py > 36 && py < H - 6 && !collide(px, py),
+      spawn: { x: 320, y: 140 }, artist: null, chest: { x: CX, y: CY },
+      clickables: [{ x: CX, y: CY - 16, r: 26, go: "chest", front: { x: CX, y: CY + 12 } }],
+      icons: [{ x: CX, y: CY - 40, icon: "❓" }],
+    };
+  }
+
+  window.World = { buildPlaza, buildLounge, buildSea, rankTops: {} };
 })();

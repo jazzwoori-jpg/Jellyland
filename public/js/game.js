@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "28"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "29"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -80,6 +80,9 @@
   function buildWorlds() {
     G.worlds.plaza = World.buildPlaza();
     G.worlds.lounge = World.buildLounge();
+    const oldSea = G.worlds.sea;
+    G.worlds.sea = World.buildSea();
+    if (oldSea) { Object.assign(G.worlds.sea.sea, oldSea.sea); G.worlds.sea.icons[0].icon = oldSea.icons[0].icon; }
   }
   function scene() { return G.worlds[G.scene]; }
   function setScene(id, pos) {
@@ -96,8 +99,8 @@
   }
   function updateSceneLabels() {
     if (!G.scene) return;
-    $("#mm-label").textContent = G.scene === "plaza" ? t("mapPlaza") : t("mapLounge");
-    $("#chat-title").textContent = G.scene === "plaza" ? t("chatPlaza") : t("chatLounge");
+    $("#mm-label").textContent = G.scene === "plaza" ? t("mapPlaza") : G.scene === "sea" ? t("mapSea") : t("mapLounge");
+    $("#chat-title").textContent = G.scene === "lounge" ? t("chatLounge") : t("chatPlaza");
     $("#btn-gb").classList.toggle("hidden", G.scene !== "lounge");
   }
 
@@ -186,7 +189,7 @@
     G.t += dt * 1000;
     const p = G.player;
     let vx = 0, vy = 0;
-    if (G.mode === "world" && !G.modalOpen) {
+    if (G.mode === "world" && !G.modalOpen && !G.frozen && !G.quizOpen) {
       if (G.keys.has("u")) vy -= 1; if (G.keys.has("d")) vy += 1; if (G.keys.has("l")) vx -= 1; if (G.keys.has("r")) vx += 1;
       if (G.joy.x || G.joy.y) { vx = G.joy.x; vy = G.joy.y; }
       if (G.seat && (vx || vy || G.target)) standUp();
@@ -205,7 +208,7 @@
     if (p.moving !== wasMoving && G.mode === "world") kickSync(); // 출발·정지 순간 바로 알림
     if (p.moving) {
       if (len > 1) { vx /= len; vy /= len; }
-      const sp = 92 * dt;
+      const sp = (G.scene === "sea" ? 74 : 92) * dt;
       const nx = p.x + vx * sp, ny = p.y + vy * sp;
       const ox = p.x, oy = p.y;
       if (!blockedFeet(nx, p.y)) p.x = nx;
@@ -238,6 +241,7 @@
       }
     }
     updateNPCs(dt);
+    updateDive(dt);
     const w = scene();
     let zone = null;
     if (G.mode === "world") for (const z of w.zones) if (p.x > z.x && p.x < z.x + z.w && p.y > z.y && p.y < z.y + z.h) { zone = z; break; }
@@ -271,7 +275,7 @@
   function renderPrompt() {
     const pr = $("#prompt"), z = G.zone;
     if (!z) return pr.classList.add("hidden");
-    const act = z.id === "exit" || z.id === "seat" || z.id === "stand" ? "" : z.id === "piano" ? t("actPlay") : z.id === "recboard" || z.id === "rankboard" || z.id === "profile" || z.id === "guide" || z.id === "guestbook" ? t("actView") : t("actEnter");
+    const act = z.id === "exit" || z.id === "seat" || z.id === "stand" || z.id === "surface" ? "" : z.id === "piano" ? t("actPlay") : z.id === "fountain" ? t("actDive") : z.id === "chest" ? t("actOpen") : z.id === "recboard" || z.id === "rankboard" || z.id === "profile" || z.id === "guide" || z.id === "guestbook" || z.id === "art" ? t("actView") : t("actEnter");
     pr.innerHTML = `<kbd>E</kbd>${esc(z.label)} ${esc(act)}`;
     pr.classList.remove("hidden");
   }
@@ -282,7 +286,7 @@
   function render() {
     const w = scene();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = w.id === "plaza" ? "#4a4458" : "#2a2230";
+    ctx.fillStyle = w.id === "plaza" ? "#4a4458" : w.id === "sea" ? "#123a58" : "#2a2230";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     const k = S * dpr;
     ctx.setTransform(k, 0, 0, k, -G.cam.x * k, -G.cam.y * k);
@@ -299,16 +303,16 @@
     for (const o of G.others.values()) {
       const st = o.seat && seatMap[o.seat];
       if (st) { o.rx = o.x = st.x; o.ry = o.y = st.y; }
-      chars.push({ x: o.rx, y: o.ry, name: o.name, av: o.avatar, dir: st ? st.dir : o.dir || "down", frame: frameOf(o.walking, o.t || 0), crown: o.role === "artist", id: o.id, artist: o.role === "artist", admin: o.role === "admin", sit: !!st });
+      chars.push({ emo: o.emoShow, x: o.rx, y: o.ry, name: o.name, av: o.avatar, dir: st ? st.dir : o.dir || "down", frame: frameOf(o.walking, o.t || 0), crown: o.role === "artist", id: o.id, artist: o.role === "artist", admin: o.role === "admin", sit: !!st });
     }
-    if (G.mode === "world") chars.push({ x: G.player.x, y: G.player.y, name: G.user.nickname, av: G.user.avatar, dir: G.player.dir, frame: frameOf(G.player.moving, G.player.t), crown: G.user.role === "artist", me: true, id: G.user.id, artist: G.user.role === "artist", admin: G.user.role === "admin", sit: !!G.seat });
+    if (G.mode === "world") chars.push({ swim: G.scene === "sea", emo: G.myEmo, x: G.player.x, y: G.player.y, name: G.user.nickname, av: G.user.avatar, dir: G.player.dir, frame: frameOf(G.player.moving, G.player.t), crown: G.user.role === "artist", me: true, id: G.user.id, artist: G.user.role === "artist", admin: G.user.role === "admin", sit: !!G.seat });
     for (const c of chars) list.push({ y: c.y, char: c });
     list.sort((a, b) => a.y - b.y);
     for (const o of list) {
       if (o.char) {
         const c = o.char;
         if (c.artist || c.admin) drawAura(c.x, c.y, G.t, c.admin);
-        Avatar.draw(ctx, c.av, c.x, c.y, c.dir, c.bobby ? (Math.floor(G.t / 500) % 2 ? 1 : 0) : c.frame, { keytar: c.keytar, sit: c.sit });
+        Avatar.draw(ctx, c.av, c.x, c.y + (c.swim ? Math.round(Math.sin(G.t / 320) * 2) : 0), c.dir, c.bobby ? (Math.floor(G.t / 500) % 2 ? 1 : 0) : c.frame, { keytar: c.keytar, sit: c.sit });
         if (c.artist || c.admin) drawSparkles(c.x, c.y, G.t, c.admin);
       } else o.draw(ctx, G.t);
     }
@@ -333,7 +337,11 @@
       ctx.font = `16px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(ic.icon, X, Y + 1);
     }
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    for (const sg of w.signs || []) drawBubble(sx(sg.x), sy(sg.y) - 22 - Math.sin(G.t / 280) * 3, t(sg.key), "#fff3a8");
+    for (const sg of w.signs || []) {
+      let txt = t(sg.key);
+      if (sg.type) { const ph = G.t % 7000, n = Math.min(txt.length, Math.floor(ph / 110) + 1); txt = [...txt].slice(0, n).join(""); } // 한 글자씩 스르륵
+      drawBubble(sx(sg.x), sy(sg.y) - 22 - Math.sin(G.t / 280) * 3, txt, sg.bg || "#fff3a8");
+    }
     const now = Date.now();
     for (const c of chars) {
       const X = sx(c.x), Y = sy(c.y - (c.sit ? 33 : 42));
@@ -348,6 +356,7 @@
       if (b && b.until > now) drawBubble(X, Y - 14, msgText(b.m), null, bubbleStyleOf(c));
       if (c.artist && !c.id && G.scene === "plaza" && Math.floor(G.t / 4000) % 3 === 0) drawBubble(X, Y - 14, t("artistHello"));
       if (c.npc && c.npc.say && c.npc.sayUntil > G.t) drawBubble(X, Y - 14, c.npc.say);
+      if (c.emo && c.emo.until > now) drawEmote(X, Y, c.emo, now, b && b.until > now);
     }
     drawBanner();
     if (G.mode === "world" && G.t - (G.mmT || 0) > 120) { G.mmT = G.t; drawMinimapFrame(); } // 지도는 초당 8번만 (폰 부담 줄이기)
@@ -504,7 +513,7 @@
 
   // ---------------- 상호작용 ----------------
   function interact() {
-    if (G.mode !== "world" || G.modalOpen) return;
+    if (G.mode !== "world" || G.modalOpen || G.frozen || G.quizOpen) return;
     if (G.zone) runZone(G.zone.id);
   }
   function seatTaken(id) { for (const o of G.others.values()) if (o.seat === id) return true; return false; }
@@ -579,8 +588,328 @@
     if (id === "recboard") return openRecBoard();
     if (id === "rankboard") return openRankBoard();
     if (id === "game") return openGame();
+    if (id === "art") return openArt();
+    if (id === "fountain") return diveIn();
+    if (id === "chest") return openChest();
+    if (id === "surface") return surface(false);
     if (id === "lounge") { await fade(true); setScene("lounge"); await fade(false); toast(t("enteredLounge")); return; }
     if (id === "exit") { const b = G.worlds.plaza.buildings.find((x) => x.id === "lounge"); await fade(true); setScene("plaza", { x: b.door.x, y: b.door.y + 22, dir: "down" }); await fade(false); }
+  }
+
+  // ---------------- 😊 이모티콘 반응 (머리 위로 떠오름 · 모두에게 보임) ----------------
+  const EMOTES = ["👏", "❤️", "🎉", "😂", "😭", "😍", "👍", "🎵"];
+  function drawEmote(X, Y, emo, now, hasBubble) {
+    const age = now - emo.at, left = emo.until - now;
+    const pop = Math.min(1, age / 180), a = Math.min(1, left / 500);
+    const size = Math.round(24 * (0.6 + 0.4 * pop) + (age < 300 ? Math.sin((age / 300) * Math.PI) * 6 : 0));
+    const yy = Y - (hasBubble ? 58 : 30) - (age / 3500) * 14;
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = "#fff8ea"; ctx.strokeStyle = "#3a2530"; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(X, yy, size * 0.72, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.font = `${size}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(EMOTES[emo.e] || "❤️", X, yy + 1);
+    ctx.restore();
+  }
+  let emoLast = 0;
+  function sendEmote(e) {
+    if (G.mode !== "world") return;
+    const now = Date.now(); if (now - emoLast < 1200) return; emoLast = now;
+    G.myEmo = { e, at: now, until: now + 3500 };
+    G.sendEmo = { e, k: Math.random().toString(36).slice(2, 10) };
+    kickSync(); scheduleSync(60);
+    $("#emo-pop").classList.add("hidden");
+  }
+  (function emotePicker() {
+    const pop = $("#emo-pop");
+    pop.innerHTML = EMOTES.map((e, i) => `<button type="button" class="emo" data-e="${i}">${e}</button>`).join("");
+    pop.querySelectorAll(".emo").forEach((b) => b.addEventListener("click", (ev) => { ev.stopPropagation(); sendEmote(+b.dataset.e); }));
+    const toggle = (ev) => { ev.preventDefault(); ev.stopPropagation(); pop.classList.toggle("hidden"); };
+    $("#btn-emo").addEventListener("click", toggle);
+    $("#emo-fab").addEventListener("click", toggle);
+    document.addEventListener("pointerdown", (ev) => { if (!pop.classList.contains("hidden") && !pop.contains(ev.target) && ev.target.id !== "btn-emo" && ev.target.id !== "emo-fab") pop.classList.add("hidden"); });
+    window.addEventListener("keydown", (ev) => { if (G.mode === "world" && !G.modalOpen && !G.quizOpen && ev.target.tagName !== "INPUT" && ev.target.tagName !== "TEXTAREA" && /^Digit[1-8]$/.test(ev.code)) sendEmote(+ev.code.slice(5) - 1); });
+  })();
+
+  // ---------------- 🫧 분수대 → 바닷속 보물상자 ----------------
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const FOUNTAIN_FRONT = { x: 640, y: 268, dir: "down" };
+  function fmtLeft(ms) { const m = Math.ceil(ms / 60000), h = Math.floor(m / 60); return h ? t("hm", { h, m: m % 60 }) : t("mOnly", { m }); }
+  async function diveIn() {
+    if (G.dive || G.diving) return;
+    G.diving = true;
+    let r;
+    try { r = await API.seaDive(); } catch (e) { G.diving = false; return toast(e.message); }
+    try { SFX.splash(); } catch {}
+    // 풍덩! 물보라
+    for (let i = 0; i < 40; i++) { const a = -Math.PI * Math.random(), sp = 40 + Math.random() * 70; G.fx.push({ x: G.player.x, y: G.player.y - 6, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.8, max: 0.8, col: i % 2 ? "#c7f1fa" : "#ffffff", s: 2.5, g: 160 }); }
+    await sleep(350);
+    await fade(true);
+    const w = G.worlds.sea, locked = r.lockLeft > 0;
+    w.sea.chestOpen = false; w.sea.locked = locked; w.icons[0].icon = locked ? "🔒" : "❓";
+    setScene("sea", { ...w.spawn, dir: "down" });
+    G.fx = [];
+    try { Chip.play("sea"); } catch {}
+    G.dive = { t0: performance.now(), o2: r.o2 || 20000, need: r.need || 2, ok: 0, coins: r.coins || 400, lockUntil: locked ? Date.now() + r.lockLeft : 0, done: false, beat: 0, bub: 0 };
+    renderO2();
+    $("#o2").classList.remove("hidden");
+    G.diving = false;
+    await fade(false);
+    toast(locked ? t("seaLockedToast", { time: fmtLeft(r.lockLeft) }) : t("seaHint", { n: G.dive.need, c: G.dive.coins }));
+  }
+  function o2Left() { const d = G.dive; return d ? Math.max(0, d.o2 - (performance.now() - d.t0)) : 0; }
+  function renderO2() {
+    const d = G.dive; if (!d) return;
+    const left = d.done && d.frozenLeft !== undefined ? d.frozenLeft : o2Left(), k = left / d.o2;
+    $("#o2-fill").style.width = (k * 100).toFixed(1) + "%";
+    $("#o2").classList.toggle("low", k <= 0.3);
+    $("#o2-txt").textContent = (left / 1000).toFixed(1);
+    $("#o2-score").textContent = `🧰 ${d.ok}/${d.need}`;
+    $("#o2-dark").style.opacity = d.done ? 0 : Math.max(0, (0.35 - k) / 0.35) * 0.9;
+  }
+  function updateDive(dt) {
+    const d = G.dive; if (!d || G.scene !== "sea") return;
+    renderO2();
+    // 입에서 뽀글뽀글 물방울
+    d.bub -= dt; if (d.bub <= 0) { d.bub = 0.5 + Math.random() * 0.5; G.fx.push({ x: G.player.x + (G.player.dir === "left" ? -3 : 3), y: G.player.y - 30, vx: (Math.random() - 0.5) * 8, vy: -28, life: 1.6, max: 1.6, col: "#dff8ff", s: 2, g: -6 }); }
+    if (d.done) return;
+    const left = o2Left();
+    if (left <= 5000) { d.beat -= dt; if (d.beat <= 0) { d.beat = left <= 2500 ? 0.5 : 0.9; try { SFX.beat(); } catch {} } }
+    if (left <= 0) suffocate();
+  }
+  function endDive() {
+    G.dive = null; closeQuiz();
+    $("#o2").classList.add("hidden"); $("#o2-dark").style.opacity = 0;
+    try { Chip.stop(); } catch {}
+  }
+  async function suffocate() {
+    const d = G.dive; if (!d || d.done) return;
+    d.done = true; d.frozenLeft = 0;
+    closeQuiz(); G.frozen = true; G.target = null; G.keys.clear();
+    try { Chip.stop(); SFX.choke(); } catch {}
+    const ch = $("#choke"); $("#choke-txt").textContent = t("seaChoke");
+    ch.classList.remove("out"); ch.classList.add("on");
+    await sleep(2600);
+    endDive();
+    setScene("plaza", FOUNTAIN_FRONT);
+    await sleep(500);
+    ch.classList.add("out"); ch.classList.remove("on");
+    G.frozen = false;
+    await sleep(1200);
+    ch.classList.remove("out");
+    toast(t("seaRespawn"));
+  }
+  async function surface(win) {
+    const d = G.dive; if (!d || G.surfacing) return;
+    if (!d.done) { d.done = true; d.frozenLeft = o2Left(); }
+    G.surfacing = true;
+    closeQuiz();
+    try { SFX.splash(); } catch {}
+    await fade(true);
+    endDive();
+    setScene("plaza", FOUNTAIN_FRONT);
+    await fade(false);
+    G.surfacing = false;
+    if (!win) toast(t("seaUp"));
+  }
+  function openChest() {
+    const d = G.dive; if (!d || d.done) return;
+    if (d.lockUntil > Date.now()) return toast(t("seaLockedToast", { time: fmtLeft(d.lockUntil - Date.now()) }));
+    G.quizOpen = true; G.keys.clear(); G.joy.x = G.joy.y = 0; G.target = null;
+    $("#quiz").classList.remove("hidden");
+    $("#quiz-msg").textContent = "";
+    nextQuestion();
+  }
+  function closeQuiz() { G.quizOpen = false; $("#quiz").classList.add("hidden"); }
+  let quizBusy = false;
+  async function nextQuestion() {
+    const d = G.dive; if (!d || d.done || !G.quizOpen) return;
+    $("#quiz-score").textContent = `${d.ok}/${d.need}`;
+    $("#quiz-q").textContent = "…"; $("#quiz-choices").innerHTML = "";
+    let q;
+    try { q = await API.seaQ(I.lang); } catch (e) { if (e.code === "seaTimeout") return suffocate(); toast(e.message); return closeQuiz(); }
+    if (!G.dive || G.dive.done || !G.quizOpen) return;
+    $("#quiz-q").textContent = q.q;
+    const box = $("#quiz-choices");
+    box.innerHTML = q.choices.map((c, i) => `<button class="btn qc" data-i="${i}"><b>${"ABCD"[i]}</b> ${esc(c)}</button>`).join("");
+    quizBusy = false;
+    box.querySelectorAll(".qc").forEach((b) => b.addEventListener("click", () => answer(+b.dataset.i)));
+  }
+  async function answer(i) {
+    const d = G.dive; if (!d || d.done || quizBusy) return;
+    quizBusy = true;
+    const btns = [...document.querySelectorAll("#quiz-choices .qc")]; btns.forEach((b) => (b.disabled = true));
+    let r;
+    try { r = await API.seaAnswer(i); } catch (e) { if (e.code === "seaTimeout") return suffocate(); toast(e.message); quizBusy = false; btns.forEach((b) => (b.disabled = false)); return; }
+    if (!G.dive || G.dive.done) return;
+    if (btns[r.answer]) btns[r.answer].classList.add("right");
+    if (!r.correct && btns[i]) btns[i].classList.add("wrong");
+    d.ok = r.ok;
+    $("#quiz-score").textContent = `${d.ok}/${d.need}`;
+    renderO2();
+    if (r.correct) { try { SFX.right(); } catch {} $("#quiz-msg").textContent = t("quizRight"); }
+    else { try { SFX.wrong(); } catch {} $("#quiz-msg").textContent = t("quizWrong"); }
+    if (r.opened) return chestOpened(r);
+    await sleep(r.correct ? 650 : 1000);
+    $("#quiz-msg").textContent = "";
+    nextQuestion();
+  }
+  async function chestOpened(r) {
+    const d = G.dive; d.done = true; d.frozenLeft = o2Left();
+    const w = G.worlds.sea; w.sea.chestOpen = true; w.sea.locked = true; w.icons[0].icon = "✨";
+    if (r.user) setUser(r.user);
+    try { SFX.chest(); } catch {}
+    $("#quiz-q").textContent = t("seaWin", { n: r.coins });
+    $("#quiz-choices").innerHTML = `<div class="quiz-win">🧰✨ +${r.coins} 🪙</div>`;
+    $("#quiz-msg").textContent = t("seaAgain");
+    const cx = w.chest.x, cy = w.chest.y - 22;
+    for (let k = 0; k < 60; k++) setTimeout(() => G.fx.push({ x: cx + (Math.random() - 0.5) * 20, y: cy, vx: (Math.random() - 0.5) * 90, vy: -60 - Math.random() * 90, life: 1.4, max: 1.4, col: k % 3 ? "#ffd34d" : "#fff3a8", s: 3, g: 90 }), k * 25);
+    renderO2();
+    await sleep(3200);
+    surface(true);
+    toast(t("seaWinToast", { n: r.coins }));
+  }
+  $("#quiz-close").addEventListener("click", closeQuiz);
+  window.addEventListener("keydown", (ev) => {
+    if (!G.quizOpen) return;
+    if (ev.key === "Escape") { closeQuiz(); ev.preventDefault(); return; }
+    const k = { Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Numpad1: 0, Numpad2: 1, Numpad3: 2, Numpad4: 3 }[ev.code];
+    if (k !== undefined) { const b = document.querySelectorAll("#quiz-choices .qc")[k]; if (b && !b.disabled) b.click(); ev.preventDefault(); }
+  }, true);
+
+  // ---------------- 🎨 젤리에게 그려줘! (그림판 + 갤러리) ----------------
+  const ART_COLORS = ["#ff3b30", "#ff9500", "#ffd60a", "#34c759", "#0a84ff", "#1f2a7a", "#9b51e0", "#1a1a1a", "#ffffff"];
+  const ART_W = 320, ART_H = 240;
+  const art = { sort: "new", page: 0, color: 0, size: 1, fill: false, draft: null, title: "" };
+  function openArt() {
+    openModal("🎨 " + t("artBoard"), `<div class="art-top"><div class="chips"><button class="chip" data-sort="new">🆕 ${esc(t("artNew"))}</button><button class="chip" data-sort="top">❤️ ${esc(t("artTop"))}</button></div>
+      <button class="btn sm pink" id="art-draw">🖌 ${esc(t("artDraw"))}</button></div>
+      <p class="art-intro">${esc(t("artIntro"))}</p>
+      <div class="art-grid" id="art-grid"><p class="gb-empty">…</p></div><div class="art-pager" id="art-pager"></div>`, (el) => {
+      el.querySelectorAll("[data-sort]").forEach((b) => b.addEventListener("click", () => { art.sort = b.dataset.sort; art.page = 0; loadArt(); }));
+      el.querySelector("#art-draw").addEventListener("click", openDraw);
+      loadArt();
+    }, true);
+  }
+  async function loadArt() {
+    const grid = $("#art-grid"); if (!grid) return;
+    document.querySelectorAll(".art-top [data-sort]").forEach((b) => b.classList.toggle("on", b.dataset.sort === art.sort));
+    let r;
+    try { r = await API.artList(art.page, art.sort); } catch (e) { grid.innerHTML = `<p class="gb-empty">${esc(e.message)}</p>`; return; }
+    art.items = r.items || []; art.left = r.left;
+    if (!$("#art-grid")) return;
+    grid.innerHTML = art.items.length ? art.items.map((it, i) => `<div class="art-card" data-i="${i}"><img src="${esc(API.artImg(it))}" alt="" loading="lazy"><div class="art-meta"><b>${esc(it.title || t("artUntitled"))}</b><small>${esc(it.name)} · <span class="${it.liked ? "liked" : ""}">❤️ ${it.likes}</span></small></div></div>`).join("") : `<p class="gb-empty">${esc(t("artEmpty"))}</p>`;
+    grid.querySelectorAll(".art-card").forEach((c) => c.addEventListener("click", () => openArtView(art.items[+c.dataset.i])));
+    const pages = Math.max(1, Math.ceil((r.total || 0) / 12)), pg = $("#art-pager");
+    pg.innerHTML = pages > 1 ? `<button class="btn sm" id="ap-prev" ${art.page ? "" : "disabled"}>◀</button><span>${art.page + 1} / ${pages}</span><button class="btn sm" id="ap-next" ${art.page + 1 < pages ? "" : "disabled"}>▶</button>` : "";
+    if (pages > 1) { pg.querySelector("#ap-prev").addEventListener("click", () => { art.page--; loadArt(); }); pg.querySelector("#ap-next").addEventListener("click", () => { art.page++; loadArt(); }); }
+  }
+  function openArtView(it) {
+    const canDel = it.uid === G.user.id || staff(G.user.role);
+    openModal("🎨 " + (it.title || t("artUntitled")), `<div class="art-view"><img src="${esc(API.artImg(it))}" alt="">
+      <div class="art-by"><canvas width="32" height="26" id="av-face"></canvas><div><b>${esc(it.name)}</b>${it.role === "artist" ? " 👑" : it.role === "admin" ? " ★" : ""}<br><small>${esc(fmtTime(it.ts))}</small></div>
+      <button class="btn sm ${it.liked ? "pink" : ""}" id="av-like">❤️ ${it.likes}</button></div>
+      <div class="art-view-foot"><button class="btn sm" id="av-back">◀ ${esc(t("artBack"))}</button>${canDel ? `<button class="btn sm kick" id="av-del">${esc(t("del"))}</button>` : ""}</div></div>`, (el) => {
+      try { if (it.avatar) Avatar.face(el.querySelector("#av-face").getContext("2d"), it.avatar, 32, 26); } catch {}
+      el.querySelector("#av-back").addEventListener("click", openArt);
+      el.querySelector("#av-like").addEventListener("click", async (e) => {
+        e.target.disabled = true;
+        try { const r = await API.artLike(it.id); Object.assign(it, r.item); e.target.textContent = `❤️ ${it.likes}`; e.target.classList.toggle("pink", it.liked); if (it.liked) { try { SFX.coin(); } catch {} } }
+        catch (x) { toast(x.message); } finally { e.target.disabled = false; }
+      });
+      const del = el.querySelector("#av-del");
+      if (del) del.addEventListener("click", async () => {
+        if (!del.classList.contains("sure")) { del.classList.add("sure"); del.textContent = t("adminKickSure"); return; }
+        try { await API.artDelete(it.id); toast(t("artDeleted")); openArt(); } catch (x) { toast(x.message); }
+      });
+    }, true);
+  }
+  function openDraw() {
+    openModal("🖌 " + t("artDraw"), `<div class="draw">
+      <input class="inp" id="dr-title" maxlength="30" placeholder="${esc(t("artTitlePh"))}" value="${esc(art.title)}">
+      <div class="dr-wrap"><canvas id="dr-cv" width="${ART_W}" height="${ART_H}"></canvas></div>
+      <div class="dr-pal">${ART_COLORS.map((c, i) => `<button class="sw" data-c="${i}" style="background:${c}" title="${esc((t("artColors") || [])[i] || "")}"></button>`).join("")}</div>
+      <div class="dr-tools">
+        <span class="dr-sizes">${[0, 1, 2].map((i) => `<button class="btn sm" data-s="${i}"><i style="width:${[4, 8, 14][i]}px;height:${[4, 8, 14][i]}px"></i></button>`).join("")}</span>
+        <button class="btn sm" id="dr-fill">🪣 ${esc(t("artFill"))}</button>
+        <button class="btn sm" id="dr-undo">↩ ${esc(t("artUndo"))}</button>
+        <button class="btn sm" id="dr-clear">🗑 ${esc(t("artClear"))}</button>
+      </div>
+      <div class="dr-foot"><small id="dr-left"></small><button class="btn sm" id="dr-gal">🖼 ${esc(t("artGallery"))}</button><button class="btn pink" id="dr-post">📌 ${esc(t("artPost"))}</button></div></div>`, (el) => {
+      const cv = el.querySelector("#dr-cv"), g = cv.getContext("2d", { willReadFrequently: true });
+      g.imageSmoothingEnabled = false;
+      if (art.draft) g.putImageData(art.draft, 0, 0); else { g.fillStyle = "#ffffff"; g.fillRect(0, 0, ART_W, ART_H); }
+      const undo = [];
+      const snap = () => { undo.push(g.getImageData(0, 0, ART_W, ART_H)); if (undo.length > 25) undo.shift(); };
+      const saveDraft = () => { art.draft = g.getImageData(0, 0, ART_W, ART_H); art.dirty = true; };
+      const R = [1, 3, 6];
+      const stamp = (x, y) => {
+        const r = R[art.size]; g.fillStyle = ART_COLORS[art.color];
+        for (let dy = -r; dy <= r; dy++) { const w = Math.floor(Math.sqrt(r * r - dy * dy + r * 0.8)); g.fillRect(x - w, y + dy, w * 2 + 1, 1); }
+      };
+      const line = (x0, y0, x1, y1) => { const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1); for (let i = 0; i <= n; i++) stamp(Math.round(x0 + ((x1 - x0) * i) / n), Math.round(y0 + ((y1 - y0) * i) / n)); };
+      const flood = (sx, sy) => {
+        const img = g.getImageData(0, 0, ART_W, ART_H), d = img.data;
+        const hexc = ART_COLORS[art.color], nr = parseInt(hexc.slice(1, 3), 16), ng = parseInt(hexc.slice(3, 5), 16), nb = parseInt(hexc.slice(5, 7), 16);
+        const i0 = (sy * ART_W + sx) * 4, tr = d[i0], tg = d[i0 + 1], tb = d[i0 + 2];
+        if (tr === nr && tg === ng && tb === nb) return;
+        const same = (p) => d[p] === tr && d[p + 1] === tg && d[p + 2] === tb;
+        const stack = [[sx, sy]];
+        while (stack.length) {
+          let [x, y] = stack.pop(); let p = (y * ART_W + x) * 4;
+          while (x > 0 && same(p - 4)) { x--; p -= 4; }
+          let up = false, dn = false;
+          while (x < ART_W && same(p)) {
+            d[p] = nr; d[p + 1] = ng; d[p + 2] = nb; d[p + 3] = 255;
+            if (y > 0) { const q = p - ART_W * 4; if (same(q)) { if (!up) { stack.push([x, y - 1]); up = true; } } else up = false; }
+            if (y < ART_H - 1) { const q = p + ART_W * 4; if (same(q)) { if (!dn) { stack.push([x, y + 1]); dn = true; } } else dn = false; }
+            x++; p += 4;
+          }
+        }
+        g.putImageData(img, 0, 0);
+      };
+      const pos = (e) => { const r = cv.getBoundingClientRect(); return [Math.max(0, Math.min(ART_W - 1, Math.floor(((e.clientX - r.left) / r.width) * ART_W))), Math.max(0, Math.min(ART_H - 1, Math.floor(((e.clientY - r.top) / r.height) * ART_H)))]; };
+      let drawing = null;
+      cv.addEventListener("pointerdown", (e) => {
+        e.preventDefault(); const [x, y] = pos(e); snap();
+        if (art.fill) { flood(x, y); saveDraft(); return; }
+        try { cv.setPointerCapture(e.pointerId); } catch {}
+        drawing = { id: e.pointerId, x, y }; stamp(x, y);
+      });
+      cv.addEventListener("pointermove", (e) => { if (!drawing || e.pointerId !== drawing.id) return; e.preventDefault(); const [x, y] = pos(e); line(drawing.x, drawing.y, x, y); drawing.x = x; drawing.y = y; });
+      const end = () => { if (drawing) { drawing = null; saveDraft(); } };
+      cv.addEventListener("pointerup", end); cv.addEventListener("pointercancel", end); cv.addEventListener("lostpointercapture", end);
+      const refresh = () => {
+        el.querySelectorAll(".dr-pal .sw").forEach((b) => b.classList.toggle("on", +b.dataset.c === art.color));
+        el.querySelectorAll("[data-s]").forEach((b) => b.classList.toggle("on", +b.dataset.s === art.size && !art.fill));
+        el.querySelector("#dr-fill").classList.toggle("on", art.fill);
+      };
+      el.querySelectorAll(".dr-pal .sw").forEach((b) => b.addEventListener("click", () => { art.color = +b.dataset.c; refresh(); }));
+      el.querySelectorAll("[data-s]").forEach((b) => b.addEventListener("click", () => { art.size = +b.dataset.s; art.fill = false; refresh(); }));
+      el.querySelector("#dr-fill").addEventListener("click", () => { art.fill = !art.fill; refresh(); });
+      el.querySelector("#dr-undo").addEventListener("click", () => { const im = undo.pop(); if (im) { g.putImageData(im, 0, 0); saveDraft(); } });
+      el.querySelector("#dr-clear").addEventListener("click", (e) => {
+        const b = e.currentTarget; if (!b.classList.contains("sure")) { b.classList.add("sure"); b.textContent = t("adminKickSure"); setTimeout(() => { if (b.isConnected) { b.classList.remove("sure"); b.textContent = "🗑 " + t("artClear"); } }, 3000); return; }
+        snap(); g.fillStyle = "#ffffff"; g.fillRect(0, 0, ART_W, ART_H); art.draft = null; art.dirty = false; b.classList.remove("sure"); b.textContent = "🗑 " + t("artClear");
+      });
+      el.querySelector("#dr-title").addEventListener("input", (e) => (art.title = e.target.value));
+      el.querySelector("#dr-gal").addEventListener("click", openArt);
+      const leftEl = el.querySelector("#dr-left");
+      const showLeft = (n) => { leftEl.textContent = n >= 99 ? "" : t("artLeft", { n }); };
+      if (art.left !== undefined) showLeft(art.left);
+      API.artList(0, "new").then((r) => { art.left = r.left; if (leftEl.isConnected) showLeft(r.left); }).catch(() => {});
+      el.querySelector("#dr-post").addEventListener("click", async (e) => {
+        if (!art.dirty) return toast(t("artEmptyDraw"));
+        const b = e.currentTarget; b.disabled = true;
+        try {
+          const r = await API.artPost(cv.toDataURL("image/png"), art.title.trim());
+          if (r.user) setUser(r.user);
+          art.draft = null; art.dirty = false; art.title = ""; art.left = r.left; art.sort = "new"; art.page = 0;
+          toast(r.gained ? t("artPostedCoins", { n: r.gained }) : t("artPosted"));
+          try { SFX.star(); } catch {}
+          openArt();
+        } catch (x) { toast(x.message); b.disabled = false; }
+      });
+      refresh();
+    }, true);
   }
 
   // ---------------- 모달 콘텐츠 ----------------
@@ -977,7 +1306,16 @@
     } catch {}
   }
   setInterval(() => { if (!document.hidden) loadMail(); }, 60000);
-  function renderMailBadge() { const b = $("#mail-badge"); b.textContent = mailUnread > 9 ? "9+" : mailUnread; b.classList.toggle("hidden", !mailUnread); }
+  function renderMailBadge() { for (const b of [$("#mail-badge"), $("#menu-badge")]) { b.textContent = mailUnread > 9 ? "9+" : mailUnread; b.classList.toggle("hidden", !mailUnread); } }
+  // ---------------- ☰ 메뉴 (코인 · 📸 · 🔊 빼고 전부 이 안에) ----------------
+  function toggleMenu(open) {
+    const l = $("#menu-list"), on = open ?? l.classList.contains("hidden");
+    l.classList.toggle("hidden", !on); $("#btn-menu").setAttribute("aria-expanded", on); $("#btn-menu").classList.toggle("on", on);
+  }
+  $("#btn-menu").addEventListener("click", (e) => { e.stopPropagation(); toggleMenu(); });
+  $("#menu-list").addEventListener("click", (e) => { if (e.target.closest("button")) toggleMenu(false); });
+  document.addEventListener("pointerdown", (e) => { if (!e.target.closest(".menu-wrap")) toggleMenu(false); });
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape") toggleMenu(false); });
   function openMail() {
     openModal(t("mailTitle"), `<div id="mail-list" class="mail-list"></div>`, () => {
       renderMailList();
@@ -1154,6 +1492,7 @@
   window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvt = e; });
   const isStandalone = () => window.matchMedia("(display-mode: standalone)").matches || window.matchMedia("(display-mode: fullscreen)").matches || navigator.standalone === true;
   function maybeInstallPopup() {
+    if (G.dive || G.quizOpen) return void setTimeout(maybeInstallPopup, 15000);
     if (!IS_TOUCH || isStandalone() || G.modalOpen || G.mode !== "world") return;
     try { if (localStorage.getItem("jl_install_shown")) return; localStorage.setItem("jl_install_shown", "1"); } catch {}
     openInstall();
@@ -1342,10 +1681,12 @@
     if (G.mode !== "world" || syncBusy) return scheduleSync();
     syncBusy = true; lastSync = Date.now();
     const room = G.scene;
+    const inSea = room === "sea"; // 분수대 속: 다른 사람에게는 분수대 앞에 서 있는 것처럼 보임
+    const emo = G.sendEmo; G.sendEmo = null;
     try {
-      const r = await API.sync({ scene: room, x: Math.round(G.player.x), y: Math.round(G.player.y), dir: G.player.dir, seat: G.seat, vx: Math.round(G.player.vx || 0), vy: Math.round(G.player.vy || 0), since: G.chat.since });
+      const r = await API.sync({ scene: inSea ? "plaza" : room, x: inSea ? 640 : Math.round(G.player.x), y: inSea ? 262 : Math.round(G.player.y), dir: inSea ? "up" : G.player.dir, seat: inSea ? null : G.seat, vx: inSea ? 0 : Math.round(G.player.vx || 0), vy: inSea ? 0 : Math.round(G.player.vy || 0), since: G.chat.since, ...(emo ? { emo } : {}) });
       if (room !== G.scene) return;
-      applyOthers(r.others || [], r.now);
+      if (!inSea) applyOthers(r.others || [], r.now);
       if (!API.demo) { G.online = r.online || 1; $("#online").textContent = t("online", { n: G.online }); }
       applyChat(r.messages || [], r.notice);
     } catch (e) {
@@ -1362,8 +1703,10 @@
       const upd = { x: o.x, y: o.y, dir: o.dir, name: o.name, avatar: o.avatar, role: o.role, seat: o.seat || null,
         vx: o.vx || 0, vy: o.vy || 0, age: serverNow ? Math.max(0, serverNow - o.ts) : 0, recv: now, seen: now };
       if (ex && o.role === "artist" && upd.seat === "throne" && ex.seat !== "throne") { const st = (scene().seats || []).find((x) => x.id === "throne"); if (st) celebrate(st); }
+      const tgt = ex || { id: o.id, rx: o.x, ry: o.y };
+      if (o.emo && o.emo.k && tgt.emoK !== o.emo.k) { tgt.emoK = o.emo.k; if (!serverNow || serverNow - o.emo.t < 4000) tgt.emoShow = { e: o.emo.e, at: now, until: now + 3500 }; }
       if (ex) Object.assign(ex, upd);
-      else G.others.set(o.id, { ...upd, id: o.id, rx: o.x, ry: o.y });
+      else G.others.set(o.id, Object.assign(tgt, upd));
     }
     // 잠깐 응답에서 빠져도 바로 사라지지 않게 8초 유지 (깜빡임 방지)
     for (const [id, o] of G.others) if (now - o.seen > 8000) G.others.delete(id);
@@ -1629,6 +1972,7 @@
     setTimeout(maybeInstallPopup, 5500);
   }
   function logout() {
+    if (G.dive) endDive(); G.frozen = false;
     API.logout(); G.user = null; G.mode = "title"; G.others.clear(); BGM.play("title");
     closeModal();
     $("#hud").classList.add("hidden"); $("#creator").classList.add("hidden");
