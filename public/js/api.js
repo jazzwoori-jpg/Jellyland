@@ -132,7 +132,7 @@
       return { box, unread: box.filter((m) => !m.read).length };
     }
     if (route === "mail/read") { ls.set("jl_demo_mail_" + me.id, ls.get("jl_demo_mail_" + me.id, []).map((m) => ({ ...m, read: true }))); return { ok: true }; }
-    if (route === "admin/users") return { users: Object.values(users).map((u) => ({ id: u.id, email: u.email, nickname: u.nickname, avatar: u.avatar, role: u.role || "fan", coins: u.coins | 0, createdAt: +String(u.id).slice(1) || 0, best: u.best | 0 })) };
+    if (route === "admin/users") return { users: Object.values(users).map((u) => ({ id: u.id, email: u.email, nickname: u.nickname, avatar: u.avatar, role: u.role || "fan", coins: u.coins | 0, createdAt: +String(u.id).slice(1) || 0, best: u.best | 0, bestUp: u.bestUp | 0 })) };
     if (route === "admin/mail") {
       const m = { ts: Date.now(), from: me.nickname, fromRole: me.role || "admin", text: b.text, read: false, all: b.to === "all" };
       const ids = b.to === "all" ? Object.values(users).map((u) => u.id) : [b.to];
@@ -145,6 +145,15 @@
       const e = Object.keys(users).find((k) => users[k].id === b.id); if (!e) fail("notfound", 404);
       const u = users[e], before = u.coins | 0; u.coins = Math.max(0, b.mode === "set" ? +b.amount | 0 : before + (+b.amount | 0)); save();
       return { ok: true, id: u.id, coins: u.coins, diff: u.coins - before, user: u.id === me.id ? pub(u) : undefined };
+    }
+    if (route === "admin/rank") {
+      const e = Object.keys(users).find((k) => users[k].id === b.id); if (!e) fail("notfound", 404);
+      const u = users[e], up = b.game === "up", bk = up ? "bestUp" : "best", tk = up ? "jl_demo_top_up" : "jl_demo_top";
+      const m = b.mode === "remove" ? 0 : Math.max(0, Math.floor(+b.m || 0)); u[bk] = m; save();
+      let top = ls.get(tk, []); const old = top.find((x) => x.id === u.id); top = top.filter((x) => x.id !== u.id);
+      if (m > 0) top.push({ id: u.id, name: u.nickname, avatar: u.avatar, role: u.role || "fan", m, ts: old ? old.ts : Date.now() });
+      top = top.sort((x, y) => y.m - x.m || x.ts - y.ts).slice(0, 10); ls.set(tk, top);
+      return { ok: true, id: u.id, game: b.game, m, rank: top.findIndex((x) => x.id === u.id) + 1, top };
     }
     if (route === "admin/delete") { const e = Object.keys(users).find((k) => users[k].id === b.id); if (e) delete users[e]; save(); return { ok: true }; }
     if (route === "game/top") {
@@ -254,6 +263,7 @@
     pushKey: () => call("push/key"),
     pushSub: (sub) => call("push/sub", { method: "POST", body: { sub } }),
     pushHost: () => call("push/host", { method: "POST", body: {} }),
+    adminRank: (game, id, m, mode) => call("admin/rank", { method: "POST", body: { game, id, m, mode } }),
     adminDelete: (id) => call("admin/delete", { method: "POST", body: { id } }),
     gameFinish: (run, m) => call("game/finish", { method: "POST", body: { run, m } }),
     chatDelete: (key) => call("chat?key=" + encodeURIComponent(key), { method: "DELETE" }),

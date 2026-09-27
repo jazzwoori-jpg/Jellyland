@@ -17,7 +17,7 @@
 //   POST /api/slot/spin             ← 🎰 럭키젤리! (참가비 20코인, 결과는 서버에서 확률로 결정)
 //   GET  /api/rec?page · POST /api/rec {notes, title} · DELETE /api/rec?key  ← 🎹 "젤리에게 들려줘!" 피아노 녹음 게시판 (하루 3개, 10초)
 //   GET  /api/mail  · POST /api/mail/read · DELETE /api/mail?ts=  ← 내 쪽지함
-//   GET  /api/admin/users · POST /api/admin/mail {to, text} · POST /api/admin/delete {id}  ← 관리자 전용 회원관리
+//   GET  /api/admin/users · POST /api/admin/mail {to, text} · POST /api/admin/delete {id} · POST /api/admin/rank {game,id,m,mode}  ← 관리자 전용 회원관리
 import { getStore } from "@netlify/blobs";
 import crypto from "node:crypto";
 
@@ -598,7 +598,7 @@ export default async (req) => {
       const ms = store("jl-mail");
       const sendMail = async (id, m) => { const k = "box/" + id; const box = (await ms.get(k, { type: "json" })) || []; box.unshift(m); await ms.setJSON(k, box.slice(0, MAIL_MAX)); };
       if (route === "admin/users" && method === "GET") {
-        const list = (await allUsers()).map((u) => ({ id: u.id, email: u.email, nickname: u.nickname || "", avatar: u.avatar || null, role: roleOf(u.email), coins: u.coins | 0, createdAt: u.createdAt || 0, best: u.best | 0 }));
+        const list = (await allUsers()).map((u) => ({ id: u.id, email: u.email, nickname: u.nickname || "", avatar: u.avatar || null, role: roleOf(u.email), coins: u.coins | 0, createdAt: u.createdAt || 0, best: u.best | 0, bestUp: u.bestUp | 0 }));
         list.sort((a, b) => b.createdAt - a.createdAt);
         return json({ users: list });
       }
@@ -635,6 +635,28 @@ export default async (req) => {
         if (diff > 0 && target.id !== user.id) { try { await sendMail(target.id, { ts: Date.now(), from: me.nickname || "관리자", fromRole: me.role, text: `🎁 젤리코인 ${diff.toLocaleString()}개를 선물로 받았어요!`, read: false, gift: diff }); await sendPush([target.id], "mail", { from: me.nickname || "관리자", text: `🎁 젤리코인 ${diff.toLocaleString()}개를 선물로 받았어요!` }); } catch {} }
         if (target.id === user.id) user.coins = target.coins;
         return json({ ok: true, id: target.id, coins: target.coins, diff, user: target.id === user.id ? publicUser(target) : undefined });
+      }
+      // 🏆 랭킹 기록 직접 수정/삭제 {game:"jump"|"up", id, m, mode?:"remove"}
+      if (route === "admin/rank" && method === "POST") {
+        const GK = { jump: { top: "top", best: "best" }, up: { top: "top_up", best: "bestUp" } }[body.game];
+        if (!GK) return err("msg");
+        const target = (await allUsers()).find((u) => u.id === body.id);
+        if (!target) return err("notfound", 404);
+        const m = body.mode === "remove" ? 0 : Math.floor(+body.m || 0);
+        if (!Number.isFinite(m) || m < 0 || m > 100000000) return err("msg");
+        const tk = target._key; delete target._key;
+        target[GK.best] = m;
+        await us.setJSON(tk, target);
+        if (target.id === user.id) user[GK.best] = m;
+        const gs3 = store("jl-game");
+        let top = (await gs3.get(GK.top, { type: "json" })) || [];
+        const old = top.find((e) => e.id === target.id);
+        top = top.filter((e) => e.id !== target.id);
+        if (m > 0) top.push({ id: target.id, name: target.nickname || "?", avatar: target.avatar || null, role: roleOf(target.email), m, ts: old ? old.ts : Date.now() });
+        top.sort((a, b) => b.m - a.m || a.ts - b.ts);
+        top = top.slice(0, 10);
+        await gs3.setJSON(GK.top, top);
+        return json({ ok: true, id: target.id, game: body.game, m, rank: top.findIndex((e) => e.id === target.id) + 1, top });
       }
       if (route === "admin/delete" && method === "POST") {
         const target = (await allUsers()).find((u) => u.id === body.id);

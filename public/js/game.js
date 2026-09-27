@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "27"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "28"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -1028,10 +1028,13 @@
     el.innerHTML = list.map((u) => `<div class="adm-row" data-id="${esc(u.id)}">
       <canvas width="32" height="26" data-av='${esc(JSON.stringify(u.avatar || null))}'></canvas>
       <div class="adm-info"><b>${esc(u.nickname || "—")}</b> <span class="adm-role r-${u.role}">${esc(roleName(u.role))}</span><br>
-        <small>${esc(u.email)} · ${esc(t("adminJoined"))} ${u.createdAt ? fmtTime(u.createdAt).slice(0, 10) : "-"} · 🪙 ${(u.coins | 0).toLocaleString()}</small></div>
-      <div class="adm-act"><button class="btn sm coin" data-act="coin">${esc(t("adminCoin"))}</button><button class="btn sm" data-act="msg">${esc(t("adminMsg"))}</button>${staff(u.role) ? "" : `<button class="btn sm kick" data-act="kick">${esc(t("adminKick"))}</button>`}</div>
+        <small>${esc(u.email)} · ${esc(t("adminJoined"))} ${u.createdAt ? fmtTime(u.createdAt).slice(0, 10) : "-"} · 🪙 ${(u.coins | 0).toLocaleString()}<br>🏃 ${(u.best | 0).toLocaleString()}m · 🪜 ${(u.bestUp | 0).toLocaleString()}m</small></div>
+      <div class="adm-act"><button class="btn sm coin" data-act="coin">${esc(t("adminCoin"))}</button><button class="btn sm" data-act="rank">${esc(t("adminRank"))}</button><button class="btn sm" data-act="msg">${esc(t("adminMsg"))}</button>${staff(u.role) ? "" : `<button class="btn sm kick" data-act="kick">${esc(t("adminKick"))}</button>`}</div>
       <div class="adm-coin hidden"><input class="inp" type="number" min="0" step="10" inputmode="numeric" placeholder="${esc(t("adminCoinPh"))}">
         <button class="btn sm pink" data-mode="add">${esc(t("adminCoinAdd"))}</button><button class="btn sm" data-mode="sub">${esc(t("adminCoinSub"))}</button><button class="btn sm grape" data-mode="set">${esc(t("adminCoinSet"))}</button></div>
+      <div class="adm-rank hidden"><select class="inp"><option value="jump">🏃 ${esc(t("rkJump"))}</option><option value="up">🪜 ${esc(t("upTitle"))}</option></select>
+        <input class="inp" type="number" min="0" step="1" inputmode="numeric" placeholder="${esc(t("adminRankPh"))}" value="${u.best | 0}">
+        <button class="btn sm pink" data-rk="save">${esc(t("adminRankSave"))}</button><button class="btn sm kick" data-rk="remove">${esc(t("adminRankDel"))}</button></div>
       <div class="adm-compose hidden"><textarea maxlength="500" rows="3" placeholder="${esc(t("adminMsgPh"))}"></textarea><button class="btn sm pink" data-act="send">${esc(t("adminSend"))}</button></div></div>`).join("");
     el.querySelectorAll("canvas[data-av]").forEach((c) => { try { const av = JSON.parse(c.dataset.av); if (av) Avatar.face(c.getContext("2d"), av, 32, 26); } catch {} });
     el.querySelectorAll(".adm-row").forEach((row) => {
@@ -1046,6 +1049,23 @@
           const r = await API.adminCoins(u.id, mode, amount);
           u.coins = r.coins; if (r.user) setUser(r.user);
           toast(t("adminCoinDone", { name: u.nickname || u.email, n: r.coins.toLocaleString() })); renderAdmin();
+        } catch (x) { toast(x.message); b.disabled = false; }
+      }));
+      const rk = row.querySelector(".adm-rank"), rkSel = rk.querySelector("select"), rkIn = rk.querySelector("input");
+      row.querySelector("[data-act=rank]").addEventListener("click", () => { rk.classList.toggle("hidden"); rkIn.focus(); });
+      rkSel.addEventListener("change", () => { rkIn.value = (rkSel.value === "up" ? u.bestUp : u.best) | 0; });
+      rk.querySelectorAll("[data-rk]").forEach((b) => b.addEventListener("click", async () => {
+        const game = rkSel.value, remove = b.dataset.rk === "remove";
+        const m = Math.floor(+rkIn.value || 0); if (!remove && !(m >= 0)) return;
+        if (remove && !b.classList.contains("sure")) { b.classList.add("sure"); b.textContent = t("adminKickSure"); setTimeout(() => { if (b.isConnected) { b.classList.remove("sure"); b.textContent = t("adminRankDel"); } }, 4000); return; }
+        b.disabled = true;
+        try {
+          const r = await API.adminRank(game, u.id, m, remove ? "remove" : undefined);
+          u[game === "up" ? "bestUp" : "best"] = r.m;
+          if (u.id === G.user.id) { try { setUser(await API.me()); } catch {} }
+          if (typeof refreshRankTop === "function") refreshRankTop();
+          toast(t(r.m > 0 ? "adminRankDone" : "adminRankRemoved", { name: u.nickname || u.email, game: t(game === "up" ? "upTitle" : "rkJump"), m: r.m.toLocaleString(), r: r.rank || "-" }));
+          renderAdmin();
         } catch (x) { toast(x.message); b.disabled = false; }
       }));
       row.querySelector("[data-act=send]").addEventListener("click", async (e) => {
