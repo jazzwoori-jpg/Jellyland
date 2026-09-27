@@ -394,8 +394,8 @@
       artist: null, // 조젤리 NPC 는 없앰 (피아노를 직접 연주)
       piano: { x: PX, y: PY - 10, front: { x: PX, y: PY + 20 } },
       clickables: [{ x: RX, y: RY - 20, r: 24, go: "recboard", front: { x: RX, y: RY + 16 } }, { x: BX, y: BY - 50, r: 56, go: "rankboard", front: { x: BX, y: BY + 16 } }, { x: FX, y: FY - 6, r: 38, go: "fountain", front: { x: FX, y: FY + 32 } }],
-      icons: [...buildings.map((b) => ({ x: b.x + b.w / 2 + 2, y: b.y - 4, icon: b.icon, label: b.name })), { x: PX, y: PY - 34, icon: "🎹" }, { x: RX, y: RY - 48, icon: "📼" }, { x: BX, y: BY - 122, icon: "🏆" }, { x: 532, y: 744, icon: "ℹ️" }, { x: FX, y: FY - 40, icon: "🫧" }],
-      signs: [{ x: FX, y: FY + 56, key: "fountainSign", bg: "#e8dcfa", type: true }],
+      icons: [...buildings.map((b) => ({ x: b.x + b.w / 2 + 2, y: b.y - 4, icon: b.icon, label: b.name })), { x: PX, y: PY - 34, icon: "🎹" }, { x: RX, y: RY - 48, icon: "📼" }, { x: BX, y: BY - 122, icon: "🏆" }, { x: 532, y: 744, icon: "ℹ️" }],
+      signs: [{ x: FX, y: FY - 34, key: "fountainSign", bg: "#e8dcfa", type: true }],
       npcArea: [300, 300, 700, 500],
     };
   }

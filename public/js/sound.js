@@ -50,6 +50,9 @@
     slotStop() { if (!ctx()) return; const t = actx.currentTime; tone("square", 180, 90, t, 0.1, 0.12); noise(t, 0.06, 0.2, 600, "lowpass"); },
     win() { if (!ctx()) return; const t = actx.currentTime; [72, 76, 79, 84, 79, 84].forEach((m, i) => tone("square", hz(m), 0, t + i * 0.09, 0.14, 0.08)); for (let i = 0; i < 8; i++) tone("triangle", hz(96 + (i % 3) * 4), 0, t + 0.5 + i * 0.06, 0.08, 0.05); },
     jackpot() { if (!ctx()) return; const t = actx.currentTime; [60, 64, 67, 72, 76, 79, 84, 88, 91, 96].forEach((m, i) => tone("square", hz(m), 0, t + i * 0.06, 0.2, 0.08)); [72, 76, 79, 84].forEach((m) => tone("sawtooth", hz(m), 0, t + 0.7, 1.2, 0.05)); for (let i = 0; i < 24; i++) tone("triangle", hz(100 + (i % 5) * 2), 0, t + 0.7 + i * 0.05, 0.06, 0.04); noise(t + 0.7, 1.2, 0.15, 7000, "highpass"); },
+    // 👼 젤리축복 · 😇 천사의 링: 하프 글리산도 + 반짝
+    bless() { if (!ctx()) return; const t = actx.currentTime; [60, 64, 67, 72, 76, 79, 84, 88, 91, 96].forEach((m, i) => tone("sine", hz(m), 0, t + i * 0.04, 0.5, 0.07)); [84, 88, 91].forEach((m) => tone("triangle", hz(m), 0, t + 0.45, 0.9, 0.05)); noise(t + 0.4, 0.6, 0.06, 8000, "highpass"); },
+    angel() { if (!ctx()) return; const t = actx.currentTime; tone("sine", 300, 2400, t, 0.8, 0.08); [72, 76, 79, 84, 88, 91, 96].forEach((m, i) => tone("triangle", hz(m), 0, t + i * 0.05, 0.4, 0.07)); noise(t, 0.8, 0.08, 6000, "highpass"); },
     // 🫧 분수대 다이빙
     splash() { if (!ctx()) return; const t = actx.currentTime; noise(t, 0.5, 0.45, 1200, "lowpass"); noise(t + 0.05, 0.35, 0.2, 3000, "bandpass"); tone("sine", 500, 120, t, 0.35, 0.12); },
     bubble() { if (!ctx()) return; const t = actx.currentTime; for (let i = 0; i < 3; i++) tone("sine", 300 + Math.random() * 300, 900 + Math.random() * 500, t + i * 0.07, 0.07, 0.05); },

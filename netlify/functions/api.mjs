@@ -209,9 +209,12 @@ const GAME_MAX = 200, GAME_DAY_MAX = 600, GAME_STEP_M = 100, GAME_STEP_COINS = 5
 const MAIL_MAX = 60;
 const REC_PER_DAY = 3, REC_MAX_MS = 5000, REC_MAX_NOTES = 300, REC_TTL = 7 * 24 * 3600 * 1000; // 하루 3개 · 5초 · 1주일 뒤 자동 삭제
 // 미니게임 속도 공식 (public/js/minigame.js 와 같음): 속도 = min(400, 150 + 4·t) px/s, 10px = 1m
+// 10만 m(100만 px)부터는 속도 = 400 + 0.001·(거리 − 100만 px) → 끝없이 조금씩 빨라짐 (지수적으로 증가)
 function maxMeters(sec) {
   const tc = (400 - 150) / 4;
-  const px = sec <= tc ? 150 * sec + 2 * sec * sec : 150 * tc + 2 * tc * tc + 400 * (sec - tc);
+  const base = (s) => (s <= tc ? 150 * s + 2 * s * s : 150 * tc + 2 * tc * tc + 400 * (s - tc));
+  const X0 = 1e6, K = 0.001, tA = tc + (X0 - base(tc)) / 400;
+  const px = sec <= tA ? base(sec) : X0 + (400 / K) * (Math.exp(Math.min(700, K * (sec - tA))) - 1);
   return px / 10;
 }
 const kstDay = (ts = Date.now()) => new Date(ts + 9 * 3600 * 1000).toISOString().slice(0, 10);
@@ -583,7 +586,7 @@ export default async (req) => {
       const sec = (Date.now() - t0) / 1000;
       if (sec > 12 * 3600) return err("forbidden", 400); // 한 판 최대 12시간 (예전 1시간 제한 때문에 긴 기록이 저장되지 않던 문제 수정)
       // 시간에 비해 너무 먼 거리(높이)는 인정 안 함 — 올라올라는 초당 최대 약 50m
-      const m = Math.max(0, Math.min(+body.m || 0, g === "up" ? sec * 50 + 30 : maxMeters(sec) * 1.1 + 20));
+      const m = Math.max(0, Math.min(+body.m || 0, g === "up" ? sec * 90 + 300 : maxMeters(sec) * 1.1 + 20));
       const left = gameLeft();
       const coins = Math.min(GAME_MAX, left, Math.floor(m / GAME_STEP_M) * GAME_STEP_COINS);
       if (user.gameDay !== kstDay()) { user.gameDay = kstDay(); user.gameCoins = 0; }
