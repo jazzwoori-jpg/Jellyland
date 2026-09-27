@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "25"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "26"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -1067,10 +1067,56 @@
   setInterval(() => { if (!document.hidden) checkVersion(); }, 120000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) checkVersion(); });
 
+  // ---------------- 🔔 푸시 알림 (조젤리 입장 · 새 쪽지) ----------------
+  const pushSupported = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  const b64ToBytes = (s) => { const p = "=".repeat((4 - (s.length % 4)) % 4), b = atob((s + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(b, (c) => c.charCodeAt(0)); };
+  async function subscribePush() {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      const { key } = await API.pushKey(); if (!key) throw new Error("demo");
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(key) });
+    }
+    await API.pushSub(sub.toJSON());
+  }
+  async function pushOnEnter() {
+    if (API.demo) return;
+    // 호스트가 들어오면 알림을 켠 모든 회원에게 "Jo Jelly 등장!" (서버에서 30분에 한 번만)
+    if (G.user.role === "artist") API.pushHost().catch(() => {});
+    if (!pushSupported()) return;
+    if (Notification.permission === "granted") { subscribePush().catch(() => {}); return; } // 이 계정으로 다시 연결
+    // 홈 화면 앱(또는 안드로이드)에서 아직 안 물어봤으면 알림 켜기 안내
+    const ios = document.body.classList.contains("ios");
+    let asked = false; try { asked = !!localStorage.getItem("jl_push_asked"); } catch {}
+    if (Notification.permission === "default" && !asked && IS_TOUCH && (isStandalone() || !ios)) setTimeout(() => { if (!G.modalOpen && G.mode === "world") openPushSetup(); }, 12000);
+  }
+  function openPushSetup() {
+    try { localStorage.setItem("jl_push_asked", "1"); } catch {}
+    const ios = document.body.classList.contains("ios");
+    let state = "ok", note = "";
+    if (!pushSupported()) { state = "no"; note = ios && !isStandalone() ? t("pushNeedInstall") : t("pushUnsupported"); }
+    else if (Notification.permission === "denied") { state = "denied"; note = t("pushDenied"); }
+    else if (Notification.permission === "granted") note = t("pushAlready");
+    openModal(t("pushTitle"), `<div class="install"><div class="push-bell">🔔</div><p>${esc(t("pushIntro"))}</p>
+      ${state === "ok" ? `<button class="btn pink" id="push-on">${esc(t("pushOn"))}</button>` : ""}
+      ${note ? `<p class="push-note">${esc(note)}</p>` : ""}${state === "no" && ios ? `<button class="btn sm" id="push-install">${esc(t("installHelp"))}</button>` : ""}</div>`, (el) => {
+      const on = el.querySelector("#push-on");
+      if (on) on.addEventListener("click", async () => {
+        on.disabled = true;
+        try {
+          const p = await Notification.requestPermission();
+          if (p !== "granted") { toast(t("pushDenied")); on.disabled = false; return; }
+          await subscribePush(); toast(t("pushDone")); closeModal();
+        } catch (e) { toast(e.message === "demo" ? t("pushUnsupported") : t("err")); on.disabled = false; }
+      });
+      const ib = el.querySelector("#push-install"); if (ib) ib.addEventListener("click", openInstall);
+    });
+  }
+
   // ---------------- 📲 홈 화면에 앱 추가 ----------------
   let installEvt = null;
   window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvt = e; });
-  const isStandalone = () => window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  const isStandalone = () => window.matchMedia("(display-mode: standalone)").matches || window.matchMedia("(display-mode: fullscreen)").matches || navigator.standalone === true;
   function maybeInstallPopup() {
     if (!IS_TOUCH || isStandalone() || G.modalOpen || G.mode !== "world") return;
     try { if (localStorage.getItem("jl_install_shown")) return; localStorage.setItem("jl_install_shown", "1"); } catch {}
@@ -1081,7 +1127,7 @@
     const html = `<div class="install"><img src="img/icon-180.png" alt="" class="inst-icon"><p>${esc(t("installIntro"))}</p>
       ${installEvt ? `<button class="btn pink" id="inst-go">${esc(t("installBtn"))}</button>` : ""}
       <div class="inst-steps">${ios ? `<div class="inst-card">${t("installIOS")}</div>` : `<div class="inst-card">${t("installAndroid")}</div><div class="inst-card">${t("installIOS")}</div>`}</div>
-      <button class="btn sm" id="inst-later">${esc(t("installLater"))}</button></div>`;
+      <p class="push-note">${esc(t("installPushHint"))}</p><button class="btn sm" id="inst-later">${esc(t("installLater"))}</button></div>`;
     openModal(t("installTitle"), html, (el) => {
       const go = el.querySelector("#inst-go");
       if (go) go.addEventListener("click", async () => { try { installEvt.prompt(); await installEvt.userChoice; toast(t("installDone")); } catch {} installEvt = null; closeModal(); });
@@ -1135,8 +1181,8 @@
   }
 
   function openGuide() {
-    openModal(t("guideTitle"), `<ul class="guide">${t("guide").map((g) => `<li>${g}</li>`).join("")}</ul><p style="text-align:center"><button class="btn sm grape" id="guide-profile">${esc(t("seeProfile"))}</button> <button class="btn sm pink" id="guide-install">${esc(t("installHelp"))}</button></p>`,
-      (el) => { el.querySelector("#guide-install").addEventListener("click", openInstall); el.querySelector("#guide-profile").addEventListener("click", openProfile); });
+    openModal(t("guideTitle"), `<ul class="guide">${t("guide").map((g) => `<li>${g}</li>`).join("")}</ul><p style="text-align:center"><button class="btn sm grape" id="guide-profile">${esc(t("seeProfile"))}</button> <button class="btn sm pink" id="guide-install">${esc(t("installHelp"))}</button> <button class="btn sm" id="guide-push">${esc(t("pushBtn"))}</button></p>`,
+      (el) => { el.querySelector("#guide-install").addEventListener("click", openInstall); el.querySelector("#guide-profile").addEventListener("click", openProfile); el.querySelector("#guide-push").addEventListener("click", openPushSetup); });
   }
   $("#btn-help").addEventListener("click", openGuide);
   // ---------------- 📸 스크린샷 ----------------
@@ -1542,6 +1588,7 @@
     checkDaily();
     loadMail(true);
     refreshRankTop();
+    pushOnEnter();
     setTimeout(maybeInstallPopup, 5500);
   }
   function logout() {

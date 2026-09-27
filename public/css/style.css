@@ -538,3 +538,7 @@ body.touch .pn-hint:first-of-type { display: none; }
 .adm-row .adm-coin { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .adm-row .adm-coin .inp { width: 140px; -webkit-user-select: text; user-select: text; }
 .adm-act .coin { background: #fff3a8; }
+/* ---------- v26: 알림 ---------- */
+.push-bell { font-size: 48px; animation: bell 1.6s ease-in-out infinite; }
+@keyframes bell { 0%, 60%, 100% { transform: rotate(0); } 10% { transform: rotate(18deg); } 20% { transform: rotate(-16deg); } 30% { transform: rotate(10deg); } 40% { transform: rotate(-6deg); } }
+.push-note { font-size: 12px; opacity: .8; }

@@ -157,6 +157,71 @@ async function deletedIds(force) {
 }
 const clean = (s, n) => String(s ?? "").replace(/[\u0000-\u001f]/g, "").trim().slice(0, n);
 
+// ================= 🔔 웹 푸시 알림 (홈 화면에 추가한 앱 · 안드로이드 크롬) =================
+// 외부 라이브러리 없이 표준(RFC 8291 aes128gcm + RFC 8292 VAPID)대로 직접 암호화해서 보냄
+const b64uDec = (s) => Buffer.from(String(s).replace(/-/g, "+").replace(/_/g, "/"), "base64");
+let vapidCache = null;
+async function getVapid() {
+  if (vapidCache) return vapidCache;
+  const cfg = store("jl-config");
+  let v = await cfg.get("vapid", { type: "json" });
+  if (!v) {
+    const { privateKey, publicKey } = crypto.generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+    const pj = publicKey.export({ format: "jwk" });
+    v = { pub: b64u(Buffer.concat([Buffer.from([4]), b64uDec(pj.x), b64uDec(pj.y)])), jwk: privateKey.export({ format: "jwk" }) };
+    await cfg.setJSON("vapid", v);
+  }
+  vapidCache = { pub: v.pub, key: crypto.createPrivateKey({ key: v.jwk, format: "jwk" }) };
+  return vapidCache;
+}
+const hmac = (key, data) => crypto.createHmac("sha256", key).update(data).digest();
+function encryptPush(sub, payload) {
+  const uaPub = b64uDec(sub.keys.p256dh), auth = b64uDec(sub.keys.auth);
+  const ecdh = crypto.createECDH("prime256v1"); ecdh.generateKeys();
+  const asPub = ecdh.getPublicKey(), secret = ecdh.computeSecret(uaPub);
+  const prkKey = hmac(auth, secret);
+  const ikm = hmac(prkKey, Buffer.concat([Buffer.from("WebPush: info\0"), uaPub, asPub, Buffer.from([1])]));
+  const salt = crypto.randomBytes(16), prk = hmac(salt, ikm);
+  const cek = hmac(prk, Buffer.concat([Buffer.from("Content-Encoding: aes128gcm\0"), Buffer.from([1])])).subarray(0, 16);
+  const nonce = hmac(prk, Buffer.concat([Buffer.from("Content-Encoding: nonce\0"), Buffer.from([1])])).subarray(0, 12);
+  const c = crypto.createCipheriv("aes-128-gcm", cek, nonce);
+  const ct = Buffer.concat([c.update(Buffer.concat([Buffer.from(payload), Buffer.from([2])])), c.final(), c.getAuthTag()]);
+  const rs = Buffer.alloc(4); rs.writeUInt32BE(4096);
+  return Buffer.concat([salt, rs, Buffer.from([asPub.length]), asPub, ct]);
+}
+async function vapidHeader(endpoint) {
+  const v = await getVapid(), aud = new URL(endpoint).origin;
+  const head = b64u(JSON.stringify({ typ: "JWT", alg: "ES256" })), body = b64u(JSON.stringify({ aud, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: "https://jellyland.netlify.app" }));
+  const sig = crypto.sign("sha256", Buffer.from(`${head}.${body}`), { key: v.key, dsaEncoding: "ieee-p1363" });
+  return `vapid t=${head}.${body}.${b64u(sig)}, k=${v.pub}`;
+}
+// 알림 문구 (받는 사람 언어로)
+const PUSH_TEXT = {
+  host: { ko: ["👑 Jo Jelly 등장!", "조젤리가 젤리랜드에 들어왔어요! 지금 놀러 오세요 ♪"], en: ["👑 Jo Jelly is here!", "Jo Jelly just entered JELLY LAND! Come say hi ♪"], ja: ["👑 Jo Jelly 登場！", "Jo Jelly がゼリーランドに来ました！今すぐ遊びに来てね ♪"] },
+  mail: { ko: ["✉️ 새 쪽지가 왔어요", "{from}: {text}"], en: ["✉️ New message", "{from}: {text}"], ja: ["✉️ 新しいメッセージ", "{from}: {text}"] },
+};
+// uids: 받을 회원 id 목록 (null = 알림을 켠 모든 회원)
+async function sendPush(uids, kind, vars = {}, exclude = null) {
+  const ps = store("jl-push");
+  const { blobs } = await ps.list({ prefix: "s/" });
+  const keys = blobs.map((b) => b.key).filter((k) => (!uids || uids.includes(k.split("/")[1])) && k.split("/")[1] !== exclude);
+  let sent = 0;
+  for (let i = 0; i < keys.length; i += 40) {
+    await Promise.all(keys.slice(i, i + 40).map(async (k) => {
+      try {
+        const rec = await ps.get(k, { type: "json" }); if (!rec) return;
+        const tx = PUSH_TEXT[kind][rec.lang] || PUSH_TEXT[kind].ko;
+        const fill = (s) => s.replace("{from}", vars.from || "").replace("{text}", String(vars.text || "").slice(0, 80));
+        const payload = JSON.stringify({ title: fill(tx[0]), body: fill(tx[1]), url: "/", tag: kind });
+        const r = await fetch(rec.sub.endpoint, { method: "POST", headers: { Authorization: await vapidHeader(rec.sub.endpoint), "Content-Encoding": "aes128gcm", "Content-Type": "application/octet-stream", TTL: "86400", Urgency: "high" }, body: encryptPush(rec.sub, payload), signal: withTimeout(6000) });
+        if (r.status === 404 || r.status === 410) await ps.delete(k); // 알림을 끈 기기는 정리
+        else if (r.ok) sent++;
+      } catch {}
+    }));
+  }
+  return sent;
+}
+
 // ================= 번역 =================
 // 1) 환경변수 DEEPL_API_KEY 가 있으면 DeepL (무료 플랜: 월 50만 자)
 // 2) 없으면 MyMemory 무료 API (키 불필요, 하루 사용량 제한 있음 — MYMEMORY_EMAIL 설정 시 한도 증가)
@@ -214,6 +279,7 @@ export default async (req) => {
   if (method === "POST") { try { body = await req.json(); } catch { body = {}; } }
 
   try {
+    if (route === "push/key") return json({ key: (await getVapid()).pub });
     if (route === "health") return json({ ok: true, translator: process.env.DEEPL_API_KEY ? "deepl" : "mymemory" });
 
     if (route === "signup" && method === "POST") {
@@ -483,6 +549,34 @@ export default async (req) => {
       }
     }
 
+    // ---------- 🔔 알림 구독 ----------
+    if (route === "push/sub") {
+      const ps = store("jl-push");
+      const sub = body.sub || {};
+      if (method === "POST") {
+        if (!sub.endpoint || !/^https:\/\//.test(sub.endpoint) || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) return err("msg");
+        const k = `s/${user.id}/${crypto.createHash("sha256").update(sub.endpoint).digest("hex").slice(0, 24)}`;
+        await ps.setJSON(k, { sub: { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } }, uid: user.id, lang: me.lang, ts: Date.now() });
+        return json({ ok: true });
+      }
+      if (method === "DELETE") {
+        const ep = url.searchParams.get("ep") || "";
+        const k = `s/${user.id}/${crypto.createHash("sha256").update(ep).digest("hex").slice(0, 24)}`;
+        try { await ps.delete(k); } catch {}
+        return json({ ok: true });
+      }
+    }
+    // 👑 호스트 입장 → 알림을 켠 모든 회원에게 푸시 (30분에 한 번)
+    if (route === "push/host" && method === "POST") {
+      if (me.role !== "artist") return err("forbidden", 403);
+      const cfg = store("jl-config");
+      const last = +(await cfg.get("hostPushAt")) || 0;
+      if (Date.now() - last < 30 * 60 * 1000) return json({ ok: true, skipped: true });
+      await cfg.set("hostPushAt", String(Date.now()));
+      const sent = await sendPush(null, "host", {}, user.id);
+      return json({ ok: true, sent });
+    }
+
     // ---------- ✉️ 쪽지함 ----------
     if (route === "mail" || route === "mail/read") {
       const ms = store("jl-mail");
@@ -515,11 +609,13 @@ export default async (req) => {
         if (body.to === "all") {
           const list = await allUsers();
           for (let i = 0; i < list.length; i += 20) await Promise.all(list.slice(i, i + 20).map((u) => sendMail(u.id, m)));
+          try { await sendPush(null, "mail", { from: m.from, text }, user.id); } catch {}
           return json({ ok: true, sent: list.length });
         }
         const target = (await allUsers()).find((u) => u.id === body.to);
         if (!target) return err("notfound", 404);
         await sendMail(target.id, m);
+        try { await sendPush([target.id], "mail", { from: m.from, text }); } catch {}
         return json({ ok: true, sent: 1 });
       }
       // 🪙 코인 지급·회수·설정 (관리자 본인 포함 누구에게나)
@@ -536,7 +632,7 @@ export default async (req) => {
         if (roleOf(target.email) === "artist") target.coins = Math.max(1000000, after);
         await us.setJSON(tk, target);
         const diff = target.coins - before;
-        if (diff > 0 && target.id !== user.id) { try { await sendMail(target.id, { ts: Date.now(), from: me.nickname || "관리자", fromRole: me.role, text: `🎁 젤리코인 ${diff.toLocaleString()}개를 선물로 받았어요!`, read: false, gift: diff }); } catch {} }
+        if (diff > 0 && target.id !== user.id) { try { await sendMail(target.id, { ts: Date.now(), from: me.nickname || "관리자", fromRole: me.role, text: `🎁 젤리코인 ${diff.toLocaleString()}개를 선물로 받았어요!`, read: false, gift: diff }); await sendPush([target.id], "mail", { from: me.nickname || "관리자", text: `🎁 젤리코인 ${diff.toLocaleString()}개를 선물로 받았어요!` }); } catch {} }
         if (target.id === user.id) user.coins = target.coins;
         return json({ ok: true, id: target.id, coins: target.coins, diff, user: target.id === user.id ? publicUser(target) : undefined });
       }

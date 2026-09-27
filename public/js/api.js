@@ -139,6 +139,8 @@
       ids.forEach((id) => { const k = "jl_demo_mail_" + id; ls.set(k, [m, ...ls.get(k, [])]); });
       return { ok: true, sent: ids.length };
     }
+    if (route === "push/key") return { key: "" };
+    if (route === "push/sub" || route === "push/host") return { ok: true, demo: true };
     if (route === "admin/coins") {
       const e = Object.keys(users).find((k) => users[k].id === b.id); if (!e) fail("notfound", 404);
       const u = users[e], before = u.coins | 0; u.coins = Math.max(0, b.mode === "set" ? +b.amount | 0 : before + (+b.amount | 0)); save();
@@ -249,6 +251,9 @@
     adminUsers: () => call("admin/users"),
     adminMail: (to, text) => call("admin/mail", { method: "POST", body: { to, text } }),
     adminCoins: (id, mode, amount) => call("admin/coins", { method: "POST", body: { id, mode, amount } }),
+    pushKey: () => call("push/key"),
+    pushSub: (sub) => call("push/sub", { method: "POST", body: { sub } }),
+    pushHost: () => call("push/host", { method: "POST", body: {} }),
     adminDelete: (id) => call("admin/delete", { method: "POST", body: { id } }),
     gameFinish: (run, m) => call("game/finish", { method: "POST", body: { run, m } }),
     chatDelete: (key) => call("chat?key=" + encodeURIComponent(key), { method: "DELETE" }),
