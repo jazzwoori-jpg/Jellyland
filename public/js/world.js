@@ -795,13 +795,17 @@
     });
     // 보물상자
     const [chC, chO] = chestSprites();
-    const CX = 440, CY = 352;
+    // 보물상자 자리: 들어올 때마다 이 중 한 곳으로 바뀜 (모래 바닥 여러 곳)
+    const SPOTS = [[150, 352], [196, 346], [318, 358], [382, 350], [440, 352], [500, 355], [612, 356], [130, 362], [260, 350], [540, 366]];
+    let CX = 440, CY = 352;
     const sea = { chestOpen: false, locked: false };
-    objects.push({ y: CY, x: CX, anim: true, draw: (c, t) => {
+    const chestObj = { y: CY, x: CX, anim: true, draw: (c, t) => {
       c.drawImage(sea.chestOpen ? chO : chC, CX - 20, CY - 36);
       if (!sea.chestOpen && !sea.locked) { const a = (Math.sin(t / 250) + 1) / 2; c.fillStyle = `rgba(255,243,168,${0.25 + a * 0.5})`; [[-24, -30], [22, -24], [-4, -44]].forEach(([dx, dy], j) => c.fillRect(CX + dx + ((t / 200 + j) % 2 | 0), CY + dy, 2, 2)); }
-    } });
-    colliders.push([CX - 18, CY - 16, 36, 14]);
+    } };
+    objects.push(chestObj);
+    const chestCol = [CX - 18, CY - 16, 36, 14];
+    colliders.push(chestCol);
     // 물고기 · 물방울 · 빛줄기 (맨 위에 그림)
     const fish = [[0, 110, "#ffb347", 26], [1, 190, "#ff7fae", 34], [2, 262, "#7fe3ff", 22], [3, 150, "#ffe07a", 40], [4, 300, "#b58cff", 30]];
     objects.push({ y: 99999, x: 0, anim: true, draw: (c, t) => {
@@ -820,14 +824,30 @@
       for (let k = 0; k < 26; k++) { const bx = (k * 53) % W + Math.sin(t / 700 + k) * 4, by = H - ((t / 1000) * (20 + (k % 5) * 6) + k * 71) % (H + 20); const s = k % 3 ? 2 : 3; c.fillRect(bx, by, s, s); }
     } });
     const collide = (px, py) => colliders.some(([a, b, w, h]) => px > a && px < a + w && py > b && py < b + h);
-    return {
+    const chestZone = { id: "chest", x: CX - 30, y: CY - 8, w: 60, h: 28, label: T("zChest") };
+    const chestClick = { x: CX, y: CY - 16, r: 26, go: "chest", front: { x: CX, y: CY + 12 } };
+    const chestIcon = { x: CX, y: CY - 40, icon: "❓" };
+    const world = {
       id: "sea", W, H, ground: g, objects, colliders: [], sea,
-      zones: [{ id: "chest", x: CX - 30, y: CY - 8, w: 60, h: 28, label: T("zChest") }, { id: "surface", x: 270, y: 36, w: 100, h: 30, label: T("zSurface") }],
+      zones: [chestZone, { id: "surface", x: 270, y: 36, w: 100, h: 30, label: T("zSurface") }],
       walkable: (px, py) => px > 12 && px < W - 12 && py > 36 && py < H - 6 && !collide(px, py),
       spawn: { x: 320, y: 140 }, artist: null, chest: { x: CX, y: CY },
-      clickables: [{ x: CX, y: CY - 16, r: 26, go: "chest", front: { x: CX, y: CY + 12 } }],
-      icons: [{ x: CX, y: CY - 40, icon: "❓" }],
+      clickables: [chestClick],
+      icons: [chestIcon],
     };
+    // 🎲 보물상자를 무작위 자리로 옮김 (이전 자리와는 다르게)
+    world.placeChest = (idx) => {
+      let k = idx ?? ((Math.random() * SPOTS.length) | 0);
+      if (idx == null && SPOTS[k][0] === CX && SPOTS[k][1] === CY) k = (k + 1 + ((Math.random() * (SPOTS.length - 1)) | 0)) % SPOTS.length;
+      [CX, CY] = SPOTS[k];
+      chestObj.x = CX; chestObj.y = CY;
+      chestCol[0] = CX - 18; chestCol[1] = CY - 16;
+      Object.assign(chestZone, { x: CX - 30, y: CY - 8 });
+      Object.assign(chestClick, { x: CX, y: CY - 16, front: { x: CX, y: CY + 12 } });
+      chestIcon.x = CX; chestIcon.y = CY - 40;
+      world.chest.x = CX; world.chest.y = CY; world.chestSpot = k;
+    };
+    return world;
   }
 
   window.World = { buildPlaza, buildLounge, buildSea, rankTops: {} };

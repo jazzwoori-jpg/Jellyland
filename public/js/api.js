@@ -150,8 +150,8 @@
     if (route.startsWith("sea/")) {
       const DQ = [["노르웨이의 수도는?", ["오슬로", "스톡홀름", "코펜하겐", "헬싱키"]], ["거미의 다리는 몇 개?", ["8", "6", "10", "4"]], ["태양계에서 가장 큰 행성은?", ["목성", "토성", "지구", "해왕성"]]];
       const now = Date.now(), lock = Math.max(0, (me.seaAt || 0) + 3 * 3600e3 - now);
-      if (route === "sea/dive") { me.sea = { t0: now, ok: 0 }; save(); return { o2: 20000, need: 2, coins: 400, lockLeft: lock }; }
-      if (!me.sea || now - me.sea.t0 > 22500) fail("seaTimeout");
+      if (route === "sea/dive") { me.sea = { t0: now, ok: 0 }; save(); return { o2: 15000, need: 2, coins: 400, lockLeft: lock }; }
+      if (!me.sea || now - me.sea.t0 > 17500) fail("seaTimeout");
       if (lock > 0) fail("seaLocked");
       if (route === "sea/q") { const qi = (Math.random() * DQ.length) | 0, perm = [0, 1, 2, 3].sort(() => Math.random() - 0.5); me.sea.q = qi; me.sea.perm = perm; save(); return { q: DQ[qi][0], choices: perm.map((i) => DQ[qi][1][i]), ok: me.sea.ok, need: 2 }; }
       if (route === "sea/answer") {

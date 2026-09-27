@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "31"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "32"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -82,7 +82,7 @@
     G.worlds.lounge = World.buildLounge();
     const oldSea = G.worlds.sea;
     G.worlds.sea = World.buildSea();
-    if (oldSea) { Object.assign(G.worlds.sea.sea, oldSea.sea); G.worlds.sea.icons[0].icon = oldSea.icons[0].icon; }
+    if (oldSea) { G.worlds.sea.placeChest(oldSea.chestSpot); Object.assign(G.worlds.sea.sea, oldSea.sea); G.worlds.sea.icons[0].icon = oldSea.icons[0].icon; }
   }
   function scene() { return G.worlds[G.scene]; }
   function setScene(id, pos) {
@@ -644,11 +644,12 @@
     await sleep(350);
     await fade(true);
     const w = G.worlds.sea, locked = r.lockLeft > 0;
+    w.placeChest(); // 🎲 들어갈 때마다 보물상자 위치가 바뀜
     w.sea.chestOpen = false; w.sea.locked = locked; w.icons[0].icon = locked ? "🔒" : "❓";
     setScene("sea", { ...w.spawn, dir: "down" });
     G.fx = [];
     try { Chip.play("sea"); } catch {}
-    G.dive = { t0: performance.now(), o2: r.o2 || 20000, need: r.need || 2, ok: 0, coins: r.coins || 400, lockUntil: locked ? Date.now() + r.lockLeft : 0, done: false, beat: 0, bub: 0 };
+    G.dive = { t0: performance.now(), o2: r.o2 || 15000, need: r.need || 2, ok: 0, coins: r.coins || 400, lockUntil: locked ? Date.now() + r.lockLeft : 0, done: false, beat: 0, bub: 0 };
     renderO2();
     $("#o2").classList.remove("hidden");
     G.diving = false;

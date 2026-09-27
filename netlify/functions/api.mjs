@@ -201,7 +201,7 @@ const QUIZ = [
   ["달걀을 낳는 동물은?", "Which animal lays the eggs we usually eat?", "私たちがふだん食べる卵を産む動物は？", [["닭", "Chicken", "ニワトリ"], ["소", "Cow", "ウシ"], ["돼지", "Pig", "ブタ"], ["양", "Sheep", "ヒツジ"]]],
   ["세계에서 가장 많은 사람이 사는 대륙은?", "Which continent has the largest population?", "世界で一番人口が多い大陸は？", [["아시아", "Asia", "アジア"], ["아프리카", "Africa", "アフリカ"], ["유럽", "Europe", "ヨーロッパ"], ["남아메리카", "South America", "南アメリカ"]]],
 ];
-const SEA_O2_MS = 20000, SEA_GRACE_MS = 2500, SEA_NEED = 2, SEA_COINS = 400, SEA_COOLDOWN = 3 * 3600 * 1000; // 숨 20초 · 2문제 · 400코인 · 3시간
+const SEA_O2_MS = 15000, SEA_GRACE_MS = 2500, SEA_NEED = 2, SEA_COINS = 400, SEA_COOLDOWN = 3 * 3600 * 1000; // 숨 15초 · 2문제 · 400코인 · 3시간
 const ART_PER_DAY = 3, ART_COINS = 50, ART_MAX = 400, ART_MAX_BYTES = 350000; // 그림 하루 3장 · 첫 그림 +50코인
 const EMOTES = 8;
 const WELCOME_COINS = 100, DAILY_COINS = 100, GB_COINS = 50;
