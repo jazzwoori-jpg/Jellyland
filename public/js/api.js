@@ -132,17 +132,63 @@
       return { box, unread: box.filter((m) => !m.read).length };
     }
     if (route === "mail/read") { ls.set("jl_demo_mail_" + me.id, ls.get("jl_demo_mail_" + me.id, []).map((m) => ({ ...m, read: true }))); return { ok: true }; }
-    if (route === "admin/users") return { users: Object.values(users).map((u) => ({ id: u.id, email: u.email, nickname: u.nickname, avatar: u.avatar, role: u.role || "fan", coins: u.coins | 0, createdAt: +String(u.id).slice(1) || 0, best: u.best | 0 })) };
+    if (route === "admin/users") return { users: Object.values(users).map((u) => ({ id: u.id, email: u.email, nickname: u.nickname, avatar: u.avatar, role: u.role || "fan", coins: u.coins | 0, createdAt: +String(u.id).slice(1) || 0, best: u.best | 0, bestUp: u.bestUp | 0 })) };
     if (route === "admin/mail") {
       const m = { ts: Date.now(), from: me.nickname, fromRole: me.role || "admin", text: b.text, read: false, all: b.to === "all" };
       const ids = b.to === "all" ? Object.values(users).map((u) => u.id) : [b.to];
       ids.forEach((id) => { const k = "jl_demo_mail_" + id; ls.set(k, [m, ...ls.get(k, [])]); });
       return { ok: true, sent: ids.length };
     }
+    if (route === "push/key") return { key: "" };
+    if (route === "push/sub" || route === "push/host") return { ok: true, demo: true };
     if (route === "admin/coins") {
       const e = Object.keys(users).find((k) => users[k].id === b.id); if (!e) fail("notfound", 404);
       const u = users[e], before = u.coins | 0; u.coins = Math.max(0, b.mode === "set" ? +b.amount | 0 : before + (+b.amount | 0)); save();
       return { ok: true, id: u.id, coins: u.coins, diff: u.coins - before, user: u.id === me.id ? pub(u) : undefined };
+    }
+    // 🫧 데모: 분수대 퀴즈 (진짜 문제는 서버에만 있음 — 데모는 연습용 3문제)
+    if (route.startsWith("sea/")) {
+      const DQ = [["노르웨이의 수도는?", ["오슬로", "스톡홀름", "코펜하겐", "헬싱키"]], ["거미의 다리는 몇 개?", ["8", "6", "10", "4"]], ["태양계에서 가장 큰 행성은?", ["목성", "토성", "지구", "해왕성"]]];
+      const now = Date.now(), lock = Math.max(0, (me.seaAt || 0) + 3 * 3600e3 - now);
+      if (route === "sea/dive") { me.sea = { t0: now, ok: 0 }; save(); return { o2: 15000, need: 2, coins: 400, lockLeft: lock }; }
+      if (!me.sea || now - me.sea.t0 > 17500) fail("seaTimeout");
+      if (lock > 0) fail("seaLocked");
+      if (route === "sea/q") { const qi = (Math.random() * DQ.length) | 0, perm = [0, 1, 2, 3].sort(() => Math.random() - 0.5); me.sea.q = qi; me.sea.perm = perm; save(); return { q: DQ[qi][0], choices: perm.map((i) => DQ[qi][1][i]), ok: me.sea.ok, need: 2 }; }
+      if (route === "sea/answer") {
+        const answer = me.sea.perm.indexOf(0), correct = (b.choice | 0) === answer; if (correct) me.sea.ok++;
+        if (me.sea.ok >= 2) { me.sea = null; me.seaAt = now; me.coins = (me.coins | 0) + 400; save(); return { correct, answer, ok: 2, opened: true, coins: 400, lockLeft: 3 * 3600e3, user: pub(me) }; }
+        save(); return { correct, answer, ok: me.sea.ok, opened: false };
+      }
+    }
+    // 🎨 데모: 그림 갤러리
+    if (route.startsWith("art")) {
+      let arts = ls.get("jl_demo_art", []);
+      const left = () => (me.role === "admin" ? 99 : me.artDay === kstDay() ? Math.max(0, 3 - (me.artCount | 0)) : 3);
+      const view = (e) => ({ ...e, likes: (e.likes || []).length, liked: (e.likes || []).includes(me.id) });
+      if (route === "art" && (!opts.method || opts.method === "GET")) {
+        const list = arts.slice().sort(q.get("sort") === "top" ? (x, y) => (y.likes || []).length - (x.likes || []).length || y.ts - x.ts : (x, y) => y.ts - x.ts);
+        const page = +q.get("page") || 0; return { items: list.slice(page * 12, page * 12 + 12).map(view), total: list.length, left: left() };
+      }
+      if (route === "art" && opts.method === "POST") {
+        if (left() <= 0) fail("artDaily", 429);
+        if (me.artDay !== kstDay()) { me.artDay = kstDay(); me.artCount = 0; }
+        let gained = 0; if (!me.artCount) { gained = 50; me.coins = (me.coins | 0) + 50; }
+        me.artCount = (me.artCount | 0) + 1; save();
+        const e = { id: Date.now().toString(36), uid: me.id, name: me.nickname, role: me.role || "fan", avatar: me.avatar, title: String(b.title || "").slice(0, 30), ts: Date.now(), likes: [], img: b.img };
+        arts.push(e); try { ls.set("jl_demo_art", arts.slice(-30)); } catch {}
+        return { item: view(e), left: left(), gained, user: pub(me) };
+      }
+      if (route === "art/like") { const e = arts.find((x) => x.id === b.id); if (!e) fail("notfound", 404); e.likes = e.likes.includes(me.id) ? e.likes.filter((u) => u !== me.id) : [...e.likes, me.id]; ls.set("jl_demo_art", arts); return { item: view(e) }; }
+      if (route === "art" && opts.method === "DELETE") { ls.set("jl_demo_art", arts.filter((x) => x.id !== q.get("id"))); return { ok: true }; }
+    }
+    if (route === "admin/rank") {
+      const e = Object.keys(users).find((k) => users[k].id === b.id); if (!e) fail("notfound", 404);
+      const u = users[e], up = b.game === "up", bk = up ? "bestUp" : "best", tk = up ? "jl_demo_top_up" : "jl_demo_top";
+      const m = b.mode === "remove" ? 0 : Math.max(0, Math.floor(+b.m || 0)); u[bk] = m; save();
+      let top = ls.get(tk, []); const old = top.find((x) => x.id === u.id); top = top.filter((x) => x.id !== u.id);
+      if (m > 0) top.push({ id: u.id, name: u.nickname, avatar: u.avatar, role: u.role || "fan", m, ts: old ? old.ts : Date.now() });
+      top = top.sort((x, y) => y.m - x.m || x.ts - y.ts).slice(0, 10); ls.set(tk, top);
+      return { ok: true, id: u.id, game: b.game, m, rank: top.findIndex((x) => x.id === u.id) + 1, top };
     }
     if (route === "admin/delete") { const e = Object.keys(users).find((k) => users[k].id === b.id); if (e) delete users[e]; save(); return { ok: true }; }
     if (route === "game/top") {
@@ -249,8 +295,20 @@
     adminUsers: () => call("admin/users"),
     adminMail: (to, text) => call("admin/mail", { method: "POST", body: { to, text } }),
     adminCoins: (id, mode, amount) => call("admin/coins", { method: "POST", body: { id, mode, amount } }),
+    pushKey: () => call("push/key"),
+    pushSub: (sub) => call("push/sub", { method: "POST", body: { sub } }),
+    pushHost: () => call("push/host", { method: "POST", body: {} }),
+    adminRank: (game, id, m, mode) => call("admin/rank", { method: "POST", body: { game, id, m, mode } }),
     adminDelete: (id) => call("admin/delete", { method: "POST", body: { id } }),
     gameFinish: (run, m) => call("game/finish", { method: "POST", body: { run, m } }),
+    seaDive: () => call("sea/dive", { method: "POST", body: {} }),
+    seaQ: (lang) => call("sea/q", { method: "POST", body: { lang } }),
+    seaAnswer: (choice) => call("sea/answer", { method: "POST", body: { choice } }),
+    artList: (page, sort) => call(`art?page=${page || 0}&sort=${sort || "new"}`),
+    artPost: (img, title) => call("art", { method: "POST", body: { img, title } }),
+    artLike: (id) => call("art/like", { method: "POST", body: { id } }),
+    artDelete: (id) => call("art?id=" + encodeURIComponent(id), { method: "DELETE" }),
+    artImg: (it) => it.img || "/api/art/img?id=" + encodeURIComponent(it.id),
     chatDelete: (key) => call("chat?key=" + encodeURIComponent(key), { method: "DELETE" }),
   };
 })();

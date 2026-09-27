@@ -50,6 +50,17 @@
     slotStop() { if (!ctx()) return; const t = actx.currentTime; tone("square", 180, 90, t, 0.1, 0.12); noise(t, 0.06, 0.2, 600, "lowpass"); },
     win() { if (!ctx()) return; const t = actx.currentTime; [72, 76, 79, 84, 79, 84].forEach((m, i) => tone("square", hz(m), 0, t + i * 0.09, 0.14, 0.08)); for (let i = 0; i < 8; i++) tone("triangle", hz(96 + (i % 3) * 4), 0, t + 0.5 + i * 0.06, 0.08, 0.05); },
     jackpot() { if (!ctx()) return; const t = actx.currentTime; [60, 64, 67, 72, 76, 79, 84, 88, 91, 96].forEach((m, i) => tone("square", hz(m), 0, t + i * 0.06, 0.2, 0.08)); [72, 76, 79, 84].forEach((m) => tone("sawtooth", hz(m), 0, t + 0.7, 1.2, 0.05)); for (let i = 0; i < 24; i++) tone("triangle", hz(100 + (i % 5) * 2), 0, t + 0.7 + i * 0.05, 0.06, 0.04); noise(t + 0.7, 1.2, 0.15, 7000, "highpass"); },
+    // 👼 젤리축복 · 😇 천사의 링: 하프 글리산도 + 반짝
+    bless() { if (!ctx()) return; const t = actx.currentTime; [60, 64, 67, 72, 76, 79, 84, 88, 91, 96].forEach((m, i) => tone("sine", hz(m), 0, t + i * 0.04, 0.5, 0.07)); [84, 88, 91].forEach((m) => tone("triangle", hz(m), 0, t + 0.45, 0.9, 0.05)); noise(t + 0.4, 0.6, 0.06, 8000, "highpass"); },
+    angel() { if (!ctx()) return; const t = actx.currentTime; tone("sine", 300, 2400, t, 0.8, 0.08); [72, 76, 79, 84, 88, 91, 96].forEach((m, i) => tone("triangle", hz(m), 0, t + i * 0.05, 0.4, 0.07)); noise(t, 0.8, 0.08, 6000, "highpass"); },
+    // 🫧 분수대 다이빙
+    splash() { if (!ctx()) return; const t = actx.currentTime; noise(t, 0.5, 0.45, 1200, "lowpass"); noise(t + 0.05, 0.35, 0.2, 3000, "bandpass"); tone("sine", 500, 120, t, 0.35, 0.12); },
+    bubble() { if (!ctx()) return; const t = actx.currentTime; for (let i = 0; i < 3; i++) tone("sine", 300 + Math.random() * 300, 900 + Math.random() * 500, t + i * 0.07, 0.07, 0.05); },
+    right() { if (!ctx()) return; const t = actx.currentTime; tone("square", hz(84), 0, t, 0.1, 0.08); tone("square", hz(91), 0, t + 0.09, 0.25, 0.08); },
+    wrong() { if (!ctx()) return; const t = actx.currentTime; tone("sawtooth", 180, 150, t, 0.18, 0.09); tone("sawtooth", 150, 110, t + 0.18, 0.3, 0.09); },
+    chest() { if (!ctx()) return; const t = actx.currentTime; noise(t, 0.2, 0.2, 400, "lowpass"); [72, 76, 79, 84, 88, 91, 96].forEach((m, i) => tone("triangle", hz(m), 0, t + 0.2 + i * 0.07, 0.3, 0.09)); for (let i = 0; i < 12; i++) tone("sine", hz(96 + (i % 4) * 3), 0, t + 0.75 + i * 0.05, 0.1, 0.04); },
+    choke() { if (!ctx()) return; const t = actx.currentTime; tone("sine", 220, 55, t, 1.4, 0.18); noise(t, 1.2, 0.15, 300, "lowpass"); for (let i = 0; i < 5; i++) tone("sine", 700 - i * 60, 1200, t + i * 0.12, 0.06, 0.04); },
+    beat() { if (!ctx()) return; const t = actx.currentTime; tone("sine", 90, 50, t, 0.12, 0.3); tone("sine", 80, 45, t + 0.16, 0.14, 0.22); },
     aww() { if (!ctx()) return; const t = actx.currentTime; tone("triangle", hz(67), hz(60), t, 0.35, 0.1); tone("triangle", hz(60), hz(55), t + 0.35, 0.5, 0.1); },
     // 😝 탈락: "깔깔깔깔~" 웃음 + "메롱~" 놀리는 멜로디 (나나나나나~)
     laugh() {
@@ -141,6 +152,21 @@
         pad.push([b, 0, r - 12, 11.5]); pad.push([b, 0, ch[1] - 12, 11.5]);
       });
       return { bpm: 80, spb: 12, bars: 8, parts: [{ wave: "bell", vol: 0.12, notes: bell }, { wave: "sine", vol: 0.12, notes: pad }], drums: [] };
+    })(),
+    // 🫧 바닷속: 몽글몽글 신비로운 D단조 (96bpm) — 오르골 + 물방울 아르페지오
+    sea: (() => {
+      const prog = [[50, 1], [46, 0], [53, 0], [45, 0], [50, 1], [46, 0], [43, 1], [45, 0]];
+      const bell = [], pad = [], bass = [], drums = [];
+      const tune = [[[0, 81, 3], [4, 77, 2], [6, 74, 2], [8, 76, 4], [12, 77, 4]], [[0, 74, 3], [4, 77, 2], [6, 81, 2], [8, 82, 6]], [[0, 81, 3], [4, 84, 2], [6, 81, 2], [8, 77, 4], [12, 76, 4]], [[0, 73, 4], [4, 76, 4], [8, 79, 4], [12, 81, 4]]];
+      prog.forEach(([r, mi], b) => {
+        const ch = chordNotes(r, mi);
+        for (let s = 0; s < 16; s += 2) bell.push([b, s, ch[(s / 2) % 3] + 24 + ((s / 2) % 4 === 3 ? 12 : 0), 1.2]);
+        tune[b % 4].forEach(([s, m, l]) => bell.push([b, s, m + (b >= 4 ? 12 : 0), l]));
+        pad.push([b, 0, r - 12, 15.5]); pad.push([b, 0, ch[2] - 12, 15.5]);
+        [0, 6, 10].forEach((s) => bass.push([b, s, r - 12, 2]));
+        drums.push([b, 0, "k"], [b, 8, "k"]); for (let s = 2; s < 16; s += 4) drums.push([b, s, "h"]);
+      });
+      return { bpm: 96, spb: 16, bars: 8, parts: [{ wave: "bell", vol: 0.1, notes: bell }, { wave: "sine", vol: 0.12, notes: pad }, { wave: "triangle", vol: 0.35, notes: bass }], drums };
     })(),
   };
   function playNote(part, m, t, len) {

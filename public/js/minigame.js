@@ -1,15 +1,17 @@
 /* 🎮 점프점프 젤리월드 — 젤리게임월드의 러닝 미니게임
    - 캐릭터가 왼쪽 → 오른쪽으로 계속 달림, 탭/스페이스/↑ 로 점프 (공중에서 한 번 더 = 2단 점프)
    - ⭐ 슈퍼젤리: 먹으면 몇 초 동안 몸이 커지고 장애물을 부수며 달림
-   - 속도 = min(400, 150 + 4·t) px/s (서버 검증 공식과 같음), 10px = 1m
+   - 👼 젤리축복: 먹으면 하늘 위로 날아올라 약 17초 동안 장애물을 모두 피함 (슈퍼젤리의 약 3배)
+   - 속도 = min(400, 150 + 4·t) px/s, 10만 m(100만 px)부터는 끝없이 조금씩 빨라짐: 400 + 0.001·(거리 − 100만 px)
+     (서버 검증 공식과 같음), 10px = 1m
    - 100m 마다 5코인, 한 판 최대 200코인 */
 (function () {
   const W = 360, H = 170, GY = 138, PX = 64, R = 2;
   const GRAV = 1150, JUMP = -345, JUMP2 = -310;
-  const SUPER_TIME = 6;
+  const SUPER_TIME = 6, BLESS_TIME = 17, BLESS_Y = GY - 78, FAST_FROM = 1e6, FAST_K = 0.001;
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', sans-serif";
   const OUT = "#3a2530";
-  const speedAt = (t) => Math.min(400, 150 + 4 * t);
+  const speedAt = (t, dist = 0) => (dist >= FAST_FROM ? 400 + FAST_K * (dist - FAST_FROM) : Math.min(400, 150 + 4 * t));
 
   function mount(root, opts) {
     const t = opts.t;
@@ -23,7 +25,7 @@
 
     function reset() {
       S = { state: "ready", time: 0, dist: 0, y: GY, vy: 0, jumps: 0, obs: [], items: [], fx: [], pops: [], nextObs: 260, nextItem: 2600 + Math.random() * 1200,
-        superT: 0, run: null, milestone: 0, coins: 0, cap: Math.min(200, dayLeft), shake: 0, result: null, anim: 0 };
+        superT: 0, blessT: 0, graceT: 0, nextBless: 9000 + Math.random() * 7000, run: null, milestone: 0, coins: 0, cap: Math.min(200, dayLeft), shake: 0, result: null, anim: 0 };
     }
     reset();
 
@@ -32,6 +34,7 @@
       if (!S) return;
       if (S.state === "ready") return start();
       if (S.state === "over") { if (S.result && S.time > 0 && performance.now() - S.overAt > 700) { reset(); start(); } return; }
+      if (S.blessT > 0) return; // 하늘을 나는 중
       if (S.jumps === 0 && S.y >= GY - 0.5) { S.vy = JUMP; S.jumps = 1; puff(PX, GY, "#ffffff"); snd("jump"); }
       else if (S.jumps < 2) { S.vy = JUMP2; S.jumps = 2; puff(PX, S.y, "#ffd1e6"); snd("jump2"); }
     }
@@ -135,10 +138,30 @@
       drawStar(x, y, 4, "#fff8d8");
     }
 
+    function drawBless(it) { // 👼 젤리축복: 날개 달린 황금 젤리 + 천사 링
+      const x = Math.round(it.x), y = Math.round(it.y + Math.sin(S.anim * 4 + it.ph) * 4);
+      ctx.fillStyle = "rgba(255,236,150,.5)"; ctx.beginPath(); ctx.arc(x, y, 14 + Math.sin(S.anim * 7) * 2, 0, 7); ctx.fill();
+      const f = Math.floor(S.anim * 8) % 2;
+      for (const d of [-1, 1]) { ctx.fillStyle = OUT; ctx.fillRect(x + d * 8 - (d < 0 ? 8 : 0), y - 5 - f, 8, 6); ctx.fillStyle = "#fff"; ctx.fillRect(x + d * 8 - (d < 0 ? 7 : 0), y - 4 - f, 6, 4); ctx.fillStyle = "#dff4ff"; ctx.fillRect(x + d * 8 - (d < 0 ? 7 : 0), y - 1 - f, 6, 1); }
+      ctx.fillStyle = OUT; ctx.fillRect(x - 7, y - 5, 14, 13); ctx.fillStyle = "#ffd34d"; ctx.fillRect(x - 6, y - 4, 12, 11); ctx.fillStyle = "#fff3a8"; ctx.fillRect(x - 4, y - 3, 3, 4);
+      ctx.fillStyle = OUT; ctx.fillRect(x - 3, y, 2, 2); ctx.fillRect(x + 2, y, 2, 2); ctx.fillRect(x - 1, y + 3, 3, 1);
+      ctx.strokeStyle = "#ffe07a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(x, y - 10, 7, 2.5, 0, 0, 7); ctx.stroke();
+    }
+    function drawWings(x, y) {
+      const f = Math.floor(S.anim * 10) % 2 ? 2 : 0;
+      for (const d of [-1, 1]) {
+        const wx = d < 0 ? x - 20 : x + 6;
+        ctx.fillStyle = OUT; ctx.fillRect(wx, y - 24 - f, 14, 10); ctx.fillRect(wx + (d < 0 ? 2 : 0), y - 15 - f, 12, 5);
+        ctx.fillStyle = "#ffffff"; ctx.fillRect(wx + 1, y - 23 - f, 12, 8); ctx.fillRect(wx + (d < 0 ? 3 : 1), y - 15 - f, 10, 3);
+        ctx.fillStyle = "#cfeaff"; for (let k = 0; k < 3; k++) ctx.fillRect(wx + (d < 0 ? 2 + k * 4 : 2 + k * 4), y - 17 - f, 2, 2);
+      }
+    }
+
     // ---------- 배경 ----------
     function drawBg() {
       const g = ctx.createLinearGradient(0, 0, 0, GY);
-      if (S.superT > 0) { const h = (S.anim * 120) % 360; g.addColorStop(0, `hsl(${h},80%,82%)`); g.addColorStop(1, `hsl(${(h + 60) % 360},80%,90%)`); }
+      if (S.blessT > 0) { g.addColorStop(0, "#fff6c8"); g.addColorStop(0.6, "#ffe3f2"); g.addColorStop(1, "#dff4ff"); }
+      else if (S.superT > 0) { const h = (S.anim * 120) % 360; g.addColorStop(0, `hsl(${h},80%,82%)`); g.addColorStop(1, `hsl(${(h + 60) % 360},80%,90%)`); }
       else { g.addColorStop(0, "#bfe6ff"); g.addColorStop(0.7, "#ffe1f0"); g.addColorStop(1, "#fff3d8"); }
       ctx.fillStyle = g; ctx.fillRect(0, 0, W, GY);
       // 구름
@@ -172,32 +195,51 @@
       if (S.shake > 0) S.shake -= dt;
       if (S.state !== "run") return;
       S.time += dt;
-      const v = speedAt(S.time), dx = v * dt;
+      const v = speedAt(S.time, S.dist), dx = v * dt;
       S.dist += dx;
       // 점프 물리
-      S.vy += GRAV * dt; S.y += S.vy * dt;
-      if (S.y >= GY) { if (S.vy > 200) puff(PX, GY, "#ffffff"); S.y = GY; S.vy = 0; S.jumps = 0; }
+      if (S.blessT > 0) { // 👼 하늘 위로 날아오름 → 끝나기 1.6초 전부터 천천히 내려옴
+        S.blessT -= dt;
+        const ty = S.blessT > 1.6 ? BLESS_Y + Math.sin(S.anim * 3) * 4 : GY - (GY - BLESS_Y) * Math.max(0, S.blessT / 1.6);
+        S.y += (ty - S.y) * Math.min(1, dt * 6); S.vy = 0; S.jumps = 2;
+        if (Math.random() < dt * 30) S.fx.push({ x: PX - 8, y: S.y - 12 + (Math.random() - 0.5) * 14, vx: -80 - Math.random() * 60, vy: (Math.random() - 0.5) * 20, life: 0.6, col: ["#fff3a8", "#ffffff", "#ffd1e6"][(Math.random() * 3) | 0], s: 2 });
+        if (S.blessT <= 0) { S.blessT = 0; S.graceT = 1; S.vy = 60; }
+      } else {
+        S.vy += GRAV * dt; S.y += S.vy * dt;
+        if (S.y >= GY) { if (S.vy > 200) puff(PX, GY, "#ffffff"); S.y = GY; S.vy = 0; S.jumps = 0; }
+      }
       if (S.superT > 0) S.superT -= dt;
+      if (S.graceT > 0) S.graceT -= dt;
       // 스폰
       S.nextObs -= dx;
       if (S.nextObs <= 0) { spawnObstacle(); S.nextObs = v * (0.62 + Math.random() * 0.75) + 40; }
+      S.nextBless -= dx;
+      if (S.nextBless <= 0) { S.items.push({ x: W + 10, y: GY - 54 - Math.random() * 18, ph: Math.random() * 6, bless: true }); S.nextBless = 14000 + Math.random() * 10000; }
       S.nextItem -= dx;
       if (S.nextItem <= 0) { S.items.push({ x: W + 10, y: GY - 48 - Math.random() * 20, ph: Math.random() * 6 }); S.nextItem = 2600 + Math.random() * 2400; }
-      for (const o of S.obs) { o.x -= dx; if (o.fly) { o.top = o.base + Math.sin(S.anim * 4 + o.ph) * 4; o.x -= 30 * dt; } }
-      for (const it of S.items) it.x -= dx;
+      for (const o of S.obs) { o.px = o.x; o.x -= dx; if (o.fly) { o.top = o.base + Math.sin(S.anim * 4 + o.ph) * 4; o.x -= 30 * dt; } }
+      for (const it of S.items) { it.px = it.x; it.x -= dx; }
       S.obs = S.obs.filter((o) => o.x > -40 && !o.gone);
       S.items = S.items.filter((it) => it.x > -20 && !it.got);
       // 충돌
       const big = S.superT > 0 ? 1.4 : 1;
       const hb = { x0: PX - 6 * big, x1: PX + 6 * big, y0: S.y - 26 * big, y1: S.y - 1 };
-      for (const it of S.items) if (Math.abs(it.x - PX) < 14 * big && it.y > hb.y0 - 10 && it.y < hb.y1 + 6) {
-        it.got = true; snd("star"); S.superT = SUPER_TIME; S.pops.push({ x: PX, y: S.y - 50, text: "⭐ " + t("gameSuper"), life: 1.4, col: "#ff4f9a" });
+      // 빨라져도 그냥 지나치지 않게: 이번 프레임에 지나온 구간 전체로 판정
+      for (const it of S.items) if (it.x - 14 * big < PX && Math.max(it.px ?? it.x, it.x) + 14 * big > PX && it.y > hb.y0 - 10 && it.y < hb.y1 + 6) {
+        it.got = true;
+        if (it.bless) {
+          snd("bless"); S.blessT = BLESS_TIME; S.graceT = 0; S.pops.push({ x: PX + 20, y: S.y - 50, text: "👼 " + t("gameBless"), life: 1.8, col: "#d9a300" });
+          for (let i = 0; i < 30; i++) S.fx.push({ x: it.x, y: it.y, vx: (Math.random() - 0.5) * 300, vy: (Math.random() - 0.5) * 300, life: 0.8, col: ["#fff3a8", "#ffffff", "#ffe07a"][i % 3], s: 2 });
+          continue;
+        }
+        snd("star"); S.superT = SUPER_TIME; S.pops.push({ x: PX, y: S.y - 50, text: "⭐ " + t("gameSuper"), life: 1.4, col: "#ff4f9a" });
         for (let i = 0; i < 20; i++) S.fx.push({ x: it.x, y: it.y, vx: (Math.random() - 0.5) * 260, vy: (Math.random() - 0.5) * 260, life: 0.6, col: ["#fff3a8", "#ff9fc8", "#9fe8ff"][i % 3], s: 2 });
       }
       for (const o of S.obs) {
         if (o.broken) continue;
         const pad = 3;
-        if (hb.x1 > o.x + pad && hb.x0 < o.x + o.w - pad && hb.y1 > o.top + pad && hb.y0 < o.top + o.h - pad) {
+        if (hb.x1 > o.x + pad && hb.x0 < Math.max(o.px ?? o.x, o.x) + o.w - pad && hb.y1 > o.top + pad && hb.y0 < o.top + o.h - pad) {
+          if (S.blessT > 0 || S.graceT > 0) continue; // 축복 중엔 무적
           if (S.superT > 0) { o.broken = true; o.gone = true; smash(o); S.pops.push({ x: o.x, y: o.top - 6, text: "SMASH!", life: 0.6, col: "#7a3fc0" }); }
           else { S.shake = 0.3; for (let i = 0; i < 14; i++) S.fx.push({ x: PX, y: S.y - 14, vx: (Math.random() - 0.5) * 240, vy: -Math.random() * 240, life: 0.7, col: ["#ff7fae", "#ffffff", "#ffd34d"][i % 3], s: 2, g: true }); snd("laugh"); finish(); return; }
         }
@@ -215,7 +257,7 @@
       ctx.setTransform(R, 0, 0, R, 0, 0);
       if (S.shake > 0) ctx.translate((Math.random() - 0.5) * 4, (Math.random() - 0.5) * 3);
       drawBg();
-      for (const it of S.items) drawItem(it);
+      for (const it of S.items) it.bless ? drawBless(it) : drawItem(it);
       for (const o of S.obs) drawObstacle(o);
       // 플레이어
       const av = opts.avatar();
@@ -230,7 +272,13 @@
         if (!blink) { ctx.translate(PX, S.y); ctx.scale(k, k); ctx.translate(-PX, -S.y); }
       }
       if (S.state === "over") { ctx.globalAlpha = 0.9; }
-      Avatar.draw(ctx, av, PX, Math.round(S.y), "right", running ? frame : 0);
+      if (S.blessT > 0) { // 황금빛 + 날개 + 천사 링
+        ctx.fillStyle = "rgba(255,236,150,.4)"; ctx.beginPath(); ctx.ellipse(PX, S.y - 18, 24, 26, 0, 0, 7); ctx.fill();
+        drawWings(PX, Math.round(S.y));
+      }
+      if (S.graceT > 0 && Math.floor(S.anim * 14) % 2) ctx.globalAlpha = 0.45;
+      Avatar.draw(ctx, av, PX, Math.round(S.y), "right", running ? (S.blessT > 0 ? 1 : frame) : 0);
+      if (S.blessT > 0) { ctx.strokeStyle = "#ffe07a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(PX, Math.round(S.y) - 36, 8, 2.5, 0, 0, 7); ctx.stroke(); }
       ctx.restore();
       if (S.state === "over") { ctx.fillStyle = OUT; ctx.font = `bold 10px ${FONT}`; ctx.textAlign = "center"; ctx.fillText("✕ ✕", PX + 1, S.y - 30); }
       for (const f of S.fx) { ctx.fillStyle = f.col; ctx.fillRect(Math.round(f.x), Math.round(f.y), f.s, f.s); }
@@ -242,6 +290,8 @@
       pill(6, 6, `${m} m`, "#3a2530", "#fff");
       pill(6, 22, `🪙 ${S.coins}/${S.cap}`, "#fff3a8", "#7a4a00");
       pill(W - 6, 6, `${t("gameBest")} ${best} m`, "rgba(58,37,48,.7)", "#fff", true);
+      if (S.blessT > 0) { ctx.fillStyle = OUT; ctx.fillRect(W / 2 - 41, 17, 82, 7); ctx.fillStyle = "#ffd34d"; ctx.fillRect(W / 2 - 40, 18, 80 * (S.blessT / BLESS_TIME), 5); ctx.font = `8px ${FONT}`; ctx.textAlign = "center"; ctx.fillStyle = OUT; ctx.fillText("👼", W / 2 - 48, 21); }
+      if (v1000()) pill(W / 2, 30, t("gameFaster"), "rgba(255,79,154,.85)", "#fff", false, true);
       if (S.superT > 0) { ctx.fillStyle = OUT; ctx.fillRect(W / 2 - 41, 7, 82, 7); ctx.fillStyle = `hsl(${(S.anim * 300) % 360},90%,65%)`; ctx.fillRect(W / 2 - 40, 8, 80 * (S.superT / SUPER_TIME), 5); }
       if (S.state === "ready") panel([t("gameTitle"), dayLeft > 0 ? t("gameDayLeft", { n: dayLeft }) : t("gameDayDone"), t("gameStart")], true);
       if (S.state === "over") {
@@ -249,10 +299,11 @@
         panel([t("gameOver"), `${t("gameDist")} ${r.m} m · ${t("gameBest")} ${best} m`, `${t("gameEarn")} 🪙 ${r.coins}${r.saving ? "  (" + t("gameSaving") + ")" : ""}`, r.saving ? "" : dayLeft > 0 ? t("gameDayLeft", { n: dayLeft }) : t("gameDayDone"), performance.now() - S.overAt > 700 ? t("gameAgain") : ""]);
       }
     }
-    function pill(x, y, text, bg, fg, right) {
+    const v1000 = () => S.state === "run" && S.dist >= FAST_FROM && S.dist < FAST_FROM + 40000; // 10만 m 돌파 직후 잠깐 알림
+    function pill(x, y, text, bg, fg, right, center) {
       ctx.font = `bold 9px ${FONT}`; ctx.textBaseline = "middle";
       const w = ctx.measureText(text).width + 10;
-      const x0 = right ? x - w : x;
+      const x0 = center ? x - w / 2 : right ? x - w : x;
       ctx.fillStyle = bg; ctx.fillRect(x0, y, w, 13); ctx.fillStyle = fg; ctx.textAlign = "left"; ctx.fillText(text, x0 + 5, y + 7);
     }
     function panel(lines, title) {

@@ -2,12 +2,14 @@
    - 캐릭터가 발판 위에서 자동으로 통통 튀어 오르고, 좌우로 움직여 위로 올라감 (화면 양 끝은 이어져 있음)
    - 초록 발판: 보통 점프 · 분홍 발판: 슈퍼 점프 (초록 13개당 1번 꼴) · 빨강 발판: 밟으면 부서져서 떨어짐
    - 높이가 올라갈수록 발판 간격이 넓어지고 움직이는 발판이 늘어남
+   - 😇 천사의 링: 발판 30개 중 1개 위에 떠 있음 — 먹으면 슈퍼 점프보다 훨씬 높이 날아오름 (약 2.4초 동안 쭉 상승)
    - 10px = 1m, 100m 마다 5코인 (한 판 최대 200 · 두 게임 합쳐 하루 최대 600)
    - 조작: ← → / A D 키, 휴대폰은 화면 왼쪽·오른쪽을 누르고 있기 */
 (function () {
   const W = 240, H = 360, R = 2;
   const GRAV = 980, JUMP = -440, SUPER = -900, MAXVX = 190, ACC = 1300;
   const PW = 46, PH = 9;
+  const RING_TIME = 2.4, RING_VY = -1150, RING_EVERY = 30;
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', sans-serif";
   const OUT = "#3a2530";
 
@@ -25,7 +27,7 @@
 
     function reset() {
       S = { state: "ready", time: 0, x: W / 2, y: H - 40, vx: 0, vy: 0, face: "right", cam: 0, maxH: 0, plats: [], fx: [], pops: [], topY: H - 20,
-        greens: 0, milestone: 0, coins: 0, cap: Math.min(200, dayLeft), run: null, result: null, anim: 0, stars: [] };
+        greens: 0, rows: 0, ringSlot: (Math.random() * RING_EVERY) | 0, ringT: 0, milestone: 0, coins: 0, cap: Math.min(200, dayLeft), run: null, result: null, anim: 0, stars: [] };
       S.plats.push({ x: W / 2 - PW / 2, y: H - 20, type: "g", vx: 0 });
       while (S.topY > -H) spawnRow();
       for (let i = 0; i < 40; i++) S.stars.push({ x: Math.random() * W, y: Math.random() * H * 3, s: Math.random() < 0.2 ? 2 : 1 });
@@ -40,7 +42,12 @@
       S.greens++;
       if (S.greens >= 13) { type = "p"; S.greens = 0; } // 초록 13개당 슈퍼 점프 1개
       const moving = type === "g" && h > 120 && Math.random() < Math.min(0.45, 0.12 + h / 2500);
-      S.plats.push({ x: Math.random() * (W - PW), y: S.topY, type, vx: moving ? (Math.random() < 0.5 ? -1 : 1) * (30 + Math.min(60, h / 20)) : 0 });
+      // 😇 발판 30개마다 1개 위에 천사의 링 (처음 몇 칸은 제외)
+      const slot = S.rows % RING_EVERY;
+      if (slot === 0 && S.rows) S.ringSlot = (Math.random() * RING_EVERY) | 0;
+      const ring = S.rows >= 8 && slot === S.ringSlot;
+      S.rows++;
+      S.plats.push({ x: Math.random() * (W - PW), y: S.topY, type, vx: moving ? (Math.random() < 0.5 ? -1 : 1) * (30 + Math.min(60, h / 20)) : 0, ring });
       // 빨간 발판 (부서지는 함정) — 길을 막지 않도록 따로 추가
       if (h > 20 && Math.random() < Math.min(0.42, 0.12 + h / 3000)) {
         S.plats.push({ x: Math.random() * (W - PW), y: S.topY + gap * (0.35 + Math.random() * 0.3), type: "r", vx: 0 });
@@ -110,8 +117,23 @@
       }
       // 점프 물리 + 발판 밟기 (떨어지는 중일 때만)
       const prevY = S.y;
-      S.vy += GRAV * dt; S.y += S.vy * dt;
-      if (S.vy > 0) {
+      if (S.ringT > 0) { // 😇 천사의 링: 중력 무시하고 쭉 날아오름 (발판은 통과)
+        S.ringT -= dt; S.vy = RING_VY; S.y += S.vy * dt;
+        if (Math.random() < dt * 40) S.fx.push({ x: S.x + (Math.random() - 0.5) * 18, y: S.y + 2, vx: (Math.random() - 0.5) * 40, vy: 120 + Math.random() * 80, g: 0, life: 0.6, col: ["#fff3a8", "#ffffff", "#ffe07a"][(Math.random() * 3) | 0], s: 2 });
+        if (S.ringT <= 0) { S.ringT = 0; S.vy = -520; }
+      } else { S.vy += GRAV * dt; S.y += S.vy * dt; }
+      // 링 먹기
+      if (S.ringT <= 0) for (const p of S.plats) {
+        if (!p.ring || p.ringGot || p.broken) continue;
+        const rx = p.x + PW / 2, ry = p.y - 16;
+        if (Math.abs(S.x - rx) < 16 && S.y - 14 > ry - 22 && S.y - 14 < ry + 22) {
+          p.ringGot = true; S.ringT = RING_TIME; snd("angel");
+          S.pops.push({ x: S.x, y: S.y - 44, text: "😇 " + t("upRing"), life: 1.4, col: "#d9a300" });
+          for (let i = 0; i < 26; i++) S.fx.push({ x: rx, y: ry, vx: (Math.random() - 0.5) * 240, vy: (Math.random() - 0.5) * 240, g: 0, life: 0.8, col: ["#fff3a8", "#ffffff", "#ffe07a"][i % 3], s: 2 });
+          break;
+        }
+      }
+      if (S.vy > 0 && S.ringT <= 0) {
         for (const p of S.plats) {
           if (p.broken) continue;
           if (prevY <= p.y + 1 && S.y >= p.y && S.x > p.x - 6 && S.x < p.x + PW + 6) {
@@ -191,6 +213,14 @@
       ctx.fillStyle = c3; ctx.fillRect(x + 1, y + PH - 2, PW - 2, 1);
       if (p.type === "p") { ctx.fillStyle = "#fff"; for (let i = 0; i < 3; i++) { const sx = x + 10 + i * 13; ctx.fillRect(sx, y + 3, 3, 1); ctx.fillRect(sx + 1, y + 2, 1, 3); } } // 슈퍼 점프 표시 ▲
       if (p.type === "r" && !p.broken) { ctx.fillStyle = c3; ctx.fillRect(x + 14, y + 2, 1, 5); ctx.fillRect(x + 15, y + 4, 4, 1); ctx.fillRect(x + 30, y + 2, 1, 5); ctx.fillRect(x + 26, y + 3, 4, 1); } // 금 간 자국
+      if (p.ring && !p.ringGot && !p.broken) { // 😇 천사의 링
+        const rx = x + PW / 2, ry = y - 16 + Math.sin(S.anim * 4 + p.x) * 3;
+        ctx.fillStyle = "rgba(255,240,160,.45)"; ctx.beginPath(); ctx.arc(rx, ry, 12 + Math.sin(S.anim * 7) * 2, 0, 7); ctx.fill();
+        ctx.strokeStyle = OUT; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(rx, ry, 10, 4, 0, 0, 7); ctx.stroke();
+        ctx.strokeStyle = "#ffd34d"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(rx, ry, 10, 4, 0, 0, 7); ctx.stroke();
+        ctx.fillStyle = "#fff8d8"; ctx.fillRect(rx - 6, ry - 3, 3, 1);
+        if (Math.floor(S.anim * 4) % 2) { ctx.fillStyle = "#fff"; ctx.fillRect(rx + 9, ry - 7, 1, 3); ctx.fillRect(rx + 8, ry - 6, 3, 1); }
+      }
       if (p.vx) { ctx.fillStyle = "rgba(255,255,255,.7)"; ctx.fillRect(x - 4, y + 3, 2, 2); ctx.fillRect(x + PW + 2, y + 3, 2, 2); }
       ctx.restore();
     }
@@ -202,7 +232,13 @@
       const av = opts.avatar();
       const py = Math.round(S.y - S.cam);
       const frame = S.vy < -200 ? 1 : S.vy > 250 ? 3 : 0;
+      if (S.ringT > 0) { // 날개 + 황금빛
+        ctx.fillStyle = "rgba(255,236,150,.45)"; ctx.beginPath(); ctx.ellipse(S.x, py - 18, 22, 28, 0, 0, 7); ctx.fill();
+        const f = Math.floor(S.anim * 12) % 2 ? 2 : 0, X = Math.round(S.x);
+        for (const d of [-1, 1]) { const wx = d < 0 ? X - 20 : X + 6; ctx.fillStyle = OUT; ctx.fillRect(wx, py - 26 - f, 14, 11); ctx.fillStyle = "#fff"; ctx.fillRect(wx + 1, py - 25 - f, 12, 9); ctx.fillStyle = "#cfeaff"; ctx.fillRect(wx + 2, py - 19 - f, 10, 2); }
+      }
       Avatar.draw(ctx, av, Math.round(S.x), py, S.state === "ready" ? "down" : S.face, frame);
+      if (S.ringT > 0) { ctx.strokeStyle = "#ffe07a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(Math.round(S.x), py - 38, 8, 2.5, 0, 0, 7); ctx.stroke(); }
       if (S.x < 12) Avatar.draw(ctx, av, Math.round(S.x + W + 20), py, S.face, frame); // 화면 끝에서 이어지는 모습
       if (S.x > W - 12) Avatar.draw(ctx, av, Math.round(S.x - W - 20), py, S.face, frame);
       for (const f of S.fx) { ctx.fillStyle = f.col; ctx.fillRect(Math.round(f.x), Math.round(f.y - S.cam), f.s, f.s); }
