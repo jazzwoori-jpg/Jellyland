@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "33"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "34"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -963,7 +963,7 @@
 
   function openGallery() {
     const html = `<p style="margin-top:0">${esc(t("galleryIntro"))} <button class="btn sm grape" data-go="profile">${esc(t("seeProfile"))}</button></p>
-      <div class="gallery">${CFG.photos.map((p, i) => `<div class="polaroid" data-i="${i}"><img src="${esc(p.src)}" alt="${esc(L(p.caption))}" loading="lazy"><p>${esc(L(p.caption))}</p></div>`).join("")}</div>`;
+      <div class="gallery">${CFG.photos.map((p, i) => `<div class="polaroid${p.isNew ? " new" : ""}" data-i="${i}">${p.isNew ? '<span class="new-badge">NEW</span>' : ""}<img src="${esc(p.src)}" alt="${esc(L(p.caption))}" loading="lazy"><p>${esc(L(p.caption))}</p></div>`).join("")}</div>`;
     openModal("📷 " + t("bGallery"), html, (el) => { el.querySelector("[data-go=profile]").addEventListener("click", openProfile); el.querySelectorAll(".polaroid").forEach((d) => d.addEventListener("click", () => {
       const i = +d.dataset.i, p = CFG.photos[i], n = CFG.photos.length;
       openModal("📷 " + t("bGallery"), `<div class="lightbox"><img src="${esc(p.src)}" alt=""><p>${esc(L(p.caption))} <small>(${i + 1}/${n})</small></p>
@@ -2002,7 +2002,24 @@
     refreshRankTop();
     flushPendingRuns();
     pushOnEnter();
+    // 알림을 눌러 들어왔으면 그 화면으로 (예: ?go=gallery)
+    const goParam = new URLSearchParams(location.search).get("go");
+    if (goParam === "gallery") { markAnnounceSeen(); setTimeout(openGallery, 700); try { history.replaceState(null, "", location.pathname); } catch {} }
+    else setTimeout(showAnnounce, 1200);
     setTimeout(maybeInstallPopup, 5500);
+  }
+  // ---------------- 📢 로그인 공지 (공지마다 한 번만) ----------------
+  function markAnnounceSeen() { const a = CFG.announce; if (!a) return; try { localStorage.setItem("jl_ann_" + a.id, "1"); } catch {} }
+  function showAnnounce() {
+    const a = CFG.announce; if (!a || G.mode !== "world") return;
+    try { if (localStorage.getItem("jl_ann_" + a.id)) return; } catch {}
+    if (G.modalOpen || G.dive) return void setTimeout(showAnnounce, 4000);
+    markAnnounceSeen();
+    const goLabel = a.go === "gallery" ? "📷 " + t("annGoGallery") : "";
+    openModal("📢 " + t("annTitle"), `<div class="ann"><div class="ann-pics">${(CFG.photos || []).filter((p) => p.isNew).slice(0, 3).map((p) => `<img src="${esc(p.src)}" alt="">`).join("")}</div>
+      <p class="ann-text">${esc(L(a.text))}</p>${goLabel ? `<p style="text-align:center"><button class="btn pink" id="ann-go">${esc(goLabel)}</button></p>` : ""}</div>`, (el) => {
+      const b = el.querySelector("#ann-go"); if (b) b.addEventListener("click", () => { if (a.go === "gallery") openGallery(); });
+    });
   }
   function logout() {
     if (G.dive) endDive(); G.frozen = false;

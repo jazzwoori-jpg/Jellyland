@@ -33,12 +33,25 @@ window.JELLY_CONFIG = {
 
   // 포토 갤러리 — src: 이미지 경로, caption: 설명
   photos: [
+    // 2026.10 새 프로필 사진 (isNew: 갤러리에 NEW 표시)
+    { src: "img/photos/jojelly-06.jpg", isNew: true, caption: { ko: "새 프로필 · 화이트 리본", en: "New Profile · White Ribbon", ja: "新プロフィール · ホワイトリボン" } },
+    { src: "img/photos/jojelly-08.jpg", isNew: true, caption: { ko: "새 프로필 · 블랙", en: "New Profile · Black", ja: "新プロフィール · ブラック" } },
+    { src: "img/photos/jojelly-07.jpg", isNew: true, caption: { ko: "새 프로필 · 스튜디오", en: "New Profile · Studio", ja: "新プロフィール · スタジオ" } },
+    { src: "img/photos/jojelly-09.jpg", isNew: true, caption: { ko: "새 프로필 · 화이트 리본 2", en: "New Profile · White Ribbon 2", ja: "新プロフィール · ホワイトリボン 2" } },
+    { src: "img/photos/jojelly-10.jpg", isNew: true, caption: { ko: "새 프로필 · 블랙 2", en: "New Profile · Black 2", ja: "新プロフィール · ブラック 2" } },
     { src: "img/photos/jojelly-01.jpg", caption: { ko: "프로필 · 퍼플", en: "Profile · Purple", ja: "プロフィール · パープル" } },
     { src: "img/photos/jojelly-04.jpg", caption: { ko: "프로필 · 퍼플 2", en: "Profile · Purple 2", ja: "プロフィール · パープル 2" } },
     { src: "img/photos/jojelly-05.jpg", caption: { ko: "프로필 · 퍼플 3", en: "Profile · Purple 3", ja: "プロフィール · パープル 3" } },
     { src: "img/photos/jojelly-02.jpg", caption: { ko: "프로필 · 샹들리에", en: "Profile · Chandelier", ja: "プロフィール · シャンデリア" } },
     { src: "img/photos/jojelly-03.jpg", caption: { ko: "프로필 · 앤티크 룸", en: "Profile · Antique Room", ja: "プロフィール · アンティークルーム" } },
   ],
+
+  // 📢 로그인할 때 한 번 띄우는 공지 (id 를 바꾸면 새 공지로 다시 한 번 보여 줌) — go: 버튼을 누르면 갈 곳
+  announce: {
+    id: "photos-2026-10",
+    go: "gallery",
+    text: { ko: "\"Jo Jelly\"의 새로운 프로필 사진이 공개되었습니다! 포토갤러리로 가서 확인해보세요!", en: "New profile photos of \"Jo Jelly\" have been released! Head to the Photo Gallery to check them out!", ja: "「Jo Jelly」の新しいプロフィール写真が公開されました！フォトギャラリーでチェックしてね！" },
+  },
 
   // 앨범 기록관 — 최신 순으로 위에 추가하세요
   albums: [

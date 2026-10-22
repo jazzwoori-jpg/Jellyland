@@ -344,7 +344,20 @@ async function vapidHeader(endpoint) {
 const PUSH_TEXT = {
   host: { ko: ["👑 Jo Jelly 등장!", "조젤리가 젤리랜드에 들어왔어요! 지금 놀러 오세요 ♪"], en: ["👑 Jo Jelly is here!", "Jo Jelly just entered JELLY LAND! Come say hi ♪"], ja: ["👑 Jo Jelly 登場！", "Jo Jelly がゼリーランドに来ました！今すぐ遊びに来てね ♪"] },
   mail: { ko: ["✉️ 새 쪽지가 왔어요", "{from}: {text}"], en: ["✉️ New message", "{from}: {text}"], ja: ["✉️ 新しいメッセージ", "{from}: {text}"] },
+  photos: { ko: ["📸 Jo Jelly 새 프로필 사진 공개!", "\"Jo Jelly\"의 새로운 프로필 사진이 공개되었습니다! 포토갤러리로 가서 확인해보세요!"], en: ["📸 New Jo Jelly profile photos!", "New profile photos of \"Jo Jelly\" have been released! Check them out in the Photo Gallery!"], ja: ["📸 Jo Jelly 新プロフィール写真公開！", "「Jo Jelly」の新しいプロフィール写真が公開されました！フォトギャラリーでチェックしてね！"] },
 };
+// 📢 배포 후 한 번만 보내는 공지 알림 (실제 서버에서만 · 같은 id 는 다시 안 보냄)
+const ANNOUNCE_PUSH = { id: "photos-2026-10", kind: "photos", url: "/?go=gallery" };
+let announceChecked = false;
+async function maybeAnnounce(url) {
+  if (announceChecked) return;
+  announceChecked = true;
+  if (url.hostname.includes("--") || url.hostname === "localhost" || url.hostname === "x") return; // 테스트 서버(dev--)·미리보기에서는 보내지 않음
+  const cfg = store("jl-config"), k = "ann/" + ANNOUNCE_PUSH.id;
+  if (await cfg.get(k)) return;
+  await cfg.set(k, String(Date.now()));
+  try { const n = await sendPush(null, ANNOUNCE_PUSH.kind, { url: ANNOUNCE_PUSH.url }); await cfg.set(k, JSON.stringify({ at: Date.now(), sent: n })); } catch {}
+}
 // uids: 받을 회원 id 목록 (null = 알림을 켠 모든 회원)
 async function sendPush(uids, kind, vars = {}, exclude = null) {
   const ps = store("jl-push");
@@ -357,7 +370,7 @@ async function sendPush(uids, kind, vars = {}, exclude = null) {
         const rec = await ps.get(k, { type: "json" }); if (!rec) return;
         const tx = PUSH_TEXT[kind][rec.lang] || PUSH_TEXT[kind].ko;
         const fill = (s) => s.replace("{from}", vars.from || "").replace("{text}", String(vars.text || "").slice(0, 80));
-        const payload = JSON.stringify({ title: fill(tx[0]), body: fill(tx[1]), url: "/", tag: kind });
+        const payload = JSON.stringify({ title: fill(tx[0]), body: fill(tx[1]), url: vars.url || "/", tag: kind });
         const r = await fetch(rec.sub.endpoint, { method: "POST", headers: { Authorization: await vapidHeader(rec.sub.endpoint), "Content-Encoding": "aes128gcm", "Content-Type": "application/octet-stream", TTL: "86400", Urgency: "high" }, body: encryptPush(rec.sub, payload), signal: withTimeout(6000) });
         if (r.status === 404 || r.status === 410) await ps.delete(k); // 알림을 끈 기기는 정리
         else if (r.ok) sent++;
@@ -416,7 +429,7 @@ async function translateAll(text) {
 }
 
 // ================= 라우터 =================
-export default async (req) => {
+export default async (req, context) => {
   const url = new URL(req.url);
   const route = url.pathname.replace(/^\/api\/?/, "").replace(/\/$/, "");
   const method = req.method;
@@ -434,7 +447,11 @@ export default async (req) => {
       if (!m) return err("notfound", 404);
       return new Response(Buffer.from(m[1], "base64"), { headers: { "content-type": "image/png", "cache-control": "public, max-age=604800, immutable" } });
     }
-    if (route === "health") return json({ ok: true, translator: process.env.DEEPL_API_KEY ? "deepl" : "mymemory" });
+    if (route === "health") {
+      const p = maybeAnnounce(url).catch(() => {});
+      if (context && typeof context.waitUntil === "function") context.waitUntil(p); else await p;
+      return json({ ok: true, translator: process.env.DEEPL_API_KEY ? "deepl" : "mymemory" });
+    }
 
     if (route === "signup" && method === "POST") {
       const email = clean(body.email, 120).toLowerCase();

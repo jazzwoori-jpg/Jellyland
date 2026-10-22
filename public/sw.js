@@ -1,6 +1,6 @@
 /* JELLY LAND 서비스 워커
    - "홈 화면에 앱 추가(설치)"를 가능하게 함 (캐시는 하지 않아 항상 최신 버전)
-   - 🔔 푸시 알림: 조젤리 입장 · 새 쪽지 */
+   - 🔔 푸시 알림: 조젤리 입장 · 새 쪽지 · 공지 */
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 self.addEventListener("fetch", () => {});
@@ -16,7 +16,7 @@ self.addEventListener("notificationclick", (e) => {
   e.notification.close();
   const url = new URL((e.notification.data && e.notification.data.url) || "/", self.location.origin).href;
   e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
-    for (const c of list) if (c.url.startsWith(self.location.origin) && "focus" in c) return c.focus();
+    for (const c of list) if (c.url.startsWith(self.location.origin) && "focus" in c) { if (url !== c.url && "navigate" in c) c.navigate(url).catch(() => {}); return c.focus(); }
     return self.clients.openWindow(url);
   }));
 });

@@ -643,3 +643,12 @@ body:not(.touch) #emo-pop { right: 20px; bottom: 70px; }
 .tg-pad.desk { width: min(300px, 100%); }
 .tg-pad.desk button { font-size: 14px; padding: 5px 0; }
 @media (max-width: 600px) { .tg { height: min(52vh, 480px); } }
+
+/* ===== v34: 📢 공지 · 갤러리 NEW ===== */
+.polaroid { position: relative; }
+.polaroid .new-badge { position: absolute; top: 6px; left: 6px; z-index: 2; background: #e0304e; color: #fff; font-size: 11px; font-weight: bold; padding: 2px 7px; border: 2px solid var(--ink); border-radius: 8px; transform: rotate(-6deg); box-shadow: 0 2px 0 var(--ink); animation: bob 1.4s ease-in-out infinite; }
+.ann { text-align: center; }
+.ann-pics { display: flex; justify-content: center; gap: 8px; margin: 4px 0 12px; }
+.ann-pics img { width: min(28%, 140px); aspect-ratio: 2 / 3; object-fit: cover; border: 3px solid var(--ink); border-radius: 8px; box-shadow: 0 4px 0 rgba(58, 37, 48, .35); background: #fff; }
+.ann-pics img:nth-child(1) { transform: rotate(-4deg); } .ann-pics img:nth-child(3) { transform: rotate(4deg); }
+.ann-text { font-size: 16px; font-weight: bold; line-height: 1.5; word-break: keep-all; margin: 6px 0 12px; }
