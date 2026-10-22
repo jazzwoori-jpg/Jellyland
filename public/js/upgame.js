@@ -6,7 +6,7 @@
    - 10px = 1m, 100m 마다 5코인 (한 판 최대 200 · 두 게임 합쳐 하루 최대 600)
    - 조작: ← → / A D 키, 휴대폰은 화면 왼쪽·오른쪽을 누르고 있기 */
 (function () {
-  const W = 240, H = 360, R = 2;
+  const W = 240, H = 360, R = Math.min(4, Math.max(2, Math.ceil((window.devicePixelRatio || 1) * 2)));
   const GRAV = 980, JUMP = -440, SUPER = -900, MAXVX = 190, ACC = 1300;
   const PW = 46, PH = 9;
   const RING_TIME = 2.4, RING_VY = -1150, RING_EVERY = 30;

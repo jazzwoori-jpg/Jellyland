@@ -53,6 +53,14 @@
     // 👼 젤리축복 · 😇 천사의 링: 하프 글리산도 + 반짝
     bless() { if (!ctx()) return; const t = actx.currentTime; [60, 64, 67, 72, 76, 79, 84, 88, 91, 96].forEach((m, i) => tone("sine", hz(m), 0, t + i * 0.04, 0.5, 0.07)); [84, 88, 91].forEach((m) => tone("triangle", hz(m), 0, t + 0.45, 0.9, 0.05)); noise(t + 0.4, 0.6, 0.06, 8000, "highpass"); },
     angel() { if (!ctx()) return; const t = actx.currentTime; tone("sine", 300, 2400, t, 0.8, 0.08); [72, 76, 79, 84, 88, 91, 96].forEach((m, i) => tone("triangle", hz(m), 0, t + i * 0.05, 0.4, 0.07)); noise(t, 0.8, 0.08, 6000, "highpass"); },
+    // 🧱 젤리 블록
+    tMove() { if (!ctx()) return; const t = actx.currentTime; tone("square", 520, 0, t, 0.025, 0.025); },
+    tRot() { if (!ctx()) return; const t = actx.currentTime; tone("triangle", 700, 980, t, 0.05, 0.05); },
+    tLock() { if (!ctx()) return; const t = actx.currentTime; tone("sine", 220, 120, t, 0.08, 0.12); noise(t, 0.04, 0.06, 900, "lowpass"); },
+    tHard() { if (!ctx()) return; const t = actx.currentTime; tone("square", 400, 90, t, 0.1, 0.07); noise(t, 0.08, 0.12, 600, "lowpass"); },
+    tHold() { if (!ctx()) return; const t = actx.currentTime; tone("triangle", 660, 0, t, 0.06, 0.06); tone("triangle", 880, 0, t + 0.05, 0.08, 0.06); },
+    tClear() { if (!ctx()) return; const t = actx.currentTime; [76, 79, 84].forEach((m, i) => tone("square", hz(m), 0, t + i * 0.05, 0.12, 0.07)); noise(t, 0.25, 0.08, 4000, "highpass"); },
+    tTetris() { if (!ctx()) return; const t = actx.currentTime; [72, 76, 79, 84, 88, 91, 96].forEach((m, i) => tone("square", hz(m), 0, t + i * 0.05, 0.18, 0.08)); tone("sawtooth", 80, 40, t, 0.4, 0.15); noise(t, 0.5, 0.15, 3000, "bandpass"); },
     // 🫧 분수대 다이빙
     splash() { if (!ctx()) return; const t = actx.currentTime; noise(t, 0.5, 0.45, 1200, "lowpass"); noise(t + 0.05, 0.35, 0.2, 3000, "bandpass"); tone("sine", 500, 120, t, 0.35, 0.12); },
     bubble() { if (!ctx()) return; const t = actx.currentTime; for (let i = 0; i < 3; i++) tone("sine", 300 + Math.random() * 300, 900 + Math.random() * 500, t + i * 0.07, 0.07, 0.05); },
@@ -152,6 +160,22 @@
         pad.push([b, 0, r - 12, 11.5]); pad.push([b, 0, ch[1] - 12, 11.5]);
       });
       return { bpm: 80, spb: 12, bars: 8, parts: [{ wave: "bell", vol: 0.12, notes: bell }, { wave: "sine", vol: 0.12, notes: pad }], drums: [] };
+    })(),
+    // 🧱 젤리 블록: 경쾌한 A단조 퍼즐 BGM (150bpm, 오리지널)
+    tet: (() => {
+      const prog = [[45, 1], [41, 0], [43, 0], [40, 0], [45, 1], [41, 0], [38, 1], [40, 0]];
+      const bass = [], arp = [], mel = [], drums = [];
+      const ph = [[[0, 76, 2], [2, 72, 1], [3, 74, 1], [4, 76, 2], [6, 79, 2], [8, 77, 2], [10, 76, 2], [12, 72, 4]],
+        [[0, 77, 2], [2, 81, 2], [4, 79, 1], [5, 77, 1], [6, 76, 2], [8, 74, 2], [10, 76, 2], [12, 79, 4]],
+        [[0, 79, 2], [2, 76, 1], [3, 77, 1], [4, 79, 2], [6, 83, 2], [8, 81, 2], [10, 79, 2], [12, 76, 4]],
+        [[0, 76, 1], [1, 77, 1], [2, 76, 1], [3, 74, 1], [4, 72, 2], [6, 71, 2], [8, 72, 2], [10, 74, 2], [12, 76, 4]]];
+      prog.forEach(([r, mi], b) => {
+        for (let s = 0; s < 16; s += 2) bass.push([b, s, r - 12 + (s % 4 ? 12 : 0), 1.4]);
+        const ch = chordNotes(r + 24, mi); for (let s = 1; s < 16; s += 2) arp.push([b, s, ch[(s >> 1) % 3], 0.7]);
+        ph[b % 4].forEach(([s, m, l]) => mel.push([b, s, m, l]));
+        for (let s = 0; s < 16; s++) { if (s % 4 === 0) drums.push([b, s, "k"]); if (s % 8 === 4) drums.push([b, s, "s"]); if (s % 2 === 1) drums.push([b, s, "h"]); }
+      });
+      return { bpm: 150, spb: 16, bars: 8, parts: [{ wave: "triangle", vol: 0.45, notes: bass }, { wave: "square", vol: 0.05, notes: arp }, { wave: "square", vol: 0.14, notes: mel }], drums };
     })(),
     // 🫧 바닷속: 몽글몽글 신비로운 D단조 (96bpm) — 오르골 + 물방울 아르페지오
     sea: (() => {

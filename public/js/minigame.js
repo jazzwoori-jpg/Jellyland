@@ -6,7 +6,7 @@
      (서버 검증 공식과 같음), 10px = 1m
    - 100m 마다 5코인, 한 판 최대 200코인 */
 (function () {
-  const W = 360, H = 170, GY = 138, PX = 64, R = 2;
+  const W = 360, H = 170, GY = 138, PX = 64, R = Math.min(4, Math.max(2, Math.ceil((window.devicePixelRatio || 1) * 2)));
   const GRAV = 1150, JUMP = -345, JUMP2 = -310;
   const SUPER_TIME = 6, BLESS_TIME = 17, BLESS_Y = GY - 78, FAST_FROM = 1e6, FAST_K = 0.001;
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', sans-serif";

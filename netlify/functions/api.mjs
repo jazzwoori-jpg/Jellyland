@@ -344,7 +344,20 @@ async function vapidHeader(endpoint) {
 const PUSH_TEXT = {
   host: { ko: ["👑 Jo Jelly 등장!", "조젤리가 젤리랜드에 들어왔어요! 지금 놀러 오세요 ♪"], en: ["👑 Jo Jelly is here!", "Jo Jelly just entered JELLY LAND! Come say hi ♪"], ja: ["👑 Jo Jelly 登場！", "Jo Jelly がゼリーランドに来ました！今すぐ遊びに来てね ♪"] },
   mail: { ko: ["✉️ 새 쪽지가 왔어요", "{from}: {text}"], en: ["✉️ New message", "{from}: {text}"], ja: ["✉️ 新しいメッセージ", "{from}: {text}"] },
+  photos: { ko: ["📸 Jo Jelly 새 프로필 사진 공개!", "\"Jo Jelly\"의 새로운 프로필 사진이 공개되었습니다! 포토갤러리로 가서 확인해보세요!"], en: ["📸 New Jo Jelly profile photos!", "New profile photos of \"Jo Jelly\" have been released! Check them out in the Photo Gallery!"], ja: ["📸 Jo Jelly 新プロフィール写真公開！", "「Jo Jelly」の新しいプロフィール写真が公開されました！フォトギャラリーでチェックしてね！"] },
 };
+// 📢 배포 후 한 번만 보내는 공지 알림 (실제 서버에서만 · 같은 id 는 다시 안 보냄)
+const ANNOUNCE_PUSH = { id: "photos-2026-10", kind: "photos", url: "/?go=gallery" };
+let announceChecked = false;
+async function maybeAnnounce(url) {
+  if (announceChecked) return;
+  announceChecked = true;
+  if (url.hostname.includes("--") || url.hostname === "localhost" || url.hostname === "x") return; // 테스트 서버(dev--)·미리보기에서는 보내지 않음
+  const cfg = store("jl-config"), k = "ann/" + ANNOUNCE_PUSH.id;
+  if (await cfg.get(k)) return;
+  await cfg.set(k, String(Date.now()));
+  try { const n = await sendPush(null, ANNOUNCE_PUSH.kind, { url: ANNOUNCE_PUSH.url }); await cfg.set(k, JSON.stringify({ at: Date.now(), sent: n })); } catch {}
+}
 // uids: 받을 회원 id 목록 (null = 알림을 켠 모든 회원)
 async function sendPush(uids, kind, vars = {}, exclude = null) {
   const ps = store("jl-push");
@@ -357,7 +370,7 @@ async function sendPush(uids, kind, vars = {}, exclude = null) {
         const rec = await ps.get(k, { type: "json" }); if (!rec) return;
         const tx = PUSH_TEXT[kind][rec.lang] || PUSH_TEXT[kind].ko;
         const fill = (s) => s.replace("{from}", vars.from || "").replace("{text}", String(vars.text || "").slice(0, 80));
-        const payload = JSON.stringify({ title: fill(tx[0]), body: fill(tx[1]), url: "/", tag: kind });
+        const payload = JSON.stringify({ title: fill(tx[0]), body: fill(tx[1]), url: vars.url || "/", tag: kind });
         const r = await fetch(rec.sub.endpoint, { method: "POST", headers: { Authorization: await vapidHeader(rec.sub.endpoint), "Content-Encoding": "aes128gcm", "Content-Type": "application/octet-stream", TTL: "86400", Urgency: "high" }, body: encryptPush(rec.sub, payload), signal: withTimeout(6000) });
         if (r.status === 404 || r.status === 410) await ps.delete(k); // 알림을 끈 기기는 정리
         else if (r.ok) sent++;
@@ -416,7 +429,7 @@ async function translateAll(text) {
 }
 
 // ================= 라우터 =================
-export default async (req) => {
+export default async (req, context) => {
   const url = new URL(req.url);
   const route = url.pathname.replace(/^\/api\/?/, "").replace(/\/$/, "");
   const method = req.method;
@@ -434,7 +447,11 @@ export default async (req) => {
       if (!m) return err("notfound", 404);
       return new Response(Buffer.from(m[1], "base64"), { headers: { "content-type": "image/png", "cache-control": "public, max-age=604800, immutable" } });
     }
-    if (route === "health") return json({ ok: true, translator: process.env.DEEPL_API_KEY ? "deepl" : "mymemory" });
+    if (route === "health") {
+      const p = maybeAnnounce(url).catch(() => {});
+      if (context && typeof context.waitUntil === "function") context.waitUntil(p); else await p;
+      return json({ ok: true, translator: process.env.DEEPL_API_KEY ? "deepl" : "mymemory" });
+    }
 
     if (route === "signup" && method === "POST") {
       const email = clean(body.email, 120).toLowerCase();
@@ -571,7 +588,7 @@ export default async (req) => {
     // ---------- 미니게임: 점프점프 젤리월드 ----------
     const gameLeft = () => (user.gameDay === kstDay() ? Math.max(0, GAME_DAY_MAX - (user.gameCoins | 0)) : GAME_DAY_MAX);
     // 게임 종류: jump = 점프점프 젤리월드, up = 올라올라 (코인은 두 게임 합쳐 하루 600)
-    const GAMES = { jump: { top: "top", best: "best" }, up: { top: "top_up", best: "bestUp" } };
+    const GAMES = { jump: { top: "top", best: "best", step: GAME_STEP_M }, up: { top: "top_up", best: "bestUp", step: GAME_STEP_M }, tet: { top: "top_tet", best: "bestTet", step: 1000 } }; // tet = 젤리 블록 (점수 1000점마다 5코인)
     const gameOf = (g) => (GAMES[g] ? g : "jump");
     const runSig = async (t0, g) => crypto.createHmac("sha256", await getSecret()).update(g === "jump" ? `run.${user.id}.${t0}` : `run.${user.id}.${t0}.${g}`).digest("base64url").slice(0, 22);
     if (route === "game/start" && method === "POST") {
@@ -586,9 +603,10 @@ export default async (req) => {
       const sec = (Date.now() - t0) / 1000;
       if (sec > 12 * 3600) return err("forbidden", 400); // 한 판 최대 12시간 (예전 1시간 제한 때문에 긴 기록이 저장되지 않던 문제 수정)
       // 시간에 비해 너무 먼 거리(높이)는 인정 안 함 — 올라올라는 초당 최대 약 50m
-      const m = Math.max(0, Math.min(+body.m || 0, g === "up" ? sec * 90 + 300 : maxMeters(sec) * 1.1 + 20));
+      // 젤리 블록: 시간에 비해 말이 안 되게 큰 점수는 잘라냄 (초당 줄 수·레벨 상승을 아주 넉넉하게 잡은 한도)
+      const m = Math.max(0, Math.min(+body.m || 0, g === "up" ? sec * 90 + 300 : g === "tet" ? sec * 600 + 90 * sec * sec + 3000 : maxMeters(sec) * 1.1 + 20));
       const left = gameLeft();
-      const coins = Math.min(GAME_MAX, left, Math.floor(m / GAME_STEP_M) * GAME_STEP_COINS);
+      const coins = Math.min(GAME_MAX, left, Math.floor(m / G.step) * GAME_STEP_COINS);
       if (user.gameDay !== kstDay()) { user.gameDay = kstDay(); user.gameCoins = 0; }
       user.gameCoins = (user.gameCoins | 0) + coins;
       user.lastRun = t0;
@@ -615,8 +633,8 @@ export default async (req) => {
     if (route === "game/top" && method === "GET") {
       const gs = store("jl-game");
       if (url.searchParams.get("game") === "all") { // 광장 랭킹 게시판용: 두 게임 1위
-        const [a, b] = await Promise.all([gs.get("top", { type: "json" }), gs.get("top_up", { type: "json" })]);
-        return json({ jump: (a || [])[0] || null, up: (b || [])[0] || null });
+        const [a, b, c] = await Promise.all([gs.get("top", { type: "json" }), gs.get("top_up", { type: "json" }), gs.get("top_tet", { type: "json" })]);
+        return json({ jump: (a || [])[0] || null, up: (b || [])[0] || null, tet: (c || [])[0] || null });
       }
       const g = gameOf(url.searchParams.get("game"));
       const top = (await gs.get(GAMES[g].top, { type: "json" })) || [];
@@ -859,7 +877,7 @@ export default async (req) => {
       const ms = store("jl-mail");
       const sendMail = async (id, m) => { const k = "box/" + id; const box = (await ms.get(k, { type: "json" })) || []; box.unshift(m); await ms.setJSON(k, box.slice(0, MAIL_MAX)); };
       if (route === "admin/users" && method === "GET") {
-        const list = (await allUsers()).map((u) => ({ id: u.id, email: u.email, nickname: u.nickname || "", avatar: u.avatar || null, role: roleOf(u.email), coins: u.coins | 0, createdAt: u.createdAt || 0, best: u.best | 0, bestUp: u.bestUp | 0 }));
+        const list = (await allUsers()).map((u) => ({ id: u.id, email: u.email, nickname: u.nickname || "", avatar: u.avatar || null, role: roleOf(u.email), coins: u.coins | 0, createdAt: u.createdAt || 0, best: u.best | 0, bestUp: u.bestUp | 0, bestTet: u.bestTet | 0 }));
         list.sort((a, b) => b.createdAt - a.createdAt);
         return json({ users: list });
       }
@@ -899,7 +917,7 @@ export default async (req) => {
       }
       // 🏆 랭킹 기록 직접 수정/삭제 {game:"jump"|"up", id, m, mode?:"remove"}
       if (route === "admin/rank" && method === "POST") {
-        const GK = { jump: { top: "top", best: "best" }, up: { top: "top_up", best: "bestUp" } }[body.game];
+        const GK = { jump: { top: "top", best: "best" }, up: { top: "top_up", best: "bestUp" }, tet: { top: "top_tet", best: "bestTet" } }[body.game];
         if (!GK) return err("msg");
         const target = (await allUsers()).find((u) => u.id === body.id);
         if (!target) return err("notfound", 404);
@@ -931,7 +949,7 @@ export default async (req) => {
         try { await ms.delete("box/" + target.id); } catch {}
         try {
           const gs2 = store("jl-game");
-          for (const k of ["top", "top_up"]) { const top = (await gs2.get(k, { type: "json" })) || []; if (top.some((e) => e.id === target.id)) await gs2.setJSON(k, top.filter((e) => e.id !== target.id)); }
+          for (const k of ["top", "top_up", "top_tet"]) { const top = (await gs2.get(k, { type: "json" })) || []; if (top.some((e) => e.id === target.id)) await gs2.setJSON(k, top.filter((e) => e.id !== target.id)); }
         } catch {}
         // 접속 중이면 광장/라운지에서 바로 사라지게
         try {

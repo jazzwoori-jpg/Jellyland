@@ -3,7 +3,7 @@
    - 결과(확률)는 서버에서 정해짐: Jelly!×3 = 100배(1/300) · Jelly!×2 = 10배(1/100) · 사과×3 = 3배(1/16) · 하트×3 = 3배(1/16) · 별 40% · 하루 20번
      · 별이 하나라도 있으면 참가비 그대로 · 그 외엔 참가비를 잃음 */
 (function () {
-  const W = 360, H = 250, R = 2, OUT = "#3a2530";
+  const W = 360, H = 250, R = Math.min(4, Math.max(2, Math.ceil((window.devicePixelRatio || 1) * 2))), OUT = "#3a2530";
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', sans-serif";
   const SYMS = ["jelly", "apple", "heart", "star", "grape", "bell", "note", "candy", "clover", "lemon"];
   const SZ = 44; // 그림 한 칸 크기
