@@ -630,3 +630,16 @@ body:not(.touch) #emo-pop { right: 20px; bottom: 70px; }
 .menu-list { position: absolute; left: 0; top: calc(100% + 8px); z-index: 15; display: flex; flex-direction: column; gap: 6px; padding: 8px; min-width: 160px; animation: menuIn .12s ease-out; }
 .hud-btns .menu-list .btn.sm { width: 100%; text-align: left; padding: 9px 12px; font-size: 13px; white-space: nowrap; }
 @keyframes menuIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* ===== v33: 🧱 젤리 블록 ===== */
+.gw-card.tet { background: linear-gradient(#e9e0ff, #c9b0ff); }
+.tg-wrap { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.tg { height: min(60vh, 560px); max-width: 100%; aspect-ratio: 272 / 296; image-rendering: pixelated; border: 3px solid var(--ink); border-radius: 8px; touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; background: #ffe1f0; }
+.tg-pad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; width: min(360px, 100%); }
+.tg-pad button { font: inherit; font-size: 18px; font-weight: bold; padding: 10px 0; border: 3px solid var(--ink); border-radius: 12px; background: #fff8ea; color: var(--ink); box-shadow: 0 3px 0 var(--ink); touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; }
+.tg-pad button[data-k="hold"] { font-size: 12px; }
+.tg-pad button[data-k="hard"] { background: #ffd1e6; }
+.tg-pad button.on { transform: translateY(3px); box-shadow: 0 0 0 var(--ink); background: #e2d1ff; }
+.tg-pad.desk { width: min(300px, 100%); }
+.tg-pad.desk button { font-size: 14px; padding: 5px 0; }
+@media (max-width: 600px) { .tg { height: min(52vh, 480px); } }

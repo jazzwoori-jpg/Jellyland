@@ -85,11 +85,11 @@
       if ((me.coins | 0) < it.price) fail("coins");
       me.coins -= it.price; me.inv.push(it.id); save(); return { user: pub(me) };
     }
-    if (route === "game/start") return { run: Date.now() + ".demo" + (b.game === "up" ? ".up" : ""), dayLeft: me.gameDay === kstDay() ? Math.max(0, 600 - (me.gameCoins | 0)) : 600 };
+    if (route === "game/start") return { run: Date.now() + ".demo" + (b.game === "up" ? ".up" : b.game === "tet" ? ".tet" : ""), dayLeft: me.gameDay === kstDay() ? Math.max(0, 600 - (me.gameCoins | 0)) : 600 };
     if (route === "game/finish") {
       if (me.gameDay !== kstDay()) { me.gameDay = kstDay(); me.gameCoins = 0; }
-      const coins = Math.min(200, 600 - (me.gameCoins | 0), Math.floor((+b.m || 0) / 100) * 5); me.gameCoins = (me.gameCoins | 0) + coins;
-      const up = String(b.run || "").endsWith(".up"), bk = up ? "bestUp" : "best", tk = up ? "jl_demo_top_up" : "jl_demo_top";
+      const coins = Math.min(200, 600 - (me.gameCoins | 0), Math.floor((+b.m || 0) / (String(b.run || "").endsWith(".tet") ? 1000 : 100)) * 5); me.gameCoins = (me.gameCoins | 0) + coins;
+      const gk = String(b.run || "").endsWith(".up") ? "up" : String(b.run || "").endsWith(".tet") ? "tet" : "jump", bk = { jump: "best", up: "bestUp", tet: "bestTet" }[gk], tk = { jump: "jl_demo_top", up: "jl_demo_top_up", tet: "jl_demo_top_tet" }[gk];
       me.coins = (me.coins | 0) + coins; if ((+b.m | 0) > (me[bk] | 0)) me[bk] = +b.m | 0; save();
       let top = ls.get(tk, []).filter((e) => e.id !== me.id);
       top.push({ id: me.id, name: me.nickname, avatar: me.avatar, role: me.role || "fan", m: me[bk] | 0, ts: Date.now() });
@@ -132,7 +132,7 @@
       return { box, unread: box.filter((m) => !m.read).length };
     }
     if (route === "mail/read") { ls.set("jl_demo_mail_" + me.id, ls.get("jl_demo_mail_" + me.id, []).map((m) => ({ ...m, read: true }))); return { ok: true }; }
-    if (route === "admin/users") return { users: Object.values(users).map((u) => ({ id: u.id, email: u.email, nickname: u.nickname, avatar: u.avatar, role: u.role || "fan", coins: u.coins | 0, createdAt: +String(u.id).slice(1) || 0, best: u.best | 0, bestUp: u.bestUp | 0 })) };
+    if (route === "admin/users") return { users: Object.values(users).map((u) => ({ id: u.id, email: u.email, nickname: u.nickname, avatar: u.avatar, role: u.role || "fan", coins: u.coins | 0, createdAt: +String(u.id).slice(1) || 0, best: u.best | 0, bestUp: u.bestUp | 0, bestTet: u.bestTet | 0 })) };
     if (route === "admin/mail") {
       const m = { ts: Date.now(), from: me.nickname, fromRole: me.role || "admin", text: b.text, read: false, all: b.to === "all" };
       const ids = b.to === "all" ? Object.values(users).map((u) => u.id) : [b.to];
@@ -183,7 +183,7 @@
     }
     if (route === "admin/rank") {
       const e = Object.keys(users).find((k) => users[k].id === b.id); if (!e) fail("notfound", 404);
-      const u = users[e], up = b.game === "up", bk = up ? "bestUp" : "best", tk = up ? "jl_demo_top_up" : "jl_demo_top";
+      const u = users[e], bk = { jump: "best", up: "bestUp", tet: "bestTet" }[b.game] || "best", tk = { jump: "jl_demo_top", up: "jl_demo_top_up", tet: "jl_demo_top_tet" }[b.game] || "jl_demo_top";
       const m = b.mode === "remove" ? 0 : Math.max(0, Math.floor(+b.m || 0)); u[bk] = m; save();
       let top = ls.get(tk, []); const old = top.find((x) => x.id === u.id); top = top.filter((x) => x.id !== u.id);
       if (m > 0) top.push({ id: u.id, name: u.nickname, avatar: u.avatar, role: u.role || "fan", m, ts: old ? old.ts : Date.now() });
@@ -192,9 +192,9 @@
     }
     if (route === "admin/delete") { const e = Object.keys(users).find((k) => users[k].id === b.id); if (e) delete users[e]; save(); return { ok: true }; }
     if (route === "game/top") {
-      if (q.get("game") === "all") return { jump: ls.get("jl_demo_top", [])[0] || null, up: ls.get("jl_demo_top_up", [])[0] || null };
-      const up = q.get("game") === "up";
-      return { top: ls.get(up ? "jl_demo_top_up" : "jl_demo_top", []), best: me[up ? "bestUp" : "best"] | 0 };
+      if (q.get("game") === "all") return { jump: ls.get("jl_demo_top", [])[0] || null, up: ls.get("jl_demo_top_up", [])[0] || null, tet: ls.get("jl_demo_top_tet", [])[0] || null };
+      const gk = ["up", "tet"].includes(q.get("game")) ? q.get("game") : "jump";
+      return { top: ls.get({ jump: "jl_demo_top", up: "jl_demo_top_up", tet: "jl_demo_top_tet" }[gk], []), best: me[{ jump: "best", up: "bestUp", tet: "bestTet" }[gk]] | 0 };
     }
     if (route === "settings") { if (b.lang) me.lang = b.lang; ls.set("jl_demo_users", users); return { user: pub(me) }; }
     if (route === "presence") return { others: [], online: 1 };

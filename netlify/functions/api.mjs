@@ -571,7 +571,7 @@ export default async (req) => {
     // ---------- 미니게임: 점프점프 젤리월드 ----------
     const gameLeft = () => (user.gameDay === kstDay() ? Math.max(0, GAME_DAY_MAX - (user.gameCoins | 0)) : GAME_DAY_MAX);
     // 게임 종류: jump = 점프점프 젤리월드, up = 올라올라 (코인은 두 게임 합쳐 하루 600)
-    const GAMES = { jump: { top: "top", best: "best" }, up: { top: "top_up", best: "bestUp" } };
+    const GAMES = { jump: { top: "top", best: "best", step: GAME_STEP_M }, up: { top: "top_up", best: "bestUp", step: GAME_STEP_M }, tet: { top: "top_tet", best: "bestTet", step: 1000 } }; // tet = 젤리 블록 (점수 1000점마다 5코인)
     const gameOf = (g) => (GAMES[g] ? g : "jump");
     const runSig = async (t0, g) => crypto.createHmac("sha256", await getSecret()).update(g === "jump" ? `run.${user.id}.${t0}` : `run.${user.id}.${t0}.${g}`).digest("base64url").slice(0, 22);
     if (route === "game/start" && method === "POST") {
@@ -586,9 +586,10 @@ export default async (req) => {
       const sec = (Date.now() - t0) / 1000;
       if (sec > 12 * 3600) return err("forbidden", 400); // 한 판 최대 12시간 (예전 1시간 제한 때문에 긴 기록이 저장되지 않던 문제 수정)
       // 시간에 비해 너무 먼 거리(높이)는 인정 안 함 — 올라올라는 초당 최대 약 50m
-      const m = Math.max(0, Math.min(+body.m || 0, g === "up" ? sec * 90 + 300 : maxMeters(sec) * 1.1 + 20));
+      // 젤리 블록: 시간에 비해 말이 안 되게 큰 점수는 잘라냄 (초당 줄 수·레벨 상승을 아주 넉넉하게 잡은 한도)
+      const m = Math.max(0, Math.min(+body.m || 0, g === "up" ? sec * 90 + 300 : g === "tet" ? sec * 600 + 90 * sec * sec + 3000 : maxMeters(sec) * 1.1 + 20));
       const left = gameLeft();
-      const coins = Math.min(GAME_MAX, left, Math.floor(m / GAME_STEP_M) * GAME_STEP_COINS);
+      const coins = Math.min(GAME_MAX, left, Math.floor(m / G.step) * GAME_STEP_COINS);
       if (user.gameDay !== kstDay()) { user.gameDay = kstDay(); user.gameCoins = 0; }
       user.gameCoins = (user.gameCoins | 0) + coins;
       user.lastRun = t0;
@@ -615,8 +616,8 @@ export default async (req) => {
     if (route === "game/top" && method === "GET") {
       const gs = store("jl-game");
       if (url.searchParams.get("game") === "all") { // 광장 랭킹 게시판용: 두 게임 1위
-        const [a, b] = await Promise.all([gs.get("top", { type: "json" }), gs.get("top_up", { type: "json" })]);
-        return json({ jump: (a || [])[0] || null, up: (b || [])[0] || null });
+        const [a, b, c] = await Promise.all([gs.get("top", { type: "json" }), gs.get("top_up", { type: "json" }), gs.get("top_tet", { type: "json" })]);
+        return json({ jump: (a || [])[0] || null, up: (b || [])[0] || null, tet: (c || [])[0] || null });
       }
       const g = gameOf(url.searchParams.get("game"));
       const top = (await gs.get(GAMES[g].top, { type: "json" })) || [];
@@ -859,7 +860,7 @@ export default async (req) => {
       const ms = store("jl-mail");
       const sendMail = async (id, m) => { const k = "box/" + id; const box = (await ms.get(k, { type: "json" })) || []; box.unshift(m); await ms.setJSON(k, box.slice(0, MAIL_MAX)); };
       if (route === "admin/users" && method === "GET") {
-        const list = (await allUsers()).map((u) => ({ id: u.id, email: u.email, nickname: u.nickname || "", avatar: u.avatar || null, role: roleOf(u.email), coins: u.coins | 0, createdAt: u.createdAt || 0, best: u.best | 0, bestUp: u.bestUp | 0 }));
+        const list = (await allUsers()).map((u) => ({ id: u.id, email: u.email, nickname: u.nickname || "", avatar: u.avatar || null, role: roleOf(u.email), coins: u.coins | 0, createdAt: u.createdAt || 0, best: u.best | 0, bestUp: u.bestUp | 0, bestTet: u.bestTet | 0 }));
         list.sort((a, b) => b.createdAt - a.createdAt);
         return json({ users: list });
       }
@@ -899,7 +900,7 @@ export default async (req) => {
       }
       // 🏆 랭킹 기록 직접 수정/삭제 {game:"jump"|"up", id, m, mode?:"remove"}
       if (route === "admin/rank" && method === "POST") {
-        const GK = { jump: { top: "top", best: "best" }, up: { top: "top_up", best: "bestUp" } }[body.game];
+        const GK = { jump: { top: "top", best: "best" }, up: { top: "top_up", best: "bestUp" }, tet: { top: "top_tet", best: "bestTet" } }[body.game];
         if (!GK) return err("msg");
         const target = (await allUsers()).find((u) => u.id === body.id);
         if (!target) return err("notfound", 404);
@@ -931,7 +932,7 @@ export default async (req) => {
         try { await ms.delete("box/" + target.id); } catch {}
         try {
           const gs2 = store("jl-game");
-          for (const k of ["top", "top_up"]) { const top = (await gs2.get(k, { type: "json" })) || []; if (top.some((e) => e.id === target.id)) await gs2.setJSON(k, top.filter((e) => e.id !== target.id)); }
+          for (const k of ["top", "top_up", "top_tet"]) { const top = (await gs2.get(k, { type: "json" })) || []; if (top.some((e) => e.id === target.id)) await gs2.setJSON(k, top.filter((e) => e.id !== target.id)); }
         } catch {}
         // 접속 중이면 광장/라운지에서 바로 사라지게
         try {

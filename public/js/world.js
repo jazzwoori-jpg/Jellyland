@@ -4,7 +4,20 @@
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', monospace";
   const T = (k) => window.I18N.t(k);
   function rng(seed) { return () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296); }
-  function cv(w, h) { const c = document.createElement("canvas"); c.width = w; c.height = h; const x = c.getContext("2d"); x.imageSmoothingEnabled = false; return [c, x]; }
+  // 스프라이트용 캔버스. 글자(fillText)는 그림에 굽지 않고 기억해 두었다가, 화면에 그릴 때 실제 해상도로 다시 그림 → 확대해도 글자가 또렷함
+  function cv(w, h) {
+    const c = document.createElement("canvas"); c.width = w; c.height = h; const x = c.getContext("2d"); x.imageSmoothingEnabled = false;
+    c._texts = [];
+    x.fillText = (t, px, py) => { c._texts.push({ t: String(t), x: px, y: py, font: x.font, fill: x.fillStyle, align: x.textAlign, base: x.textBaseline }); };
+    return [c, x];
+  }
+  function blitText(ctx, c, dx, dy) {
+    if (!c._texts || !c._texts.length) return;
+    const a = ctx.textAlign, b = ctx.textBaseline;
+    for (const r of c._texts) { ctx.font = r.font; ctx.fillStyle = r.fill; ctx.textAlign = r.align; ctx.textBaseline = r.base; ctx.fillText(r.t, dx + r.x, dy + r.y); }
+    ctx.textAlign = a; ctx.textBaseline = b;
+  }
+  function blit(ctx, c, dx, dy) { ctx.drawImage(c, dx, dy); blitText(ctx, c, dx, dy); }
   const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 
   // ---------------- 공용 스프라이트 ----------------
@@ -191,6 +204,8 @@
       { id: "shop", name: T("bShop"), x: 170, y: 640, w: 176, h: 130, roof: "#ff7fae", wall: "#fff4f8", trim: "#c98b5a", icon: "🛍️", deco: "shop" },
       { id: "game", name: T("bGame"), x: 934, y: 640, w: 176, h: 130, roof: "#4fc3b0", wall: "#f4fffb", trim: "#8f5a34", icon: "🎮", deco: "game" },
     ];
+    // 건물 크기를 조금 줄임 (문 위치·바닥선은 그대로)
+    for (const b of buildings) { const nw = Math.round(b.w * 0.76), nh = Math.round(b.h * 0.8); b.x += Math.round((b.w - nw) / 2); b.y += b.h - nh; b.w = nw; b.h = nh; }
     const paving = (x, y) => {
       const dx = Math.abs(x - CX), dy = Math.abs(y - CY);
       let p = (dx <= 520 && dy <= 400 && dx + dy <= 780) || (Math.abs(x - CX) <= 60 && y > CY);
@@ -307,7 +322,7 @@
     // 건물
     for (const b of buildings) {
       b.sprite = buildingSprite(b);
-      objects.push({ y: b.y + b.h, x: b.x, draw: (c) => c.drawImage(b.sprite, b.x - 2, b.y) });
+      objects.push({ y: b.y + b.h, x: b.x, draw: (c) => blit(c, b.sprite, b.x - 2, b.y) });
       const wt = Math.round(b.h * 0.42);
       colliders.push([b.x, b.y + wt - 10, b.w, b.h - wt + 8]);
       b.door = { x: b.x + b.w / 2, y: b.y + b.h + 4 };
@@ -328,10 +343,10 @@
     seats.push({ id: "throne", x: TX, y: TY + 1, dir: "down", ax: TX, ay: TY + 22, hostOnly: true });
     const RX = CX + 64, RY = CY + 2;
     const recB = recBoardSprite(T("recBoard"));
-    objects.push({ y: RY, x: RX, draw: (c) => c.drawImage(recB, RX - 40, RY - 44) });
+    objects.push({ y: RY, x: RX, draw: (c) => blit(c, recB, RX - 40, RY - 44) });
     colliders.push([RX - 24, RY - 8, 48, 10]);
     // 랭킹 1위 게시판 (젤리게임월드 옆)
-    const BX = 866, BY = 770; // 젤리게임월드 바로 왼쪽, 건물 앞면과 같은 선
+    const BX = 888, BY = 770; // 젤리게임월드 바로 왼쪽, 건물 앞면과 같은 선
     objects.push({ y: BY, x: BX, draw: (c, t) => drawRankBoard(c, BX, BY, t) });
     colliders.push([BX - 56, BY - 14, 112, 16]);
 
@@ -353,7 +368,13 @@
 
     // 가로등
     [[520, 420], [760, 420], [520, 590], [760, 590], [580, 780], [700, 780], [330, 330], [950, 330], [600, 880], [680, 880]].forEach(([lx, ly]) => {
-      objects.push({ y: ly, x: lx, draw: (c) => c.drawImage(LAMP, lx - 5, ly - 28) });
+      objects.push({ y: ly, x: lx, anim: true, draw: (c, t) => {
+        c.drawImage(LAMP, lx - 5, ly - 28);
+        // 따뜻한 가로등 불빛 (살짝 일렁임)
+        const k = 0.75 + 0.25 * Math.sin(t / 700 + lx);
+        const g = c.createRadialGradient(lx, ly - 23, 1, lx, ly - 23, 16); g.addColorStop(0, `rgba(255,236,160,${0.55 * k})`); g.addColorStop(1, "rgba(255,236,160,0)");
+        c.fillStyle = g; c.fillRect(lx - 16, ly - 39, 32, 32);
+      } });
       colliders.push([lx - 3, ly - 3, 6, 4]);
     });
     // 벤치 & 화분
@@ -370,12 +391,12 @@
 
     // 남쪽 게이트
     const gate = gateSprite();
-    objects.push({ y: 914, x: 640, draw: (c) => c.drawImage(gate, 640 - 80, 860) });
+    objects.push({ y: 914, x: 640, draw: (c) => blit(c, gate, 640 - 80, 860) });
     colliders.push([560, 900, 18, 14], [702, 900, 18, 14]);
 
     // 안내 게시판
     const board = boardSprite(T("zGuide"));
-    objects.push({ y: 812, x: 532, draw: (c) => c.drawImage(board, 492, 748) });
+    objects.push({ y: 812, x: 532, draw: (c) => blit(c, board, 492, 748) });
     colliders.push([498, 798, 70, 12]);
 
     const zones = [
@@ -511,16 +532,16 @@
     c.fillStyle = "#f2c14e"; c.fillRect(x0 + 1, y0 + 1, W - 2, H - 20);
     c.fillStyle = "#fff3a8"; c.fillRect(x0 + 1, y0 + 1, W - 2, 3);
     c.fillStyle = "#fffaf2"; c.fillRect(x0 + 5, y0 + 18, W - 10, H - 40);
-    // 점프점프 1위 ↔ 올라올라 1위 를 6초마다 번갈아 보여 줌
+    // 점프점프 1위 → 올라올라 1위 → 젤리 블록 1위 를 6초마다 번갈아 보여 줌 (기록 없는 게임은 건너뜀)
     const tops = window.World.rankTops || {};
-    let which = Math.floor(t / 6000) % 2 ? "up" : "jump";
-    if (!tops[which] && tops[which === "up" ? "jump" : "up"]) which = which === "up" ? "jump" : "up";
-    const title = T(which === "up" ? "rankBoardUp" : "rankBoard");
-    c.fillStyle = which === "up" ? "#8fe07a" : "#f2c14e"; c.fillRect(x0 + 1, y0 + 1, W - 2, 16);
+    const ORDER = ["jump", "up", "tet"], have = ORDER.filter((g) => tops[g]);
+    const which = have.length ? have[Math.floor(t / 6000) % have.length] : ORDER[Math.floor(t / 6000) % 3];
+    const title = T(which === "up" ? "rankBoardUp" : which === "tet" ? "rankBoardTet" : "rankBoard");
+    c.fillStyle = which === "up" ? "#8fe07a" : which === "tet" ? "#c9b0ff" : "#f2c14e"; c.fillRect(x0 + 1, y0 + 1, W - 2, 16);
     c.textAlign = "center"; c.textBaseline = "middle";
     let fs = 10; c.font = `bold ${fs}px ${FONT}`; while (c.measureText(title).width > W - 10 && fs > 6) { fs--; c.font = `bold ${fs}px ${FONT}`; }
     c.fillStyle = OUT; c.fillText(title, bx, y0 + 10);
-    c.fillStyle = which === "jump" ? OUT : "#c9982c"; c.fillRect(bx - 6, y0 + H - 21, 4, 2); c.fillStyle = which === "up" ? OUT : "#c9982c"; c.fillRect(bx + 2, y0 + H - 21, 4, 2); // 페이지 표시
+    ORDER.forEach((g, i) => { c.fillStyle = which === g ? OUT : "#c9982c"; c.fillRect(bx - 10 + i * 8, y0 + H - 21, 4, 2); }); // 페이지 표시
     const top = tops[which];
     const cy0 = y0 + 18;
     if (top && top.avatar) {
@@ -532,7 +553,7 @@
       c.fillStyle = "#d8434e"; c.fillRect(bx - 38, cy0 + 2, 14, 12); c.fillStyle = "#fff"; c.font = `bold 9px ${FONT}`; c.fillText("1", bx - 31, cy0 + 8);
       c.font = `bold 10px ${FONT}`; c.fillStyle = OUT;
       const name = String(top.name || "?"); c.fillText(name.length > 12 ? name.slice(0, 11) + "…" : name, bx, y0 + H - 30);
-      c.fillStyle = "#7a3fc0"; c.font = `bold 9px ${FONT}`; c.fillText(`${Number(top.m).toLocaleString()} m`, bx, y0 + H - 22 + 2);
+      c.fillStyle = "#7a3fc0"; c.font = `bold 9px ${FONT}`; c.fillText(`${Number(top.m).toLocaleString()}${which === "tet" ? " " + T("ptsUnit") : " m"}`, bx, y0 + H - 22 + 2);
     } else {
       c.fillStyle = "#9a8a9a"; c.font = `10px ${FONT}`; c.fillText("?", bx, cy0 + 28);
     }
@@ -714,10 +735,10 @@
       return c;
     })();
     const ABX = 420, ABY = 86;
-    objects.push({ y: ABY + 68, x: ABX + 48, draw: (c) => c.drawImage(artBoard, ABX, ABY) });
+    objects.push({ y: ABY + 68, x: ABX + 48, draw: (c) => blit(c, artBoard, ABX, ABY) });
     colliders.push([ABX + 8, ABY + 44, 80, 24]);
     const GBX = 124, GBY = 86;
-    objects.push({ y: GBY + 68, x: GBX + 48, draw: (c) => c.drawImage(gbBoard, GBX, GBY) });
+    objects.push({ y: GBY + 68, x: GBX + 48, draw: (c) => blit(c, gbBoard, GBX, GBY) });
     colliders.push([GBX + 8, GBY + 44, 80, 24]);
     [[20, 100, "#ff8fb8"], [608, 100, "#b58cff"], [20, 390, "#ffd34d"], [608, 390, "#ff8fb8"]].forEach(([px, py, col]) => { const sp = flowerPot(col); objects.push({ y: py + 16, x: px, draw: (c) => c.drawImage(sp, px - 7, py) }); colliders.push([px - 7, py + 6, 14, 10]); });
 
@@ -850,5 +871,5 @@
     return world;
   }
 
-  window.World = { buildPlaza, buildLounge, buildSea, rankTops: {} };
+  window.World = { buildPlaza, buildLounge, buildSea, rankTops: {}, blitText };
 })();

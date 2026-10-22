@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "32"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "33"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -291,7 +291,7 @@
     const k = S * dpr;
     ctx.setTransform(k, 0, 0, k, -G.cam.x * k, -G.cam.y * k);
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(w.ground, 0, 0);
+    ctx.drawImage(w.ground, 0, 0); World.blitText(ctx, w.ground, 0, 0);
 
     const vx0 = G.cam.x - 60, vx1 = G.cam.x + VW / S + 60, vy0 = G.cam.y - 20, vy1 = G.cam.y + VH / S + 80;
     const list = [];
@@ -329,6 +329,7 @@
       G.vig = v;
     }
     ctx.fillStyle = G.vig; ctx.fillRect(0, 0, VW, VH);
+    drawAmbient(w);
     const sx = (x) => (x - G.cam.x) * S, sy = (y) => (y - G.cam.y) * S;
     for (const ic of w.icons) {
       const X = sx(ic.x), Y = sy(ic.y) - 16 - Math.sin(G.t / 300) * 4;
@@ -350,7 +351,8 @@
       if (c.admin) ctx.font = `bold 12px ${FONT}`;
       const tw = ctx.measureText(label).width + 10;
       ctx.fillStyle = c.artist ? "rgba(40,130,230,.95)" : c.admin ? "rgba(214,150,10,.95)" : c.me ? "rgba(58,37,48,.85)" : c.npc ? "rgba(79,195,176,.85)" : "rgba(58,37,48,.6)";
-      ctx.fillRect(X - tw / 2, Y - 9, tw, 17);
+      rrect(X - tw / 2, Y - 9, tw, 17, 6); ctx.fill();
+      ctx.strokeStyle = c.artist ? "rgba(190,235,255,.9)" : c.admin ? "rgba(255,236,150,.9)" : "rgba(255,255,255,.35)"; ctx.lineWidth = 1; ctx.stroke();
       ctx.fillStyle = "#fff"; ctx.fillText(label, X, Y);
       const b = c.id && G.bubbles.get(c.id);
       if (b && b.until > now) drawBubble(X, Y - 14, msgText(b.m), null, bubbleStyleOf(c));
@@ -360,6 +362,31 @@
     }
     drawBanner();
     if (G.mode === "world" && G.t - (G.mmT || 0) > 120) { G.mmT = G.t; drawMinimapFrame(); } // 지도는 초당 8번만 (폰 부담 줄이기)
+  }
+  // 둥근 사각형 경로
+  function rrect(x, y, w, h, r) { ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h); }
+  // ✨ 분위기 효과: 광장은 꽃잎·반짝이가 바람에 날리고, 팬 라운지는 음표가 둥실둥실
+  G.amb = [];
+  let ambT = performance.now();
+  function drawAmbient(w) {
+    const now = performance.now(), dt = Math.min(0.05, (now - ambT) / 1000); ambT = now;
+    if (w.id === "sea" || G.mode !== "world") return;
+    const want = w.id === "plaza" ? 26 : 10;
+    while (G.amb.length < want) G.amb.push({ x: Math.random() * VW, y: Math.random() * VH, vx: 0, vy: 0, ph: Math.random() * 6.3, k: G.amb.length % 4, s: 0.6 + Math.random() * 0.8 });
+    if (G.amb.length > want) G.amb.length = want;
+    ctx.save();
+    for (const a of G.amb) {
+      a.ph += dt;
+      if (w.id === "plaza") { a.x += (14 + Math.sin(a.ph * 0.7) * 10) * dt * a.s; a.y += (16 + Math.cos(a.ph) * 6) * dt * a.s; }
+      else { a.x += Math.sin(a.ph * 0.8) * 8 * dt; a.y -= 12 * dt * a.s; }
+      if (a.x > VW + 10) a.x = -10; if (a.y > VH + 10) a.y = -10; if (a.y < -10) a.y = VH + 10;
+      const tw = 0.5 + 0.5 * Math.sin(a.ph * 3);
+      if (w.id === "plaza") {
+        if (a.k === 3) { ctx.globalAlpha = 0.35 + tw * 0.5; ctx.fillStyle = "#fff8d8"; const r = 1.5 * a.s * S / 2; ctx.fillRect(a.x - r * 2, a.y - r / 2, r * 4, r); ctx.fillRect(a.x - r / 2, a.y - r * 2, r, r * 4); }
+        else { ctx.globalAlpha = 0.55; ctx.fillStyle = a.k === 0 ? "#ffd1e1" : a.k === 1 ? "#ffb8d0" : "#ffffff"; ctx.save(); ctx.translate(a.x, a.y); ctx.rotate(a.ph * 1.3); const r = 2.2 * a.s * S / 2; ctx.fillRect(-r, -r / 2, r * 2, r); ctx.restore(); }
+      } else { ctx.globalAlpha = 0.25 + tw * 0.3; ctx.fillStyle = a.k % 2 ? "#ffd1e6" : "#e2d1ff"; ctx.font = `${Math.round(10 * a.s * S / 2 + 6)}px sans-serif`; ctx.textAlign = "center"; ctx.fillText(a.k % 2 ? "♪" : "♫", a.x, a.y); }
+    }
+    ctx.restore();
   }
   // 아티스트(조젤리) 전용: 영롱한 푸른 빛 오라 + 반짝이
   // 관리자: 노란(황금빛) 오라
@@ -1152,15 +1179,15 @@
   // ---------------- 🏆 랭킹 1위 게시판 ----------------
   async function refreshRankTop() {
     if (!G.user) return;
-    try { const r = await API.gameTop("all"); World.rankTops = { jump: r.jump || null, up: r.up || null }; } catch {}
+    try { const r = await API.gameTop("all"); World.rankTops = { jump: r.jump || null, up: r.up || null, tet: r.tet || null }; } catch {}
   }
   setInterval(() => { if (G.mode === "world" && G.scene === "plaza" && !document.hidden) refreshRankTop(); }, 60000);
   function openRankBoard() {
-    openModal("🏆 " + t("rankBoardZ"), `<div class="chips shop-tabs rk-tabs"><button class="chip on" data-g="jump">🏃 ${esc(t("gameTitle"))}</button><button class="chip" data-g="up">⬆️ ${esc(t("upTitle"))}</button></div>
+    openModal("🏆 " + t("rankBoardZ"), `<div class="chips shop-tabs rk-tabs"><button class="chip on" data-g="jump">🏃 ${esc(t("gameTitle"))}</button><button class="chip" data-g="up">⬆️ ${esc(t("upTitle"))}</button><button class="chip" data-g="tet">🧱 ${esc(t("tgTitle"))}</button></div>
       <div id="jg-rank" class="jg-rank rank-modal"><div class="rk-list"><p class="rk-empty">…</p></div></div>
       <p style="text-align:center"><button class="btn sm pink" id="rk-go-game">🎮 ${esc(t("bGame"))}</button></p>`, (el) => {
       let g = "jump";
-      const load = () => API.gameTop(g).then((r) => renderRank(r.top || [])).catch(() => renderRank([]));
+      const load = () => (rankGame = g, API.gameTop(g)).then((r) => renderRank(r.top || [])).catch(() => renderRank([]));
       el.querySelectorAll(".rk-tabs .chip").forEach((b) => b.addEventListener("click", () => { g = b.dataset.g; el.querySelectorAll(".rk-tabs .chip").forEach((x) => x.classList.toggle("on", x === b)); el.querySelector(".rk-list").innerHTML = "<p class='rk-empty'>…</p>"; load(); }));
       el.querySelector("#rk-go-game").addEventListener("click", () => openGame());
       load();
@@ -1228,6 +1255,7 @@
         root.innerHTML = `<p class="gw-intro">${esc(t("gwIntro"))}</p><div class="gw-menu">
           <button class="gw-card jump" data-g="jump"><span class="gw-ico">🏃</span><b>${esc(t("gameTitle"))}</b><small>${esc(t("gwJump"))}</small></button>
           <button class="gw-card up" data-g="up"><span class="gw-ico">⬆️</span><b>${esc(t("upTitle"))}</b><small>${esc(t("gwUp"))}</small></button>
+          <button class="gw-card tet" data-g="tet"><span class="gw-ico">🧱</span><b>${esc(t("tgTitle"))}</b><small>${esc(t("gwTet"))}</small></button>
           <button class="gw-card lucky" data-g="slot"><span class="gw-ico">🎰</span><b>${esc(t("slTitle"))}</b><small>${esc(t("gwSlot"))}</small></button>
           <button class="gw-card ft" data-g="fortune"><span class="gw-ico">🔮</span><b>${esc(t("ftBtn").replace(/^🔮\s*/, ""))}</b><small>${esc(t("gwFortune"))}</small></button></div>
           <p class="gw-day">🪙 ${esc(t("gameDayLeft", { n: G.user.gameLeft ?? 600 }))}</p>`;
@@ -1255,12 +1283,13 @@
           });
           return;
         }
-        const up = g === "up";
-        setTitle((up ? "⬆️ " : "🏃 ") + t(up ? "upTitle" : "gameTitle"));
-        document.querySelector("#modal .modal").classList.toggle("up", up);
-        root.innerHTML = backBtn() + `<div id="gw-play"></div><div id="jg-rank" class="jg-rank"><h3>${esc(t(up ? "upRankTitle" : "rankTitle"))}</h3><div class="rk-list"><p class="rk-empty">…</p></div></div>`;
+        const up = g === "up", tet = g === "tet";
+        setTitle((tet ? "🧱 " : up ? "⬆️ " : "🏃 ") + t(tet ? "tgTitle" : up ? "upTitle" : "gameTitle"));
+        document.querySelector("#modal .modal").classList.toggle("up", up || tet);
+        root.innerHTML = backBtn() + `<div id="gw-play"></div><div id="jg-rank" class="jg-rank"><h3>${esc(t(tet ? "tgRankTitle" : up ? "upRankTitle" : "rankTitle"))}</h3><div class="rk-list"><p class="rk-empty">…</p></div></div>`;
         root.querySelector("#gw-back").addEventListener("click", menu);
-        const Game = up ? UpGame : JumpGame;
+        rankGame = g;
+        const Game = tet ? TetrisGame : up ? UpGame : JumpGame;
         cur = Game.mount(root.querySelector("#gw-play"), {
           t, avatar: () => G.user.avatar, dayLeft: G.user.gameLeft,
           onStart: () => API.gameStart(g),
@@ -1281,14 +1310,16 @@
     document.querySelector("#modal .modal").classList.add("game");
   }
 
-  // 랭킹 TOP 10
+  // 랭킹 TOP 10 (점프점프·올라올라는 m, 젤리 블록은 점)
+  let rankGame = "jump";
+  const rankUnit = (g) => (g === "tet" ? " " + t("ptsUnit") : " m");
   function renderRank(top) {
     const list = document.querySelector("#jg-rank .rk-list"); if (!list) return;
     if (!top.length) { list.innerHTML = `<p class="rk-empty">${esc(t("rankEmpty"))}</p>`; return; }
     const medal = ["🥇", "🥈", "🥉"];
     list.innerHTML = top.map((e, i) => `<div class="rk-row${G.user && e.id === G.user.id ? " me" : ""}${e.role === "artist" ? " host" : ""}">
       <span class="rk-no">${medal[i] || i + 1}</span><canvas width="32" height="26" data-av='${esc(JSON.stringify(e.avatar || null))}'></canvas>
-      <b>${e.role === "artist" ? "✦ " : ""}${esc(e.name)}</b><span class="rk-m">${Number(e.m).toLocaleString()} m</span></div>`).join("");
+      <b>${e.role === "artist" ? "✦ " : ""}${esc(e.name)}</b><span class="rk-m">${Number(e.m).toLocaleString()}${rankUnit(rankGame)}</span></div>`).join("");
     list.querySelectorAll("canvas[data-av]").forEach((c) => { try { Avatar.face(c.getContext("2d"), JSON.parse(c.dataset.av), 32, 26); } catch {} });
   }
 
@@ -1367,11 +1398,11 @@
     el.innerHTML = list.map((u) => `<div class="adm-row" data-id="${esc(u.id)}">
       <canvas width="32" height="26" data-av='${esc(JSON.stringify(u.avatar || null))}'></canvas>
       <div class="adm-info"><b>${esc(u.nickname || "—")}</b> <span class="adm-role r-${u.role}">${esc(roleName(u.role))}</span><br>
-        <small>${esc(u.email)} · ${esc(t("adminJoined"))} ${u.createdAt ? fmtTime(u.createdAt).slice(0, 10) : "-"} · 🪙 ${(u.coins | 0).toLocaleString()}<br>🏃 ${(u.best | 0).toLocaleString()}m · 🪜 ${(u.bestUp | 0).toLocaleString()}m</small></div>
+        <small>${esc(u.email)} · ${esc(t("adminJoined"))} ${u.createdAt ? fmtTime(u.createdAt).slice(0, 10) : "-"} · 🪙 ${(u.coins | 0).toLocaleString()}<br>🏃 ${(u.best | 0).toLocaleString()}m · 🪜 ${(u.bestUp | 0).toLocaleString()}m · 🧱 ${(u.bestTet | 0).toLocaleString()}${esc(t("ptsUnit"))}</small></div>
       <div class="adm-act"><button class="btn sm coin" data-act="coin">${esc(t("adminCoin"))}</button><button class="btn sm" data-act="rank">${esc(t("adminRank"))}</button><button class="btn sm" data-act="msg">${esc(t("adminMsg"))}</button>${staff(u.role) ? "" : `<button class="btn sm kick" data-act="kick">${esc(t("adminKick"))}</button>`}</div>
       <div class="adm-coin hidden"><input class="inp" type="number" min="0" step="10" inputmode="numeric" placeholder="${esc(t("adminCoinPh"))}">
         <button class="btn sm pink" data-mode="add">${esc(t("adminCoinAdd"))}</button><button class="btn sm" data-mode="sub">${esc(t("adminCoinSub"))}</button><button class="btn sm grape" data-mode="set">${esc(t("adminCoinSet"))}</button></div>
-      <div class="adm-rank hidden"><select class="inp"><option value="jump">🏃 ${esc(t("rkJump"))}</option><option value="up">🪜 ${esc(t("upTitle"))}</option></select>
+      <div class="adm-rank hidden"><select class="inp"><option value="jump">🏃 ${esc(t("rkJump"))}</option><option value="up">🪜 ${esc(t("upTitle"))}</option><option value="tet">🧱 ${esc(t("tgTitle"))}</option></select>
         <input class="inp" type="number" min="0" step="1" inputmode="numeric" placeholder="${esc(t("adminRankPh"))}" value="${u.best | 0}">
         <button class="btn sm pink" data-rk="save">${esc(t("adminRankSave"))}</button><button class="btn sm kick" data-rk="remove">${esc(t("adminRankDel"))}</button></div>
       <div class="adm-compose hidden"><textarea maxlength="500" rows="3" placeholder="${esc(t("adminMsgPh"))}"></textarea><button class="btn sm pink" data-act="send">${esc(t("adminSend"))}</button></div></div>`).join("");
@@ -1392,7 +1423,8 @@
       }));
       const rk = row.querySelector(".adm-rank"), rkSel = rk.querySelector("select"), rkIn = rk.querySelector("input");
       row.querySelector("[data-act=rank]").addEventListener("click", () => { rk.classList.toggle("hidden"); rkIn.focus(); });
-      rkSel.addEventListener("change", () => { rkIn.value = (rkSel.value === "up" ? u.bestUp : u.best) | 0; });
+      const BK = { jump: "best", up: "bestUp", tet: "bestTet" };
+      rkSel.addEventListener("change", () => { rkIn.value = u[BK[rkSel.value]] | 0; });
       rk.querySelectorAll("[data-rk]").forEach((b) => b.addEventListener("click", async () => {
         const game = rkSel.value, remove = b.dataset.rk === "remove";
         const m = Math.floor(+rkIn.value || 0); if (!remove && !(m >= 0)) return;
@@ -1400,10 +1432,10 @@
         b.disabled = true;
         try {
           const r = await API.adminRank(game, u.id, m, remove ? "remove" : undefined);
-          u[game === "up" ? "bestUp" : "best"] = r.m;
+          u[BK[game]] = r.m;
           if (u.id === G.user.id) { try { setUser(await API.me()); } catch {} }
           if (typeof refreshRankTop === "function") refreshRankTop();
-          toast(t(r.m > 0 ? "adminRankDone" : "adminRankRemoved", { name: u.nickname || u.email, game: t(game === "up" ? "upTitle" : "rkJump"), m: r.m.toLocaleString(), r: r.rank || "-" }));
+          toast(t(r.m > 0 ? "adminRankDone" : "adminRankRemoved", { name: u.nickname || u.email, game: t(game === "tet" ? "tgTitle" : game === "up" ? "upTitle" : "rkJump"), m: r.m.toLocaleString() + (game === "tet" ? t("ptsUnit") : "m"), r: r.rank || "-" }));
           renderAdmin();
         } catch (x) { toast(x.message); b.disabled = false; }
       }));
