@@ -39,6 +39,30 @@
           <label class="field"><span data-i18n="password"></span><input type="password" name="password" autocomplete="current-password" required></label>
           <div class="err"></div>
           <button class="btn pink go" type="submit" data-i18n="loginGo"></button>
+          <button class="link-btn" type="button" id="btn-forgot" data-i18n="pwForgot"></button>
+        </form>
+        <!-- 🔑 비밀번호 찾기 -->
+        <form id="f-forgot" class="hidden">
+          <p class="fg-intro" data-i18n="pwForgotIntro"></p>
+          <label class="field"><span data-i18n="emailId"></span><input type="email" name="email" autocomplete="email" inputmode="email" autocapitalize="off" placeholder="jelly@example.com" required></label>
+          <label class="field"><span data-i18n="pwForgotNick"></span><input name="nick" maxlength="12" autocomplete="off" required></label>
+          <label class="field"><span data-i18n="pwForgotNote"></span><textarea name="note" maxlength="200" rows="2" data-i18n-ph="pwForgotNotePh"></textarea></label>
+          <div class="err"></div>
+          <button class="btn pink go" type="submit" data-i18n="pwForgotGo"></button>
+          <button class="link-btn" type="button" data-back="login" data-i18n="pwBackLogin"></button>
+        </form>
+        <div id="fg-wait" class="hidden">
+          <p class="fg-intro" id="fg-wait-msg"></p>
+          <div class="err" id="fg-wait-err"></div>
+          <button class="btn pink go" type="button" id="btn-fg-check" data-i18n="pwCheck"></button>
+          <button class="link-btn" type="button" id="btn-fg-cancel" data-i18n="pwCancelReq"></button>
+        </div>
+        <form id="f-newpw" class="hidden">
+          <p class="fg-intro" data-i18n="pwNewIntro"></p>
+          <label class="field"><span data-i18n="password6"></span><input type="password" name="password" autocomplete="new-password" minlength="6" required></label>
+          <label class="field"><span data-i18n="password2"></span><input type="password" name="password2" autocomplete="new-password" minlength="6" required></label>
+          <div class="err"></div>
+          <button class="btn pink go" type="submit" data-i18n="pwNewGo"></button>
         </form>
         <form id="f-signup" class="hidden">
           <div class="field"><span data-i18n="language"></span><div class="lang-pick" id="lang-pick"></div></div>
@@ -102,6 +126,7 @@
           <button class="btn sm mail-hud" id="btn-mail"><span data-i18n="mailBtn"></span><span class="badge hidden" id="mail-badge">0</span></button>
           <button class="btn sm hidden admin-hud" id="btn-admin" data-i18n="adminBtn"></button>
           <button class="btn sm" id="btn-edit" data-i18n="edit"></button>
+          <button class="btn sm" id="btn-pw" data-i18n="pwChangeBtn"></button>
           <button class="btn sm" id="btn-lang" data-i18n="langBtn"></button>
           <button class="btn sm" id="btn-help" data-i18n="help"></button>
           <button class="btn sm" id="btn-logout" data-i18n="logout"></button>

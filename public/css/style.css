@@ -652,3 +652,31 @@ body:not(.touch) #emo-pop { right: 20px; bottom: 70px; }
 .ann-pics img { width: min(28%, 140px); aspect-ratio: 2 / 3; object-fit: cover; border: 3px solid var(--ink); border-radius: 8px; box-shadow: 0 4px 0 rgba(58, 37, 48, .35); background: #fff; }
 .ann-pics img:nth-child(1) { transform: rotate(-4deg); } .ann-pics img:nth-child(3) { transform: rotate(4deg); }
 .ann-text { font-size: 16px; font-weight: bold; line-height: 1.5; word-break: keep-all; margin: 6px 0 12px; }
+
+/* ===== v35: 🔑 비밀번호 찾기 ===== */
+.link-btn { display: block; margin: 10px auto 0; background: none; border: none; color: #7a3fc0; text-decoration: underline; font: inherit; font-size: 13px; cursor: pointer; padding: 4px; }
+.fg-intro { font-size: 13px; line-height: 1.55; margin: 0 0 10px; color: var(--ink); background: #fff8ea; border: 2px dashed #e2d1ff; border-radius: 10px; padding: 8px 10px; word-break: keep-all; }
+.fg-intro.warn { background: #fff3a8; border-color: #f2c14e; }
+#f-forgot textarea, .pw-form textarea { width: 100%; border: 3px solid var(--ink); border-radius: 10px; padding: 8px 10px; font: inherit; resize: vertical; -webkit-user-select: text; user-select: text; }
+.pw-form .field { display: block; margin-bottom: 10px; }
+.pw-form .field input { width: 100%; }
+#adm-pwreq { position: relative; }
+#adm-pwreq .badge { position: absolute; top: -8px; right: -8px; background: #e0304e; color: #fff; border: 2px solid var(--ink); border-radius: 10px; padding: 0 5px; font-size: 10px; line-height: 14px; }
+.adm-pwreq { border: 3px solid var(--ink); border-radius: 10px; background: #fffaf2; padding: 8px 10px; margin: 8px 0; display: flex; flex-direction: column; gap: 6px; }
+.adm-pw-tip { margin: 0 0 4px; font-size: 12px; background: #fff3a8; border-radius: 8px; padding: 6px 8px; }
+.adm-pw-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; border: 2px solid #e2d1ff; border-radius: 8px; padding: 6px 8px; background: #fff; }
+.adm-pw-row.st-approved { border-color: #8fe07a; } .adm-pw-row.st-rejected { opacity: .6; }
+.adm-pw-st { font-size: 11px; background: #e2d1ff; border-radius: 6px; padding: 1px 6px; }
+.adm-pw-note { font-size: 12px; margin-top: 3px; color: #5a4a58; }
+.adm-pw-act { display: flex; gap: 4px; flex-shrink: 0; }
+.adm-row .adm-pwout { grid-column: 1 / -1; background: #fff3a8; border: 2px solid var(--ink); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+.pw-code { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+.pw-code code { font-size: 20px; font-weight: bold; letter-spacing: 1px; background: #fff; border: 2px solid var(--ink); border-radius: 6px; padding: 4px 10px; -webkit-user-select: all; user-select: all; }
+.adm-pw-same { margin-top: 6px; font-size: 12px; background: #f4ecff; border-radius: 8px; padding: 6px 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.adm-pw-same .adm-pwout { flex-basis: 100%; background: #fff3a8; border: 2px solid var(--ink); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+.pw-code span { font-size: 12px; min-width: 72px; }
+.pw-code code.id { font-size: 15px; }
+.adm-row .adm-email { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.adm-row .adm-email .inp { flex: 1; min-width: 200px; -webkit-user-select: text; user-select: text; }
+.adm-row .adm-email small { flex-basis: 100%; opacity: .75; }
+.link-btn.inline { display: inline; margin: 0; padding: 0 2px; }

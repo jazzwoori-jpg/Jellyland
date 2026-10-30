@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "34"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "36"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -1375,7 +1375,8 @@
   function openAdmin() {
     if (!G.user || !staff(G.user.role)) return;
     openModal(t("adminTitle"), `<div class="adm-top"><input class="inp" id="adm-q" placeholder="${esc(t("adminSearch"))}"><span id="adm-count"></span>
-      <button class="btn sm grape" id="adm-all">${esc(t("adminAll"))}</button></div>
+      <button class="btn sm grape" id="adm-all">${esc(t("adminAll"))}</button><button class="btn sm" id="adm-pwreq">🔑 ${esc(t("pwReqBtn"))} <span class="badge hidden" id="adm-pwreq-n">0</span></button></div>
+      <div class="adm-pwreq hidden" id="adm-pwreq-box"></div>
       <div class="adm-compose hidden" id="adm-compose-all"><textarea id="adm-all-text" maxlength="500" rows="3" placeholder="${esc(t("adminMsgPh"))}"></textarea><button class="btn sm pink" id="adm-all-send">${esc(t("adminSend"))}</button></div>
       <div class="adm-list" id="adm-list"><p class="gb-empty">…</p></div>`, (el) => {
       el.querySelector("#adm-q").addEventListener("input", renderAdmin);
@@ -1386,8 +1387,52 @@
         try { const r = await API.adminMail("all", text); ta.value = ""; el.querySelector("#adm-compose-all").classList.add("hidden"); toast(t("adminSent", { n: r.sent })); loadMail(); }
         catch (x) { toast(x.message); } finally { e.target.disabled = false; }
       });
+      el.querySelector("#adm-pwreq").addEventListener("click", () => { const b = el.querySelector("#adm-pwreq-box"); b.classList.toggle("hidden"); if (!b.classList.contains("hidden")) loadPwReqs(); });
+      loadPwReqs(true);
       API.adminUsers().then((r) => { adminUsers = r.users || []; renderAdmin(); }).catch((x) => { el.querySelector("#adm-list").innerHTML = `<p class="gb-empty">${esc(x.message)}</p>`; });
     }, true);
+  }
+  // 🔑 비밀번호 찾기 요청 (본인 확인 후 승인 → 요청한 기기에서 새 비밀번호 설정)
+  async function loadPwReqs(countOnly) {
+    let r; try { r = await API.adminPwResets(); } catch (x) { if (!countOnly) toast(x.message); return; }
+    const reqs = r.requests || [], pending = reqs.filter((q) => q.status === "pending").length;
+    const nb = $("#adm-pwreq-n"); if (nb) { nb.textContent = pending; nb.classList.toggle("hidden", !pending); }
+    if (countOnly) return;
+    const box = $("#adm-pwreq-box"); if (!box) return;
+    const stName = (s) => t(s === "pending" ? "pwStPending" : s === "approved" ? "pwStApproved" : "pwStRejected");
+    box.innerHTML = `<p class="adm-pw-tip">${esc(t("pwReqTip"))}</p>` + (reqs.length ? reqs.map((q, i) => {
+      const match = q.account && q.account.nickname === q.nick;
+      return `<div class="adm-pw-row st-${q.status}" data-i="${i}">
+        <div><b>${esc(q.nick)}</b> · <small>${esc(q.email)}</small> <span class="adm-pw-st">${esc(stName(q.status))}</span><br>
+        <small>${q.account ? `${esc(t("pwReqAccount"))}: <b>${esc(q.account.nickname || "—")}</b> ${match ? "✅" : "⚠️ " + esc(t("pwReqMismatch"))}` : "❌ " + esc(t("pwReqNoAcc"))} · ${esc(fmtTime(q.ts))}</small>
+        ${q.note ? `<div class="adm-pw-note">💬 ${esc(q.note)}</div>` : ""}
+        ${(q.sameNick || []).map((a, j) => `<div class="adm-pw-same" data-j="${j}">👤 ${esc(t("pwSameNick"))}: <b>${esc(a.email)}</b> <small>(${a.createdAt ? esc(fmtTime(a.createdAt).slice(0, 10)) : "-"})</small>
+          ${!q.account ? `<button class="btn sm grape" data-s="mv">✉️ ${esc(t("pwFixEmail", { email: q.email }))}</button>` : ""}<button class="btn sm" data-s="tmp">🔑 ${esc(t("pwTempBtn"))}</button><div class="adm-pwout hidden"></div></div>`).join("")}</div>
+        <div class="adm-pw-act">${q.status === "pending" && q.account ? `<button class="btn sm pink" data-d="1">${esc(t("pwApprove"))}</button><button class="btn sm" data-d="0">${esc(t("pwReject"))}</button>` : ""}<button class="btn sm kick" data-d="del">✕</button></div></div>`;
+    }).join("") : `<p class="gb-empty">${esc(t("pwReqEmpty"))}</p>`);
+    // 같은 닉네임 계정: 아이디(이메일)를 요청한 이메일로 고치거나, 바로 임시 비밀번호 만들기
+    box.querySelectorAll(".adm-pw-same [data-s]").forEach((b) => b.addEventListener("click", async () => {
+      const q = reqs[+b.closest(".adm-pw-row").dataset.i], wrap = b.closest(".adm-pw-same"), a = q.sameNick[+wrap.dataset.j];
+      if (!b.classList.contains("sure")) { b.classList.add("sure"); b.dataset.label = b.textContent; b.textContent = t("adminKickSure"); setTimeout(() => { if (b.isConnected) { b.classList.remove("sure"); b.textContent = b.dataset.label; } }, 4000); return; }
+      b.disabled = true;
+      try {
+        if (b.dataset.s === "mv") { await API.adminEmail(a.id, q.email); toast(t("pwEmailFixed", { email: q.email })); loadPwReqs(); API.adminUsers().then((r) => { adminUsers = r.users || []; renderAdmin(); }).catch(() => {}); return; }
+        const r = await API.adminTempPw(a.id);
+        showTempPw(wrap.querySelector(".adm-pwout"), q.nick, r);
+        b.classList.remove("sure"); b.textContent = b.dataset.label;
+      } catch (x) { toast(x.message); } finally { b.disabled = false; }
+    }));
+    box.querySelectorAll(".adm-pw-row [data-d]").forEach((b) => b.addEventListener("click", async () => {
+      const q = reqs[+b.closest(".adm-pw-row").dataset.i], d = b.dataset.d;
+      b.disabled = true;
+      try { await API.adminPwDecide(q.email, d === "del" ? "delete" : d === "1"); toast(d === "1" ? t("pwApproved", { name: q.nick }) : d === "0" ? t("pwRejectedT") : t("del")); loadPwReqs(); }
+      catch (x) { toast(x.message); b.disabled = false; }
+    }));
+  }
+  function showTempPw(out, name, r) {
+    out.innerHTML = `${esc(t("pwTempDone", { name }))}<div class="pw-code"><span>${esc(t("pwLoginId"))}</span><code class="id">${esc(r.email)}</code></div><div class="pw-code"><span>${esc(t("password"))}</span><code>${esc(r.password)}</code><button class="btn sm" type="button">${esc(t("copy"))}</button></div><small>${esc(t("pwTempHint"))}</small>`;
+    out.classList.remove("hidden");
+    out.querySelector("button").addEventListener("click", () => { try { navigator.clipboard.writeText(`${r.email} / ${r.password}`); toast(t("copied")); } catch {} });
   }
   function renderAdmin() {
     const el = $("#adm-list"); if (!el) return;
@@ -1399,7 +1444,9 @@
       <canvas width="32" height="26" data-av='${esc(JSON.stringify(u.avatar || null))}'></canvas>
       <div class="adm-info"><b>${esc(u.nickname || "—")}</b> <span class="adm-role r-${u.role}">${esc(roleName(u.role))}</span><br>
         <small>${esc(u.email)} · ${esc(t("adminJoined"))} ${u.createdAt ? fmtTime(u.createdAt).slice(0, 10) : "-"} · 🪙 ${(u.coins | 0).toLocaleString()}<br>🏃 ${(u.best | 0).toLocaleString()}m · 🪜 ${(u.bestUp | 0).toLocaleString()}m · 🧱 ${(u.bestTet | 0).toLocaleString()}${esc(t("ptsUnit"))}</small></div>
-      <div class="adm-act"><button class="btn sm coin" data-act="coin">${esc(t("adminCoin"))}</button><button class="btn sm" data-act="rank">${esc(t("adminRank"))}</button><button class="btn sm" data-act="msg">${esc(t("adminMsg"))}</button>${staff(u.role) ? "" : `<button class="btn sm kick" data-act="kick">${esc(t("adminKick"))}</button>`}</div>
+      <div class="adm-act"><button class="btn sm coin" data-act="coin">${esc(t("adminCoin"))}</button><button class="btn sm" data-act="rank">${esc(t("adminRank"))}</button><button class="btn sm" data-act="msg">${esc(t("adminMsg"))}</button><button class="btn sm" data-act="pw">🔑</button>${staff(u.role) ? "" : `<button class="btn sm" data-act="email" title="${esc(t("pwEmailBtn"))}">✉️ ID</button>`}${staff(u.role) ? "" : `<button class="btn sm kick" data-act="kick">${esc(t("adminKick"))}</button>`}</div>
+      <div class="adm-pwout hidden"></div>
+      <div class="adm-email hidden"><input class="inp" type="email" autocapitalize="off" value="${esc(u.email)}"><button class="btn sm pink" data-em="save">${esc(t("pwEmailSave"))}</button><small>${esc(t("pwEmailHint"))}</small></div>
       <div class="adm-coin hidden"><input class="inp" type="number" min="0" step="10" inputmode="numeric" placeholder="${esc(t("adminCoinPh"))}">
         <button class="btn sm pink" data-mode="add">${esc(t("adminCoinAdd"))}</button><button class="btn sm" data-mode="sub">${esc(t("adminCoinSub"))}</button><button class="btn sm grape" data-mode="set">${esc(t("adminCoinSet"))}</button></div>
       <div class="adm-rank hidden"><select class="inp"><option value="jump">🏃 ${esc(t("rkJump"))}</option><option value="up">🪜 ${esc(t("upTitle"))}</option><option value="tet">🧱 ${esc(t("tgTitle"))}</option></select>
@@ -1444,6 +1491,29 @@
         e.target.disabled = true;
         try { await API.adminMail(u.id, text); ta.value = ""; row.querySelector(".adm-compose").classList.add("hidden"); toast(t("adminSent", { n: 1 })); }
         catch (x) { toast(x.message); } finally { e.target.disabled = false; }
+      });
+      // ✉️ 로그인 아이디(이메일) 바꾸기
+      const eb = row.querySelector("[data-act=email]");
+      if (eb) {
+        eb.addEventListener("click", () => row.querySelector(".adm-email").classList.toggle("hidden"));
+        row.querySelector("[data-em=save]").addEventListener("click", async (e) => {
+          const v = row.querySelector(".adm-email input").value.trim().toLowerCase(); if (!v || v === u.email) return;
+          e.target.disabled = true;
+          try { await API.adminEmail(u.id, v); u.email = v; toast(t("pwEmailFixed", { email: v })); renderAdmin(); }
+          catch (x) { toast(x.message); e.target.disabled = false; }
+        });
+      }
+      // 🔑 임시 비밀번호 만들기 (두 번 눌러 확인)
+      const pb = row.querySelector("[data-act=pw]");
+      pb.title = t("pwTempBtn");
+      pb.addEventListener("click", async () => {
+        if (!pb.classList.contains("sure")) { pb.classList.add("sure"); pb.textContent = "🔑 " + t("pwTempSure"); setTimeout(() => { if (pb.isConnected) { pb.classList.remove("sure"); pb.textContent = "🔑"; } }, 4000); return; }
+        pb.disabled = true;
+        try {
+          const r = await API.adminTempPw(u.id);
+          showTempPw(row.querySelector(".adm-pwout"), u.nickname || u.email, r);
+          pb.classList.remove("sure"); pb.textContent = "🔑";
+        } catch (x) { toast(x.message); } finally { pb.disabled = false; }
       });
       const kb = row.querySelector("[data-act=kick]");
       if (kb) kb.addEventListener("click", async () => {
@@ -1941,11 +2011,82 @@
   $("#btn-edit").addEventListener("click", () => openCreator(true));
 
   // ---------------- 로그인 / 회원가입 ----------------
-  document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
-    document.querySelectorAll(".tabs button").forEach((x) => x.classList.toggle("on", x === b));
-    $("#f-login").classList.toggle("hidden", b.dataset.tab !== "login");
-    $("#f-signup").classList.toggle("hidden", b.dataset.tab !== "signup");
-  }));
+  const AUTH_PANELS = { login: "#f-login", signup: "#f-signup", forgot: "#f-forgot", wait: "#fg-wait", newpw: "#f-newpw" };
+  function authPanel(name) {
+    for (const [k, sel] of Object.entries(AUTH_PANELS)) $(sel).classList.toggle("hidden", k !== name);
+    document.querySelectorAll(".tabs button").forEach((x) => x.classList.toggle("on", x.dataset.tab === name));
+  }
+  document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => authPanel(b.dataset.tab)));
+
+  // ---------------- 🔑 비밀번호 찾기 ----------------
+  // 요청 → 관리자가 본인 확인 후 승인 → 요청한 이 기기에서 새 비밀번호 정하기 (비밀 토큰은 이 기기에만 저장)
+  const RESET_LS = "jl_pwreset";
+  const getReset = () => { try { return JSON.parse(localStorage.getItem(RESET_LS) || "null"); } catch { return null; } };
+  const setReset = (v) => { try { v ? localStorage.setItem(RESET_LS, JSON.stringify(v)) : localStorage.removeItem(RESET_LS); } catch {} };
+  $("#btn-forgot").addEventListener("click", () => { const f = $("#f-forgot"); f.email.value = $("#f-login").email.value || ""; f.querySelector(".err").textContent = ""; authPanel("forgot"); });
+  document.querySelectorAll("[data-back=login]").forEach((b) => b.addEventListener("click", () => authPanel("login")));
+  $("#f-forgot").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = e.target, er = f.querySelector(".err"), btn = f.querySelector("button[type=submit]");
+    er.textContent = ""; btn.disabled = true;
+    try {
+      const email = f.email.value.trim().toLowerCase();
+      const r = await API.pwResetRequest(email, f.nick.value.trim(), f.note.value.trim(), I.lang);
+      setReset({ email, token: r.token, ts: Date.now() });
+      showResetWait("pending");
+    } catch (x) { er.textContent = x.message; }
+    finally { btn.disabled = false; }
+  });
+  function showResetWait(status) {
+    const r = getReset(); if (!r) return authPanel("login");
+    $("#fg-wait-err").textContent = "";
+    $("#fg-wait-msg").innerHTML = esc(t(status === "rejected" ? "pwRejected" : "pwWaiting", { email: r.email })).replace(/\n/g, "<br>");
+    $("#btn-fg-check").classList.toggle("hidden", status === "rejected");
+    authPanel("wait");
+  }
+  async function checkReset(manual) {
+    const r = getReset(); if (!r) return false;
+    let st;
+    try { st = (await API.pwResetStatus(r.email, r.token)).status; } catch (x) { if (manual) $("#fg-wait-err").textContent = x.message; return false; }
+    if (st === "approved") { $("#f-newpw").querySelector(".err").textContent = ""; authPanel("newpw"); return true; }
+    if (st === "pending") { showResetWait("pending"); if (manual) $("#fg-wait-err").textContent = t("pwStillWaiting"); return true; }
+    if (st === "rejected") { showResetWait("rejected"); return true; }
+    setReset(null); if (manual) { toast(t("pwExpired")); authPanel("forgot"); } // 만료되었거나 없어진 요청
+    return false;
+  }
+  $("#btn-fg-check").addEventListener("click", () => checkReset(true));
+  $("#btn-fg-cancel").addEventListener("click", () => { setReset(null); authPanel("login"); });
+  $("#f-newpw").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = e.target, er = f.querySelector(".err"), btn = f.querySelector("button[type=submit]");
+    er.textContent = "";
+    if (f.password.value !== f.password2.value) { er.textContent = t("pwMismatch"); return; }
+    const r = getReset(); if (!r) return authPanel("login");
+    btn.disabled = true;
+    try { G.user = await API.pwResetComplete(r.email, r.token, f.password.value); setReset(null); f.reset(); toast(t("pwDone")); afterAuth(); }
+    catch (x) { er.textContent = x.message; }
+    finally { btn.disabled = false; }
+  });
+
+  // ---------------- 🔑 비밀번호 바꾸기 (메뉴) ----------------
+  function openPwChange(forced) {
+    openModal("🔑 " + t("pwChangeBtn"), `<form class="pw-form" id="pw-form">${forced ? `<p class="fg-intro warn">${esc(t("pwTempWarn"))}</p>` : ""}
+      <label class="field"><span>${esc(t("pwCurrent"))}</span><input type="password" name="old" autocomplete="current-password" required></label>
+      <label class="field"><span>${esc(t("password6"))}</span><input type="password" name="password" autocomplete="new-password" minlength="6" required></label>
+      <label class="field"><span>${esc(t("password2"))}</span><input type="password" name="password2" autocomplete="new-password" minlength="6" required></label>
+      <div class="err"></div><button class="btn pink go" type="submit">${esc(t("pwNewGo"))}</button></form>`, (el) => {
+      const f = el.querySelector("#pw-form");
+      f.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const er = f.querySelector(".err"), btn = f.querySelector("button[type=submit]"); er.textContent = "";
+        if (f.password.value !== f.password2.value) { er.textContent = t("pwMismatch"); return; }
+        btn.disabled = true;
+        try { const r = await API.changePassword(f.old.value, f.password.value); if (r.user) setUser(r.user); closeModal(); toast(t("pwDone")); }
+        catch (x) { er.textContent = x.message; btn.disabled = false; }
+      });
+    });
+  }
+  $("#btn-pw").addEventListener("click", () => openPwChange(false));
   $("#f-login").addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = e.target, er = f.querySelector(".err"), btn = f.querySelector("button[type=submit]");
@@ -1959,11 +2100,26 @@
     const f = e.target, er = f.querySelector(".err"), btn = f.querySelector("button[type=submit]");
     er.textContent = "";
     if (f.password.value !== f.password2.value) { er.textContent = t("pwMismatch"); return; }
+    // 이메일 도메인 오타 확인 (예: naver.vom → naver.com) — 한 번 물어보고 그래도 그대로 가입하면 통과
+    const sug = emailTypo(f.email.value.trim().toLowerCase());
+    if (sug && f.dataset.okEmail !== f.email.value) {
+      er.innerHTML = `${esc(t("emailTypo", { email: sug }))} <button type="button" class="link-btn inline" id="fix-email">${esc(t("emailTypoFix"))}</button>`;
+      er.querySelector("#fix-email").addEventListener("click", () => { f.email.value = sug; er.textContent = ""; });
+      f.dataset.okEmail = f.email.value; return;
+    }
     btn.disabled = true;
     try { G.user = await API.signup(f.email.value, f.password.value, signupLang); toast(t("signedUp")); afterAuth(); }
     catch (x) { er.textContent = x.message; }
     finally { btn.disabled = false; }
   });
+  const MAIL_DOMAINS = ["naver.com", "gmail.com", "daum.net", "hanmail.net", "kakao.com", "nate.com", "icloud.com", "hotmail.com", "outlook.com", "yahoo.com", "me.com", "yahoo.co.jp", "docomo.ne.jp", "ezweb.ne.jp", "softbank.ne.jp"];
+  function editDist(a, b) { const d = Array.from({ length: a.length + 1 }, (_, i) => [i]); for (let j = 1; j <= b.length; j++) d[0][j] = j; for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return d[a.length][b.length]; }
+  function emailTypo(email) {
+    const at = email.lastIndexOf("@"); if (at < 1) return null;
+    const dom = email.slice(at + 1); if (MAIL_DOMAINS.includes(dom)) return null;
+    let best = null, bd = 3; for (const d of MAIL_DOMAINS) { const x = editDist(dom, d); if (x < bd) { bd = x; best = d; } }
+    return best && bd <= 2 ? email.slice(0, at + 1) + best : null;
+  }
   function afterAuth() {
     if (document.activeElement) document.activeElement.blur();
     if (G.user.lang && G.user.lang !== I.lang) applyLang(G.user.lang);
@@ -2005,6 +2161,7 @@
     // 알림을 눌러 들어왔으면 그 화면으로 (예: ?go=gallery)
     const goParam = new URLSearchParams(location.search).get("go");
     if (goParam === "gallery") { markAnnounceSeen(); setTimeout(openGallery, 700); try { history.replaceState(null, "", location.pathname); } catch {} }
+    else if (G.user.tempPw) setTimeout(() => openPwChange(true), 900); // 임시 비밀번호로 들어왔으면 먼저 바꾸기
     else setTimeout(showAnnounce, 1200);
     setTimeout(maybeInstallPopup, 5500);
   }
@@ -2062,5 +2219,6 @@
         $("#auth-forms").classList.add("hidden"); $("#auth-continue").classList.remove("hidden");
       } catch { API.logout(); }
     }
+    if (!API.hasToken() && getReset()) checkReset(false); // 비밀번호 찾기 요청 중이면 그 화면으로
   })();
 })();
