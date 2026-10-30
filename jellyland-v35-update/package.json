@@ -1,0 +1,13 @@
+{
+  "name": "jelly-land",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "JELLY LAND — 피아니스트 조젤리 프로필 월드",
+  "scripts": {
+    "dev": "netlify dev"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  }
+}
