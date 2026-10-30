@@ -501,9 +501,10 @@ export default async (req, context) => {
         if (old && old.status === "pending" && now - old.ts < 60 * 1000) return err("resetWait", 429); // 1분에 한 번
         const token = crypto.randomBytes(24).toString("base64url");
         const user = await store("jl-users").get(userKey(email), { type: "json" });
-        // 가입 여부는 알려주지 않음 (다른 사람이 이메일을 떠보지 못하게) — 없는 계정이면 저장만 안 함
-        if (user) {
-          await rs.setJSON(rk, { email, nick, note, tokenHash: sha(token), ts: now, status: "pending", lang: LANGS.includes(body.lang) ? body.lang : "ko" });
+        // 가입 여부는 요청한 사람에게 알려주지 않음 (이메일을 떠보지 못하게).
+        // 대신 없는 이메일이어도 요청은 저장 → 관리자가 "같은 닉네임 계정"을 보고 도와줄 수 있음 (가입 때 이메일 오타 대비)
+        {
+          await rs.setJSON(rk, { email, nick, note, tokenHash: sha(token), ts: now, status: "pending", lang: LANGS.includes(body.lang) ? body.lang : "ko", noAccount: !user });
           // 관리자에게 쪽지 + 알림
           try {
             const staffEmails = [...new Set([...artistEmails(), ...adminEmails()])];
@@ -511,7 +512,7 @@ export default async (req, context) => {
             for (const se of staffEmails) {
               const su = await store("jl-users").get(userKey(se), { type: "json" }); if (!su) continue;
               const k = "box/" + su.id; const box = (await ms.get(k, { type: "json" })) || [];
-              box.unshift({ ts: now, from: "JELLY LAND", fromRole: "admin", text: `🔑 비밀번호 찾기 요청: ${nick} (${email}) — 회원관리 → 🔑 비밀번호 요청에서 확인해 주세요.`, read: false });
+              box.unshift({ ts: now, from: "JELLY LAND", fromRole: "admin", text: `🔑 비밀번호 찾기 요청: ${nick} (${email})${user ? "" : " ⚠️ 가입되지 않은 이메일 — 같은 닉네임 계정을 확인해 주세요"} — 회원관리 → 🔑 비밀번호 요청에서 확인해 주세요.`, read: false });
               await ms.setJSON(k, box.slice(0, MAIL_MAX));
               await sendPush([su.id], "mail", { from: "JELLY LAND", text: `🔑 비밀번호 찾기 요청: ${nick}` });
             }
@@ -1024,12 +1025,15 @@ export default async (req, context) => {
         const { blobs } = await rs.list({ prefix: "r/" });
         const now = Date.now();
         const list = [];
+        const everyone = blobs.length ? await allUsers() : [];
         for (const b of blobs) {
           const r = await rs.get(b.key, { type: "json" }); if (!r) continue;
           if (now - r.ts > RESET_REQ_TTL) { await rs.delete(b.key); continue; }
           const u = await us.get(userKey(r.email), { type: "json" });
           list.push({ email: r.email, nick: r.nick, note: r.note || "", ts: r.ts, status: r.status, decidedAt: r.decidedAt || 0, by: r.by || "",
-            account: u ? { id: u.id, nickname: u.nickname || "", avatar: u.avatar || null, createdAt: u.createdAt || 0 } : null });
+            account: u ? { id: u.id, nickname: u.nickname || "", avatar: u.avatar || null, createdAt: u.createdAt || 0 } : null,
+            // 같은 닉네임으로 가입된 계정들 (이메일을 잘못 적었을 때 찾기 쉽게)
+            sameNick: everyone.filter((x) => (x.nickname || "") === r.nick && x.email !== r.email).map((x) => ({ id: x.id, email: x.email, createdAt: x.createdAt || 0 })) });
         }
         list.sort((a, b) => (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1) || b.ts - a.ts);
         return json({ requests: list });
@@ -1053,6 +1057,24 @@ export default async (req, context) => {
         await us.setJSON(tk, target);
         try { await store("jl-reset").delete(resetKey(target.email)); } catch {}
         return json({ ok: true, password: pw, email: target.email });
+      }
+      // ✉️ 로그인 아이디(이메일) 바꾸기 — 가입 때 이메일을 잘못 적은 회원용
+      if (route === "admin/email" && method === "POST") {
+        const target = (await allUsers()).find((u) => u.id === body.id);
+        if (!target) return err("notfound", 404);
+        const email = clean(body.email, 120).toLowerCase();
+        if (!EMAIL_RE.test(email)) return err("email");
+        if (email === target.email) return json({ ok: true, email });
+        if (isStaff(roleOf(target.email)) || isStaff(roleOf(email))) return err("forbidden", 403); // 관리자·호스트 계정은 여기서 못 바꿈
+        const nk = userKey(email);
+        if (await us.get(nk)) return err("exists", 409);
+        const oldKey = target._key, oldEmail = target.email; delete target._key;
+        target.email = email;
+        await us.setJSON(nk, target);
+        await us.delete(oldKey);
+        try { await store("jl-reset").delete(resetKey(oldEmail)); } catch {}
+        try { await sendMail(target.id, { ts: Date.now(), from: me.nickname || "관리자", fromRole: me.role, text: `✉️ 로그인 아이디(이메일)가 ${email} 로 바뀌었어요. 다음부터 이 이메일로 로그인해 주세요.`, read: false }); } catch {}
+        return json({ ok: true, email });
       }
       if (route === "admin/delete" && method === "POST") {
         const target = (await allUsers()).find((u) => u.id === body.id);

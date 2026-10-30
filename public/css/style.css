@@ -672,3 +672,11 @@ body:not(.touch) #emo-pop { right: 20px; bottom: 70px; }
 .adm-row .adm-pwout { grid-column: 1 / -1; background: #fff3a8; border: 2px solid var(--ink); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
 .pw-code { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
 .pw-code code { font-size: 20px; font-weight: bold; letter-spacing: 1px; background: #fff; border: 2px solid var(--ink); border-radius: 6px; padding: 4px 10px; -webkit-user-select: all; user-select: all; }
+.adm-pw-same { margin-top: 6px; font-size: 12px; background: #f4ecff; border-radius: 8px; padding: 6px 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.adm-pw-same .adm-pwout { flex-basis: 100%; background: #fff3a8; border: 2px solid var(--ink); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+.pw-code span { font-size: 12px; min-width: 72px; }
+.pw-code code.id { font-size: 15px; }
+.adm-row .adm-email { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.adm-row .adm-email .inp { flex: 1; min-width: 200px; -webkit-user-select: text; user-select: text; }
+.adm-row .adm-email small { flex-basis: 100%; opacity: .75; }
+.link-btn.inline { display: inline; margin: 0; padding: 0 2px; }

@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "35"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "36"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -1405,15 +1405,34 @@
       return `<div class="adm-pw-row st-${q.status}" data-i="${i}">
         <div><b>${esc(q.nick)}</b> · <small>${esc(q.email)}</small> <span class="adm-pw-st">${esc(stName(q.status))}</span><br>
         <small>${q.account ? `${esc(t("pwReqAccount"))}: <b>${esc(q.account.nickname || "—")}</b> ${match ? "✅" : "⚠️ " + esc(t("pwReqMismatch"))}` : "❌ " + esc(t("pwReqNoAcc"))} · ${esc(fmtTime(q.ts))}</small>
-        ${q.note ? `<div class="adm-pw-note">💬 ${esc(q.note)}</div>` : ""}</div>
-        <div class="adm-pw-act">${q.status === "pending" ? `<button class="btn sm pink" data-d="1">${esc(t("pwApprove"))}</button><button class="btn sm" data-d="0">${esc(t("pwReject"))}</button>` : ""}<button class="btn sm kick" data-d="del">✕</button></div></div>`;
+        ${q.note ? `<div class="adm-pw-note">💬 ${esc(q.note)}</div>` : ""}
+        ${(q.sameNick || []).map((a, j) => `<div class="adm-pw-same" data-j="${j}">👤 ${esc(t("pwSameNick"))}: <b>${esc(a.email)}</b> <small>(${a.createdAt ? esc(fmtTime(a.createdAt).slice(0, 10)) : "-"})</small>
+          ${!q.account ? `<button class="btn sm grape" data-s="mv">✉️ ${esc(t("pwFixEmail", { email: q.email }))}</button>` : ""}<button class="btn sm" data-s="tmp">🔑 ${esc(t("pwTempBtn"))}</button><div class="adm-pwout hidden"></div></div>`).join("")}</div>
+        <div class="adm-pw-act">${q.status === "pending" && q.account ? `<button class="btn sm pink" data-d="1">${esc(t("pwApprove"))}</button><button class="btn sm" data-d="0">${esc(t("pwReject"))}</button>` : ""}<button class="btn sm kick" data-d="del">✕</button></div></div>`;
     }).join("") : `<p class="gb-empty">${esc(t("pwReqEmpty"))}</p>`);
+    // 같은 닉네임 계정: 아이디(이메일)를 요청한 이메일로 고치거나, 바로 임시 비밀번호 만들기
+    box.querySelectorAll(".adm-pw-same [data-s]").forEach((b) => b.addEventListener("click", async () => {
+      const q = reqs[+b.closest(".adm-pw-row").dataset.i], wrap = b.closest(".adm-pw-same"), a = q.sameNick[+wrap.dataset.j];
+      if (!b.classList.contains("sure")) { b.classList.add("sure"); b.dataset.label = b.textContent; b.textContent = t("adminKickSure"); setTimeout(() => { if (b.isConnected) { b.classList.remove("sure"); b.textContent = b.dataset.label; } }, 4000); return; }
+      b.disabled = true;
+      try {
+        if (b.dataset.s === "mv") { await API.adminEmail(a.id, q.email); toast(t("pwEmailFixed", { email: q.email })); loadPwReqs(); API.adminUsers().then((r) => { adminUsers = r.users || []; renderAdmin(); }).catch(() => {}); return; }
+        const r = await API.adminTempPw(a.id);
+        showTempPw(wrap.querySelector(".adm-pwout"), q.nick, r);
+        b.classList.remove("sure"); b.textContent = b.dataset.label;
+      } catch (x) { toast(x.message); } finally { b.disabled = false; }
+    }));
     box.querySelectorAll(".adm-pw-row [data-d]").forEach((b) => b.addEventListener("click", async () => {
       const q = reqs[+b.closest(".adm-pw-row").dataset.i], d = b.dataset.d;
       b.disabled = true;
       try { await API.adminPwDecide(q.email, d === "del" ? "delete" : d === "1"); toast(d === "1" ? t("pwApproved", { name: q.nick }) : d === "0" ? t("pwRejectedT") : t("del")); loadPwReqs(); }
       catch (x) { toast(x.message); b.disabled = false; }
     }));
+  }
+  function showTempPw(out, name, r) {
+    out.innerHTML = `${esc(t("pwTempDone", { name }))}<div class="pw-code"><span>${esc(t("pwLoginId"))}</span><code class="id">${esc(r.email)}</code></div><div class="pw-code"><span>${esc(t("password"))}</span><code>${esc(r.password)}</code><button class="btn sm" type="button">${esc(t("copy"))}</button></div><small>${esc(t("pwTempHint"))}</small>`;
+    out.classList.remove("hidden");
+    out.querySelector("button").addEventListener("click", () => { try { navigator.clipboard.writeText(`${r.email} / ${r.password}`); toast(t("copied")); } catch {} });
   }
   function renderAdmin() {
     const el = $("#adm-list"); if (!el) return;
@@ -1425,8 +1444,9 @@
       <canvas width="32" height="26" data-av='${esc(JSON.stringify(u.avatar || null))}'></canvas>
       <div class="adm-info"><b>${esc(u.nickname || "—")}</b> <span class="adm-role r-${u.role}">${esc(roleName(u.role))}</span><br>
         <small>${esc(u.email)} · ${esc(t("adminJoined"))} ${u.createdAt ? fmtTime(u.createdAt).slice(0, 10) : "-"} · 🪙 ${(u.coins | 0).toLocaleString()}<br>🏃 ${(u.best | 0).toLocaleString()}m · 🪜 ${(u.bestUp | 0).toLocaleString()}m · 🧱 ${(u.bestTet | 0).toLocaleString()}${esc(t("ptsUnit"))}</small></div>
-      <div class="adm-act"><button class="btn sm coin" data-act="coin">${esc(t("adminCoin"))}</button><button class="btn sm" data-act="rank">${esc(t("adminRank"))}</button><button class="btn sm" data-act="msg">${esc(t("adminMsg"))}</button><button class="btn sm" data-act="pw">🔑</button>${staff(u.role) ? "" : `<button class="btn sm kick" data-act="kick">${esc(t("adminKick"))}</button>`}</div>
+      <div class="adm-act"><button class="btn sm coin" data-act="coin">${esc(t("adminCoin"))}</button><button class="btn sm" data-act="rank">${esc(t("adminRank"))}</button><button class="btn sm" data-act="msg">${esc(t("adminMsg"))}</button><button class="btn sm" data-act="pw">🔑</button>${staff(u.role) ? "" : `<button class="btn sm" data-act="email" title="${esc(t("pwEmailBtn"))}">✉️ ID</button>`}${staff(u.role) ? "" : `<button class="btn sm kick" data-act="kick">${esc(t("adminKick"))}</button>`}</div>
       <div class="adm-pwout hidden"></div>
+      <div class="adm-email hidden"><input class="inp" type="email" autocapitalize="off" value="${esc(u.email)}"><button class="btn sm pink" data-em="save">${esc(t("pwEmailSave"))}</button><small>${esc(t("pwEmailHint"))}</small></div>
       <div class="adm-coin hidden"><input class="inp" type="number" min="0" step="10" inputmode="numeric" placeholder="${esc(t("adminCoinPh"))}">
         <button class="btn sm pink" data-mode="add">${esc(t("adminCoinAdd"))}</button><button class="btn sm" data-mode="sub">${esc(t("adminCoinSub"))}</button><button class="btn sm grape" data-mode="set">${esc(t("adminCoinSet"))}</button></div>
       <div class="adm-rank hidden"><select class="inp"><option value="jump">🏃 ${esc(t("rkJump"))}</option><option value="up">🪜 ${esc(t("upTitle"))}</option><option value="tet">🧱 ${esc(t("tgTitle"))}</option></select>
@@ -1472,6 +1492,17 @@
         try { await API.adminMail(u.id, text); ta.value = ""; row.querySelector(".adm-compose").classList.add("hidden"); toast(t("adminSent", { n: 1 })); }
         catch (x) { toast(x.message); } finally { e.target.disabled = false; }
       });
+      // ✉️ 로그인 아이디(이메일) 바꾸기
+      const eb = row.querySelector("[data-act=email]");
+      if (eb) {
+        eb.addEventListener("click", () => row.querySelector(".adm-email").classList.toggle("hidden"));
+        row.querySelector("[data-em=save]").addEventListener("click", async (e) => {
+          const v = row.querySelector(".adm-email input").value.trim().toLowerCase(); if (!v || v === u.email) return;
+          e.target.disabled = true;
+          try { await API.adminEmail(u.id, v); u.email = v; toast(t("pwEmailFixed", { email: v })); renderAdmin(); }
+          catch (x) { toast(x.message); e.target.disabled = false; }
+        });
+      }
       // 🔑 임시 비밀번호 만들기 (두 번 눌러 확인)
       const pb = row.querySelector("[data-act=pw]");
       pb.title = t("pwTempBtn");
@@ -1480,10 +1511,7 @@
         pb.disabled = true;
         try {
           const r = await API.adminTempPw(u.id);
-          const out = row.querySelector(".adm-pwout");
-          out.innerHTML = `${esc(t("pwTempDone", { name: u.nickname || u.email }))}<div class="pw-code"><code>${esc(r.password)}</code><button class="btn sm" type="button">${esc(t("copy"))}</button></div><small>${esc(t("pwTempHint"))}</small>`;
-          out.classList.remove("hidden");
-          out.querySelector("button").addEventListener("click", () => { try { navigator.clipboard.writeText(r.password); toast(t("copied")); } catch {} });
+          showTempPw(row.querySelector(".adm-pwout"), u.nickname || u.email, r);
           pb.classList.remove("sure"); pb.textContent = "🔑";
         } catch (x) { toast(x.message); } finally { pb.disabled = false; }
       });
@@ -2072,11 +2100,26 @@
     const f = e.target, er = f.querySelector(".err"), btn = f.querySelector("button[type=submit]");
     er.textContent = "";
     if (f.password.value !== f.password2.value) { er.textContent = t("pwMismatch"); return; }
+    // 이메일 도메인 오타 확인 (예: naver.vom → naver.com) — 한 번 물어보고 그래도 그대로 가입하면 통과
+    const sug = emailTypo(f.email.value.trim().toLowerCase());
+    if (sug && f.dataset.okEmail !== f.email.value) {
+      er.innerHTML = `${esc(t("emailTypo", { email: sug }))} <button type="button" class="link-btn inline" id="fix-email">${esc(t("emailTypoFix"))}</button>`;
+      er.querySelector("#fix-email").addEventListener("click", () => { f.email.value = sug; er.textContent = ""; });
+      f.dataset.okEmail = f.email.value; return;
+    }
     btn.disabled = true;
     try { G.user = await API.signup(f.email.value, f.password.value, signupLang); toast(t("signedUp")); afterAuth(); }
     catch (x) { er.textContent = x.message; }
     finally { btn.disabled = false; }
   });
+  const MAIL_DOMAINS = ["naver.com", "gmail.com", "daum.net", "hanmail.net", "kakao.com", "nate.com", "icloud.com", "hotmail.com", "outlook.com", "yahoo.com", "me.com", "yahoo.co.jp", "docomo.ne.jp", "ezweb.ne.jp", "softbank.ne.jp"];
+  function editDist(a, b) { const d = Array.from({ length: a.length + 1 }, (_, i) => [i]); for (let j = 1; j <= b.length; j++) d[0][j] = j; for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return d[a.length][b.length]; }
+  function emailTypo(email) {
+    const at = email.lastIndexOf("@"); if (at < 1) return null;
+    const dom = email.slice(at + 1); if (MAIL_DOMAINS.includes(dom)) return null;
+    let best = null, bd = 3; for (const d of MAIL_DOMAINS) { const x = editDist(dom, d); if (x < bd) { bd = x; best = d; } }
+    return best && bd <= 2 ? email.slice(0, at + 1) + best : null;
+  }
   function afterAuth() {
     if (document.activeElement) document.activeElement.blur();
     if (G.user.lang && G.user.lang !== I.lang) applyLang(G.user.lang);

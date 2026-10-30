@@ -67,7 +67,7 @@
     // 🔑 데모: 비밀번호 찾기 (브라우저 저장소에 요청 보관)
     if (route.startsWith("pwreset/")) {
       const email = String(b.email || "").trim().toLowerCase(), all = ls.get("jl_demo_resets", {}), r = all[email];
-      if (route === "pwreset/request") { const token = Math.random().toString(36).slice(2); if (users[email]) { all[email] = { email, nick: b.nick, note: b.note || "", tok: token, ts: Date.now(), status: "pending" }; ls.set("jl_demo_resets", all); } return { ok: true, token }; }
+      if (route === "pwreset/request") { const token = Math.random().toString(36).slice(2); all[email] = { email, nick: b.nick, note: b.note || "", tok: token, ts: Date.now(), status: "pending" }; ls.set("jl_demo_resets", all); return { ok: true, token }; }
       const ok = r && r.tok === b.token;
       if (route === "pwreset/status") return { status: ok ? r.status : "none" };
       if (route === "pwreset/complete") { if (!ok || r.status !== "approved") fail("resetNo", 403); if (String(b.password || "").length < 6) fail("pw6"); users[email].pw = await sha(b.password); users[email].tempPw = false; ls.set("jl_demo_users", users); delete all[email]; ls.set("jl_demo_resets", all); return { token: "demo:" + email, user: pub(users[email]) }; }
@@ -189,8 +189,9 @@
       if (route === "art/like") { const e = arts.find((x) => x.id === b.id); if (!e) fail("notfound", 404); e.likes = e.likes.includes(me.id) ? e.likes.filter((u) => u !== me.id) : [...e.likes, me.id]; ls.set("jl_demo_art", arts); return { item: view(e) }; }
       if (route === "art" && opts.method === "DELETE") { ls.set("jl_demo_art", arts.filter((x) => x.id !== q.get("id"))); return { ok: true }; }
     }
-    if (route === "admin/pwresets") { const all = ls.get("jl_demo_resets", {}); return { requests: Object.values(all).map((r) => ({ ...r, account: users[r.email] ? { id: users[r.email].id, nickname: users[r.email].nickname, avatar: users[r.email].avatar } : null })) }; }
+    if (route === "admin/pwresets") { const all = ls.get("jl_demo_resets", {}); return { requests: Object.values(all).map((r) => ({ ...r, account: users[r.email] ? { id: users[r.email].id, nickname: users[r.email].nickname, avatar: users[r.email].avatar } : null, sameNick: Object.values(users).filter((u) => u.nickname === r.nick && u.email !== r.email).map((u) => ({ id: u.id, email: u.email })) })) }; }
     if (route === "admin/pwreset/decide") { const all = ls.get("jl_demo_resets", {}); const r = all[String(b.email).toLowerCase()]; if (!r) fail("notfound", 404); if (b.ok === "delete") delete all[r.email]; else { r.status = b.ok ? "approved" : "rejected"; r.decidedAt = Date.now(); } ls.set("jl_demo_resets", all); return { ok: true }; }
+    if (route === "admin/email") { const e = Object.keys(users).find((k) => users[k].id === b.id); if (!e) fail("notfound", 404); const ne = String(b.email).toLowerCase(); if (users[ne]) fail("exists", 409); users[ne] = { ...users[e], email: ne }; delete users[e]; save(); return { ok: true, email: ne }; }
     if (route === "admin/pwreset/temp") { const e = Object.keys(users).find((k) => users[k].id === b.id); if (!e) fail("notfound", 404); const pw = "jelly-" + Math.random().toString(36).slice(2, 8); users[e].pw = await sha(pw); users[e].tempPw = true; save(); return { ok: true, password: pw, email: e }; }
     if (route === "password") { if (me.pw !== (await sha(b.old || ""))) fail("pwWrong"); if (String(b.password || "").length < 6) fail("pw6"); me.pw = await sha(b.password); me.tempPw = false; save(); return { ok: true, user: pub(me) }; }
     if (route === "admin/rank") {
@@ -317,6 +318,7 @@
     changePassword: (old, password) => call("password", { method: "POST", body: { old, password } }),
     adminPwResets: () => call("admin/pwresets"),
     adminPwDecide: (email, ok) => call("admin/pwreset/decide", { method: "POST", body: { email, ok } }),
+    adminEmail: (id, email) => call("admin/email", { method: "POST", body: { id, email } }),
     adminTempPw: (id) => call("admin/pwreset/temp", { method: "POST", body: { id } }),
     adminDelete: (id) => call("admin/delete", { method: "POST", body: { id } }),
     gameFinish: (run, m) => call("game/finish", { method: "POST", body: { run, m } }),
