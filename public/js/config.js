@@ -7,7 +7,7 @@
    ========================================================= */
 window.JELLY_CONFIG = {
   // ⚡ 실시간 위치 서버 (Cloudflare Workers) 주소. 비워 두면 예전 방식(조금 늦게 보임)으로 동작해요.
-  realtimeUrl: "",
+  realtimeUrl: "https://jellyland.jazzwoori.workers.dev",
 
   artist: {
     name: { ko: "조젤리", en: "Jo Jelly", ja: "Jo Jelly" },
