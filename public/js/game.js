@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "40"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "41"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -219,11 +219,45 @@
       p.vx = p.vx * 0.5 + ((p.x - ox) / dt) * 0.5; p.vy = p.vy * 0.5 + ((p.y - oy) / dt) * 0.5;
       if (G.target && Math.hypot(p.x - ox, p.y - oy) < 0.01) { p.stuck = (p.stuck || 0) + dt; if (p.stuck > 0.35) { G.target = null; G.pendingZone = null; p.stuck = 0; } } else p.stuck = 0;
     }
-    // 다른 플레이어: 마지막 위치 + 이동 속도로 "지금 있을 곳"을 예측해서 따라감 → 지연이 거의 안 느껴짐
+    // 내 이동 기록: 0.1초마다 위치를 남겨 다음 sync 때 함께 보냄 (다른 사람 화면에서 그대로 재생)
     const nowMs = Date.now();
+    if (G.mode === "world" && G.scene !== "sea") {
+      if (!G.trail) G.trail = [];
+      const lt = G.trail[G.trail.length - 1];
+      if (p.moving || wasMoving) { if (!lt || nowMs - lt[0] >= 100 || (!p.moving && (lt[1] !== Math.round(p.x) || lt[2] !== Math.round(p.y)))) G.trail.push([nowMs, Math.round(p.x), Math.round(p.y)]); }
+      if (G.trail.length > 40) G.trail.splice(0, G.trail.length - 40);
+    }
+    // 다른 플레이어: 서버가 준 "지나온 길"을 살짝(약 0.7~1.5초) 늦게 그대로 재생 → 끊김·빨리감기 없이 부드럽게
+    // 재생 지연은 천천히 바꿈 (한 번에 확 바꾸면 그 순간 빨리감기/멈춤처럼 보이니까)
+    G.netDelay += Math.max(-dt * 40, Math.min(dt * 120, (G.lagHist.length < 4 ? Math.max(1000, G.netTarget) : G.netTarget) - G.netDelay));
+    const renderAt = serverNow() - G.netDelay;
     for (const o of G.others.values()) {
+      if (o.buf && o.buf.length && !o.seat) {
+        const b = o.buf;
+        let tx, ty;
+        if (renderAt <= b[0][0]) { tx = b[0][1]; ty = b[0][2]; }
+        else if (renderAt >= b[b.length - 1][0]) { // 다음 길이 아직 안 왔으면: 걷던 방향으로 잠깐(최대 0.45초) 이어서 걸어감
+          const L = b[b.length - 1], P = b.length > 1 ? b[b.length - 2] : L, span = L[0] - P[0];
+          const over = Math.min(450, renderAt - L[0]);
+          let vx = span > 0 ? (L[1] - P[1]) / span : 0, vy = span > 0 ? (L[2] - P[2]) / span : 0; const vs = Math.hypot(vx, vy), VMAX = 0.13; // 최대 130px/s
+          if (vs > VMAX) { vx *= VMAX / vs; vy *= VMAX / vs; }
+          if ((o.vx || o.vy) && span >= 50 && span < 400 && vs > 0.02) { /* 아직 걷는 중일 때만 */ tx = L[1] + vx * over; ty = L[2] + vy * over; if (blockedFeet(tx, ty)) { tx = L[1]; ty = L[2]; } }
+          else { tx = L[1]; ty = L[2]; }
+        }
+        else { let i = 1; while (i < b.length && b[i][0] < renderAt) i++; const A = b[i - 1], B = b[i], k = (renderAt - A[0]) / Math.max(1, B[0] - A[0]); tx = A[1] + (B[1] - A[1]) * k; ty = A[2] + (B[2] - A[2]) * k; }
+        const dx = tx - o.rx, dy = ty - o.ry, d = Math.hypot(dx, dy);
+        if (d > 160) { o.rx = tx; o.ry = ty; o.walking = false; continue; } // 순간이동(장면 이동 등)
+        // 보정이 필요할 때도 순간이동하지 않고, 걷는 속도의 1.6배 안에서 부드럽게 따라감
+        const maxStep = Math.max(150, d * 3) * dt;
+        if (d <= maxStep) { o.rx = tx; o.ry = ty; } else { o.rx += (dx / d) * maxStep; o.ry += (dy / d) * maxStep; }
+        o.walking = d > 0.15 / Math.max(dt, 0.001) * dt; // 이번 프레임에 움직였으면 걷는 모습
+        if (d > 0.05) { o.t = (o.t || 0) + dt; o.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up"; o.lastMove = nowMs; }
+        if (nowMs - (o.lastMove || 0) > 120) { o.walking = false; if (o.sdir) o.dir = o.sdir; }
+        continue;
+      }
+      // (예전 버전 앱을 쓰는 사람: 이동 기록이 없으면 예전 방식으로 예측)
       let tx = o.x, ty = o.y;
-      const moving = !o.seat && (o.vx || o.vy);
+      const moving = !o.seat && (o.vx || o.vy) && !o.pv; // 새 버전 앱은 길 정보로만 움직임 (앞질러 예측하지 않음)
       if (moving) {
         const el = Math.min(800, (o.age || 0) + (nowMs - (o.recv || nowMs))) / 1000;
         const px = o.x + o.vx * el, py = o.y + o.vy * el;
@@ -1838,21 +1872,33 @@
   function nextSyncDelay() {
     if (document.hidden) return 15000;
     let othersMoving = false;
-    for (const o of G.others.values()) if (o.vx || o.vy) { othersMoving = true; break; }
-    if (G.player.moving || othersMoving) return 450;              // 누군가 움직이는 중: 빠르게
+    for (const o of G.others.values()) if (o.vx || o.vy || Date.now() - (o.pathAt || 0) < 2000) { othersMoving = true; break; }
+    if (G.player.moving || othersMoving) return 300;              // 누군가 움직이는 중: 빠르게
     if (G.others.size > 0 || Date.now() - G.lastInput < 4000) return 1200; // 주변에 사람만 있을 때
     return 5000;                                                   // 혼자 가만히: 드물게
   }
   function scheduleSync(ms) { clearTimeout(syncTimer); syncTimer = setTimeout(doSync, ms ?? nextSyncDelay()); }
-  function kickSync() { if (Date.now() - lastSync > 250) scheduleSync(0); }
+  function kickSync() { const since = Date.now() - lastSync; scheduleSync(since > 250 ? 0 : 250 - since); } // 출발·정지 순간은 늦어도 0.25초 안에 알림
   async function doSync() {
-    if (G.mode !== "world" || syncBusy) return scheduleSync();
+    if (G.mode !== "world") return scheduleSync();
+    if (syncBusy) return scheduleSync(G.trail && G.trail.length && G.trail[G.trail.length - 1][0] > (G.trailSent || 0) ? 120 : undefined); // 보낼 길이 남았으면 곧 다시
     syncBusy = true; lastSync = Date.now();
     const room = G.scene;
     const inSea = room === "sea"; // 분수대 속: 다른 사람에게는 분수대 앞에 서 있는 것처럼 보임
     const emo = G.sendEmo; G.sendEmo = null;
     try {
-      const r = await API.sync({ scene: inSea ? "plaza" : room, x: inSea ? 640 : Math.round(G.player.x), y: inSea ? 262 : Math.round(G.player.y), dir: inSea ? "up" : G.player.dir, seat: inSea ? null : G.seat, vx: inSea ? 0 : Math.round(G.player.vx || 0), vy: inSea ? 0 : Math.round(G.player.vy || 0), since: G.chat.since, ...(emo ? { emo } : {}) });
+      // 지난번 이후 새로 걸은 길
+      const sendT = Date.now();
+      let path = null;
+      if (!inSea && G.trail && G.trail.length) {
+        const from = G.trailSent || 0;
+        const pts = G.trail.filter((q) => q[0] > from);
+        // 시간은 서버 시계 기준으로 바꿔 보냄 (매번 같은 기준이라 묶음 사이가 어긋나지 않음)
+        if (pts.length) { path = pts.map((q) => [Math.round(q[0] + G.clockOff), q[1], q[2]]); G.trailSent = pts[pts.length - 1][0]; }
+      }
+      if (path && !G.clockSet) path = path.map((q) => [q[0] - sendT - G.clockOff, q[1], q[2]]); // 아직 서버 시계를 모르면 "몇 ms 전"으로
+      const r = await API.sync({ pv: 1, pathAbs: !!(path && G.clockSet), scene: inSea ? "plaza" : room, x: inSea ? 640 : Math.round(G.player.x), y: inSea ? 262 : Math.round(G.player.y), dir: inSea ? "up" : G.player.dir, seat: inSea ? null : G.seat, vx: inSea ? 0 : Math.round(G.player.vx || 0), vy: inSea ? 0 : Math.round(G.player.vy || 0), since: G.chat.since, ...(emo ? { emo } : {}), ...(path ? { path } : {}) });
+      if (r.now) { const recvT = Date.now(), off = r.now - (sendT + recvT) / 2; if (!G.clockSet) { G.clockOff = off; G.clockSet = true; } else G.clockOff = G.clockOff * 0.8 + off * 0.2; }
       if (room !== G.scene) return;
       if (!inSea) applyOthers(r.others || [], r.now);
       if (!API.demo) { G.online = r.online || 1; $("#online").textContent = t("online", { n: G.online }); }
@@ -1864,14 +1910,44 @@
       }
     } finally { syncBusy = false; scheduleSync(); }
   }
+  // 서버 시계 맞추기 (내 기기 시계와의 차이)
+  G.clockOff = 0; G.clockSet = false; G.lagHist = []; G.netTarget = 1000; G.netDelay = 1000;
+  function serverNow_() { return Date.now() + G.clockOff; }
+  function serverNow() { return serverNow_(); }
   function applyOthers(list, serverNow) {
     const now = Date.now();
     for (const o of list) {
       const ex = G.others.get(o.id);
       const upd = { x: o.x, y: o.y, dir: o.dir, name: o.name, avatar: o.avatar, role: o.role, seat: o.seat || null,
-        vx: o.vx || 0, vy: o.vy || 0, age: serverNow ? Math.max(0, serverNow - o.ts) : 0, recv: now, seen: now };
+        vx: o.vx || 0, vy: o.vy || 0, pv: !!o.pv, age: serverNow ? Math.max(0, serverNow - o.ts) : 0, recv: now, seen: now };
       if (ex && o.role === "artist" && upd.seat === "throne" && ex.seat !== "throne") { const st = (scene().seats || []).find((x) => x.id === "throne"); if (st) celebrate(st); }
       const tgt = ex || { id: o.id, rx: o.x, ry: o.y };
+      if (Array.isArray(o.path) && o.path.length) { // 지나온 길 합치기
+        const b = tgt.buf || (tgt.buf = []);
+        const rAt = serverNow_() - G.netDelay;
+        let added = 0, newest = 0;
+        for (const pt0 of o.path) {
+          if (pt0[0] <= (tgt.rawLast || 0)) continue; // 이미 받은 점
+          while (b.length && b[b.length - 1][3]) b.pop(); // 임시 보정점은 진짜 길이 오면 버림
+          const L = b[b.length - 1];
+          // 새로 걷기 시작한 순간: 그 길이 늦게 도착해서 재생 시각이 이미 지나갔다면, 이번 걸음 전체를 뒤로 미뤄서 처음부터 같은 속도로 재생
+          if (!L || pt0[0] - (tgt.rawLast || 0) > 400) {
+            tgt.shift = Math.max(0, rAt + 40 - pt0[0], L ? L[0] + 150 - pt0[0] : 0);
+            if (L && L[0] < pt0[0] + tgt.shift - 120) b.push([pt0[0] + tgt.shift - 120, L[1], L[2]]); // 출발 직전까지는 제자리
+          }
+          const ts = pt0[0] + (tgt.shift || 0);
+          if (L && ts <= L[0]) continue;
+          b.push([ts, pt0[1], pt0[2]]); tgt.rawLast = pt0[0]; newest = pt0[0];
+          added++; tgt.pathAt = Date.now();
+        }
+        const cut = serverNow_() - 6000; while (b.length > 2 && b[1][0] < cut) b.shift();
+        // 새 길이 도착했을 때 그 길이 "얼마나 묵은 것인지" 기록 → 최근 20번 중 가장 늦은 값에 맞춰 재생 지연을 정함
+        const fresh = serverNow_() - newest;
+        if (added >= 2 && fresh >= 0 && fresh < 4000) { G.lagHist.push(fresh); if (G.lagHist.length > 20) G.lagHist.shift(); }
+        if (G.lagHist.length) { const sl = [...G.lagHist].sort((p, q) => p - q), hi = sl[Math.max(0, sl.length - 2)]; G.netTarget = Math.max(700, Math.min(1600, hi + 350)); } // 가끔 튀는 한 번은 무시 (늦게 온 걸음은 위에서 따로 미뤄 재생) // 가장 늦게 온 것보다도 여유 있게
+      } else if (!tgt.buf || !tgt.buf.length) tgt.buf = null;
+      if (tgt.buf && tgt.buf.length && !(Array.isArray(o.path) && o.path.length) && now - (tgt.pathAt || 0) > 1500) { const L = tgt.buf[tgt.buf.length - 1]; if (Math.abs(L[1] - o.x) > 2 || Math.abs(L[2] - o.y) > 2) tgt.buf.push([Math.max(o.ts || 0, L[0] + 300), o.x, o.y, 1]); } // 길 정보가 한동안 없을 때만 위치 보정
+      if (ex && !o.seat && o.dir) tgt.sdir = o.dir;
       if (o.emo && o.emo.k && tgt.emoK !== o.emo.k) { tgt.emoK = o.emo.k; if (!serverNow || serverNow - o.emo.t < 4000) tgt.emoShow = { e: o.emo.e, at: now, until: now + 3500 }; }
       if (ex) Object.assign(ex, upd);
       else G.others.set(o.id, Object.assign(tgt, upd));

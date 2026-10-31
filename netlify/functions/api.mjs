@@ -607,11 +607,27 @@ export default async (req, context) => {
         x: Math.round(+body.x || 0), y: Math.round(+body.y || 0), dir: clean(body.dir, 5), seat: (clean(body.seat, 12) === "throne" && role !== "artist" ? null : clean(body.seat, 12)) || null, // 공주 의자는 호스트만
         vx: Math.max(-200, Math.min(200, Math.round(+body.vx || 0))), vy: Math.max(-200, Math.min(200, Math.round(+body.vy || 0))), ts: now,
       };
+      // 🏃 지나온 길(최근 약 3초): 다른 사람 화면에서 실제 걸어온 길을 그대로 따라 그려서 순간이동·빨리감기처럼 보이지 않게
+      //    path: [[서버 시각(ms), x, y], ...] (pathAbs) 또는 [[지금보다 몇 ms 전, x, y], ...]
+      let path = mine && Array.isArray(mine.path) ? mine.path.filter((p) => now - p[0] < 3000) : [];
+      if (Array.isArray(body.path) && body.path.length) {
+        const last = path.length ? path[path.length - 1][0] : 0;
+        for (const p of body.path.slice(-40)) {
+          if (!Array.isArray(p)) continue;
+          // pathAbs: 보낸 기기가 서버 시계로 맞춘 시각 / 아니면 "지금보다 몇 ms 전"
+          const ts = body.pathAbs ? Math.max(now - 3000, Math.min(now + 300, Math.round(+p[0] || 0))) : now + Math.max(-3000, Math.min(0, Math.round(+p[0] || 0)));
+          if (ts <= last) continue;
+          path.push([ts, Math.round(+p[1] || 0), Math.round(+p[2] || 0)]);
+        }
+        path = path.slice(-40);
+      }
+      if (path.length) entry.path = path;
+      if (body.pv) entry.pv = 1; // 길 정보를 보내는 새 버전 앱
       // 😊 이모티콘 반응: 새로 보낸 것만 4초 동안 다른 사람에게 보임
       if (body.emo && Number.isInteger(body.emo.e) && body.emo.e >= 0 && body.emo.e < EMOTES) entry.emo = { e: body.emo.e, k: clean(String(body.emo.k || ""), 12), t: now };
       else if (mine && mine.emo && now - mine.emo.t < 4000) entry.emo = mine.emo;
       // 위치가 그대로이고 최근에 저장했다면 쓰기를 건너뜀 (비용 절약)
-      const unchanged = mine && mine.x === entry.x && mine.y === entry.y && mine.dir === entry.dir && mine.seat === entry.seat && mine.vx === entry.vx && mine.vy === entry.vy && mine.name === entry.name && (mine.emo && mine.emo.k) === (entry.emo && entry.emo.k) &&
+      const unchanged = mine && mine.x === entry.x && mine.y === entry.y && mine.dir === entry.dir && mine.seat === entry.seat && mine.vx === entry.vx && mine.vy === entry.vy && mine.name === entry.name && (mine.emo && mine.emo.k) === (entry.emo && entry.emo.k) && !(Array.isArray(body.path) && body.path.length) &&
         JSON.stringify(mine.avatar) === JSON.stringify(entry.avatar) && now - mine.ts < 8000;
       const writes = [];
       for (const k of Object.keys(cur)) if (now - cur[k].ts > 15000) { delete cur[k]; }
