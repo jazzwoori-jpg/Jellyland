@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "41"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "42"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -90,7 +90,7 @@
     const w = scene();
     const p = pos || w.spawn;
     G.player.x = p.x; G.player.y = p.y; G.player.dir = pos && pos.dir ? pos.dir : "up";
-    G.target = null; G.pendingZone = null; G.others.clear(); G.zone = null; G.seat = null; G.seatObj = null;
+    G.target = null; G.pendingZone = null; G.others.clear(); setTimeout(rtEnsure, 0); G.zone = null; G.seat = null; G.seatObj = null;
     $("#prompt").classList.add("hidden");
     buildMinimap();
     updateSceneLabels();
@@ -205,7 +205,7 @@
     p.moving = len > 0.05;
     if (p.moving) G.lastInput = Date.now();
     if (!p.moving) { p.vx = 0; p.vy = 0; }
-    if (p.moving !== wasMoving && G.mode === "world") kickSync(); // 출발·정지 순간 바로 알림
+    if (p.moving !== wasMoving && G.mode === "world" && !RT.ok) kickSync(); // 출발·정지 순간 바로 알림 (실시간 서버가 없을 때)
     if (p.moving) {
       if (len > 1) { vx /= len; vy /= len; }
       const sp = (G.scene === "sea" ? 74 : 92) * dt;
@@ -227,24 +227,32 @@
       if (p.moving || wasMoving) { if (!lt || nowMs - lt[0] >= 100 || (!p.moving && (lt[1] !== Math.round(p.x) || lt[2] !== Math.round(p.y)))) G.trail.push([nowMs, Math.round(p.x), Math.round(p.y)]); }
       if (G.trail.length > 40) G.trail.splice(0, G.trail.length - 40);
     }
+    // ⚡ 실시간 서버로 내 위치 보내기 (걷는 동안 1초에 15번, 멈추는 순간 1번)
+    if (RT.ok && G.mode === "world" && G.scene !== "sea" && RT.room === G.scene) {
+      if (p.moving && nowMs - RT.lastSend >= 66) rtSend(1);
+      else if (!p.moving && (wasMoving || (nowMs - RT.lastSend > 250 && (Math.abs(p.x - RT.lx) > 2 || Math.abs(p.y - RT.ly) > 2)))) rtSend(0); // 멈춤 · 순간이동(문 출입 등)
+    }
+    if (nowMs - RT.chk > 1000) { RT.chk = nowMs; rtEnsure(); }
+    RT.delay += Math.max(-dt * 40, Math.min(dt * 150, RT.target - RT.delay));
+    const rtAt = Date.now() + RT.off - RT.delay;
     // 다른 플레이어: 서버가 준 "지나온 길"을 살짝(약 0.7~1.5초) 늦게 그대로 재생 → 끊김·빨리감기 없이 부드럽게
     // 재생 지연은 천천히 바꿈 (한 번에 확 바꾸면 그 순간 빨리감기/멈춤처럼 보이니까)
     G.netDelay += Math.max(-dt * 40, Math.min(dt * 120, (G.lagHist.length < 4 ? Math.max(1000, G.netTarget) : G.netTarget) - G.netDelay));
     const renderAt = serverNow() - G.netDelay;
     for (const o of G.others.values()) {
       if (o.buf && o.buf.length && !o.seat) {
-        const b = o.buf;
+        const b = o.buf, rAt = o.rt ? rtAt : renderAt;
         let tx, ty;
-        if (renderAt <= b[0][0]) { tx = b[0][1]; ty = b[0][2]; }
-        else if (renderAt >= b[b.length - 1][0]) { // 다음 길이 아직 안 왔으면: 걷던 방향으로 잠깐(최대 0.45초) 이어서 걸어감
+        if (rAt <= b[0][0]) { tx = b[0][1]; ty = b[0][2]; }
+        else if (rAt >= b[b.length - 1][0]) { // 다음 길이 아직 안 왔으면: 걷던 방향으로 잠깐(최대 0.45초) 이어서 걸어감
           const L = b[b.length - 1], P = b.length > 1 ? b[b.length - 2] : L, span = L[0] - P[0];
-          const over = Math.min(450, renderAt - L[0]);
+          const over = Math.min(o.rt ? 250 : 450, rAt - L[0]);
           let vx = span > 0 ? (L[1] - P[1]) / span : 0, vy = span > 0 ? (L[2] - P[2]) / span : 0; const vs = Math.hypot(vx, vy), VMAX = 0.13; // 최대 130px/s
           if (vs > VMAX) { vx *= VMAX / vs; vy *= VMAX / vs; }
-          if ((o.vx || o.vy) && span >= 50 && span < 400 && vs > 0.02) { /* 아직 걷는 중일 때만 */ tx = L[1] + vx * over; ty = L[2] + vy * over; if (blockedFeet(tx, ty)) { tx = L[1]; ty = L[2]; } }
+          if ((o.rt ? o.rtMov : (o.vx || o.vy)) && span >= 50 && span < 400 && vs > 0.02) { /* 아직 걷는 중일 때만 */ tx = L[1] + vx * over; ty = L[2] + vy * over; if (blockedFeet(tx, ty)) { tx = L[1]; ty = L[2]; } }
           else { tx = L[1]; ty = L[2]; }
         }
-        else { let i = 1; while (i < b.length && b[i][0] < renderAt) i++; const A = b[i - 1], B = b[i], k = (renderAt - A[0]) / Math.max(1, B[0] - A[0]); tx = A[1] + (B[1] - A[1]) * k; ty = A[2] + (B[2] - A[2]) * k; }
+        else { let i = 1; while (i < b.length && b[i][0] < rAt) i++; const A = b[i - 1], B = b[i], k = (rAt - A[0]) / Math.max(1, B[0] - A[0]); tx = A[1] + (B[1] - A[1]) * k; ty = A[2] + (B[2] - A[2]) * k; }
         const dx = tx - o.rx, dy = ty - o.ry, d = Math.hypot(dx, dy);
         if (d > 160) { o.rx = tx; o.ry = ty; o.walking = false; continue; } // 순간이동(장면 이동 등)
         // 보정이 필요할 때도 순간이동하지 않고, 걷는 속도의 1.6배 안에서 부드럽게 따라감
@@ -1873,7 +1881,7 @@
     if (document.hidden) return 15000;
     let othersMoving = false;
     for (const o of G.others.values()) if (o.vx || o.vy || Date.now() - (o.pathAt || 0) < 2000) { othersMoving = true; break; }
-    if (G.player.moving || othersMoving) return 300;              // 누군가 움직이는 중: 빠르게
+    if (G.player.moving || othersMoving) return RT.ok ? 1000 : 300; // 누군가 움직이는 중: 빠르게 (실시간 서버가 있으면 위치는 그쪽으로)
     if (G.others.size > 0 || Date.now() - G.lastInput < 4000) return 1200; // 주변에 사람만 있을 때
     return 5000;                                                   // 혼자 가만히: 드물게
   }
@@ -1910,6 +1918,78 @@
       }
     } finally { syncBusy = false; scheduleSync(); }
   }
+  // ---------------- ⚡ 실시간 위치 서버 (Cloudflare) ----------------
+  // 걷는 위치를 1초에 15번 바로바로 주고받아서, 다른 사람 움직임이 약 0.1~0.2초 만에 보여요.
+  // 연결이 안 되면 자동으로 예전 방식(sync 의 지나온 길 재생)으로 돌아가요.
+  const RT = G.RT = { ws: null, room: null, ok: false, off: 0, offN: 0, lastSend: 0, chk: 0, retry: 0, blockUntil: 0, lagHist: [], target: 150, delay: 150, pingT: 0, lx: 0, ly: 0 };
+  function rtUrl() { return ((window.JELLY_CONFIG || {}).realtimeUrl || "").trim().replace(/\/$/, ""); }
+  function rtDrop() { // 실시간 연결이 끊김 → 다른 사람들은 예전 방식으로 다시 그림
+    RT.ok = false;
+    for (const o of G.others.values()) if (o.rt) { o.rt = false; o.buf = null; o.rtMov = 0; }
+  }
+  function rtClose() { const ws = RT.ws; RT.ws = null; RT.room = null; rtDrop(); if (ws) try { ws.close(); } catch {} }
+  function rtEnsure() {
+    const want = !API.demo && rtUrl() && API.token && G.mode === "world" && G.scene !== "sea" && G.user && Date.now() > RT.blockUntil; // 분수대 속에서는 잠시 끊음 (다른 사람에게는 분수대 앞으로 보이게)
+    const room = G.scene;
+    if (!want) { if (RT.ws) rtClose(); return; }
+    if (RT.ws && RT.room === room) {
+      if (RT.ok && Date.now() - RT.pingT > (RT.offN < 4 ? 1500 : 15000)) rtPing();
+      return;
+    }
+    if (RT.ws) rtClose();
+    if (RT.wait && Date.now() < RT.wait) return;
+    let ws;
+    try { ws = new WebSocket(rtUrl().replace(/^http/, "ws") + "/ws?room=" + room); } catch { return; }
+    RT.ws = ws; RT.room = room;
+    ws.onopen = () => { if (RT.ws === ws) ws.send(JSON.stringify({ t: "auth", token: API.token })); };
+    ws.onmessage = (e) => { if (RT.ws === ws) rtMsg(e.data); };
+    ws.onclose = (e) => {
+      if (RT.ws !== ws) return;
+      RT.ws = null; RT.room = null; rtDrop();
+      if (e.code === 4001) RT.blockUntil = Date.now() + 120000; // 로그인 확인 실패: 2분 뒤 다시
+      RT.wait = Date.now() + Math.min(30000, 1000 * 2 ** RT.retry++);
+    };
+  }
+  function rtPing() { RT.pingT = Date.now(); try { RT.ws.send(JSON.stringify({ t: "ping", c: RT.pingT })); } catch {} }
+  function rtSend(m) {
+    RT.lastSend = Date.now();
+    const p = G.player;
+    RT.lx = p.x; RT.ly = p.y;
+    try { RT.ws.send(JSON.stringify({ t: "p", x: Math.round(p.x), y: Math.round(p.y), d: p.dir, m, ...(RT.offN ? { c: Math.round(Date.now() + RT.off) } : {}) })); } catch {}
+  }
+  function rtMsg(raw) {
+    let m; try { m = JSON.parse(raw); } catch { return; }
+    const now = Date.now();
+    if (m.t === "ok") { RT.ok = true; RT.retry = 0; if (!RT.offN) RT.off = m.s - now; rtPing(); return; }
+    if (m.t === "pong") { // 실시간 서버 시계와의 차이
+      const off = m.s - (m.c + now) / 2;
+      RT.off = RT.offN ? RT.off * 0.7 + off * 0.3 : off; RT.offN++;
+      return;
+    }
+    if (m.t === "bye") { const o = G.others.get(m.id); if (o && o.rt) { o.rt = false; o.buf = null; o.rtMov = 0; } return; }
+    if (m.t !== "p" || G.scene === "sea" || RT.room !== G.scene) return;
+    const o = G.others.get(m.id);
+    if (!o) return; // 아직 sync 로 이름·모습을 못 받은 사람 → 곧 생김
+    const rNow = now + RT.off;
+    // 얼마나 늦게 왔는지 기록 → 재생 지연을 자동으로 (보통 0.1~0.2초)
+    const late = rNow - m.ts;
+    if (late > -500 && late < 3000) { RT.lagHist.push(late); if (RT.lagHist.length > 60) RT.lagHist.shift(); }
+    if (RT.lagHist.length >= 5) { const sl = [...RT.lagHist].sort((a, b) => a - b); RT.target = Math.max(70, Math.min(600, sl[Math.floor(sl.length * 0.9)] + 45)); }
+    const rAt = rNow - RT.delay;
+    if (!o.rt) { o.rt = true; o.buf = [[rAt - 1, o.rx, o.ry]]; o.rtLast = 0; } // 지금 보이는 자리에서 이어서
+    const b = o.buf, L = b[b.length - 1];
+    if (m.ts <= (o.rtLast || 0)) return;
+    if (m.ts - (o.rtLast || 0) > 400) { // 새로 걷기 시작: 늦게 왔으면 그만큼 미뤄서 처음부터 같은 속도로
+      o.rtShift = Math.max(0, rAt + 20 - m.ts, L[0] + 60 - m.ts);
+      if (L[0] < m.ts + o.rtShift - 70) b.push([m.ts + o.rtShift - 70, L[1], L[2]]); // 출발 직전까지는 제자리
+    }
+    const ts = m.ts + (o.rtShift || 0);
+    if (ts <= L[0]) return;
+    b.push([ts, m.x, m.y]); o.rtLast = m.ts; o.rtMov = m.m;
+    if (!m.m) o.sdir = m.d;
+    const cut = rAt - 3000; while (b.length > 2 && b[1][0] < cut) b.shift();
+  }
+
   // 서버 시계 맞추기 (내 기기 시계와의 차이)
   G.clockOff = 0; G.clockSet = false; G.lagHist = []; G.netTarget = 1000; G.netDelay = 1000;
   function serverNow_() { return Date.now() + G.clockOff; }
@@ -1922,7 +2002,8 @@
         vx: o.vx || 0, vy: o.vy || 0, pv: !!o.pv, age: serverNow ? Math.max(0, serverNow - o.ts) : 0, recv: now, seen: now };
       if (ex && o.role === "artist" && upd.seat === "throne" && ex.seat !== "throne") { const st = (scene().seats || []).find((x) => x.id === "throne"); if (st) celebrate(st); }
       const tgt = ex || { id: o.id, rx: o.x, ry: o.y };
-      if (Array.isArray(o.path) && o.path.length) { // 지나온 길 합치기
+      if (tgt.rt) { /* 실시간 서버로 받는 중: 길 정보는 건너뜀 */ }
+      else if (Array.isArray(o.path) && o.path.length) { // 지나온 길 합치기
         const b = tgt.buf || (tgt.buf = []);
         const rAt = serverNow_() - G.netDelay;
         let added = 0, newest = 0;
@@ -1946,7 +2027,7 @@
         if (added >= 2 && fresh >= 0 && fresh < 4000) { G.lagHist.push(fresh); if (G.lagHist.length > 20) G.lagHist.shift(); }
         if (G.lagHist.length) { const sl = [...G.lagHist].sort((p, q) => p - q), hi = sl[Math.max(0, sl.length - 2)]; G.netTarget = Math.max(700, Math.min(1600, hi + 350)); } // 가끔 튀는 한 번은 무시 (늦게 온 걸음은 위에서 따로 미뤄 재생) // 가장 늦게 온 것보다도 여유 있게
       } else if (!tgt.buf || !tgt.buf.length) tgt.buf = null;
-      if (tgt.buf && tgt.buf.length && !(Array.isArray(o.path) && o.path.length) && now - (tgt.pathAt || 0) > 1500) { const L = tgt.buf[tgt.buf.length - 1]; if (Math.abs(L[1] - o.x) > 2 || Math.abs(L[2] - o.y) > 2) tgt.buf.push([Math.max(o.ts || 0, L[0] + 300), o.x, o.y, 1]); } // 길 정보가 한동안 없을 때만 위치 보정
+      if (!tgt.rt && tgt.buf && tgt.buf.length && !(Array.isArray(o.path) && o.path.length) && now - (tgt.pathAt || 0) > 1500) { const L = tgt.buf[tgt.buf.length - 1]; if (Math.abs(L[1] - o.x) > 2 || Math.abs(L[2] - o.y) > 2) tgt.buf.push([Math.max(o.ts || 0, L[0] + 300), o.x, o.y, 1]); } // 길 정보가 한동안 없을 때만 위치 보정
       if (ex && !o.seat && o.dir) tgt.sdir = o.dir;
       if (o.emo && o.emo.k && tgt.emoK !== o.emo.k) { tgt.emoK = o.emo.k; if (!serverNow || serverNow - o.emo.t < 4000) tgt.emoShow = { e: o.emo.e, at: now, until: now + 3500 }; }
       if (ex) Object.assign(ex, upd);

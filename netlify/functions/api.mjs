@@ -583,6 +583,14 @@ export default async (req, context) => {
       return err("notfound", 404);
     }
 
+    // ---------- 실시간 위치 서버(Cloudflare)가 로그인 확인을 부탁할 때 ----------
+    if (route === "rt/verify" && method === "POST") {
+      const tp = await tokenPayload(req);
+      if (!tp || tp.n === undefined) return err("auth", 401);
+      if ((await deletedIds()).has(tp.id)) return err("gone", 401);
+      return json({ id: tp.id });
+    }
+
     // ---------- 실시간 동기화: 위치 + 새 채팅 + 공지 (한 번의 요청) ----------
     if (route === "sync" && method === "POST") {
       const tp = await tokenPayload(req);
