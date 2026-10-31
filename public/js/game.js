@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "39"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "40"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -1133,7 +1133,9 @@
   function renderShop() {
     const grid = $("#shop-grid"); if (!grid) return;
     const av = G.user.avatar || {};
-    const list = SHOP.filter((it) => !it.staff && (shopTab === "all" || it.kind === shopTab)); // 관리자 전용 의상은 팔지 않음
+    const KO = { hair: 0, outfit: 1, wand: 2, bubble: 3 };
+    const list = SHOP.filter((it) => !it.staff && (shopTab === "all" || it.kind === shopTab)) // 관리자 전용 의상은 팔지 않음
+      .sort((a, b) => KO[a.kind] - KO[b.kind] || a.price - b.price); // 종류별 · 가격순
     grid.innerHTML = list.map((it) => {
       const own = owns(it), on = (av[it.kind] | 0) === it.idx;
       const tier = it.price >= 100000 ? "t4 t6" : it.price >= 30000 ? "t4 t5" : it.price >= 12000 ? "t4" : it.price >= 5000 ? "t3" : it.price >= 1200 ? "t2" : "t1";

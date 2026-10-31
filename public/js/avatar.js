@@ -26,7 +26,7 @@
   const EYES = ["#6b7fd6", "#8a5a3c", "#9b5fd6", "#3fa46a", "#d8434e"];
   // 0~5 기본 · 6~9 젤리젤리샵 판매
   // 10~13: 추가 무료 헤어 (빡빡머리 · 투블럭 · 올백 · 가르마펌)
-  // 14~23: 개성 넘치는 무료 헤어 (아프로 · 모히칸 · 리젠트 · 바가지 · 상투 · 레게 · 양갈래 땋은 머리 · 히메컷 · 불꽃 · 반짝 대머리)
+  // 14~23: 개성 헤어 (젤리젤리샵 각 5000코인) (아프로 · 모히칸 · 리젠트 · 바가지 · 상투 · 레게 · 양갈래 땋은 머리 · 히메컷 · 불꽃 · 반짝 대머리)
   const HAIRS = ["twin", "longwave", "bob", "short", "pony", "spiky", "buns", "heartlong", "bigbow", "galaxy", "buzz", "twoblock", "slick", "partperm",
     "afro", "mohawk", "pompadour", "bowl", "topknot", "dreads", "braids", "hime", "flame", "bald"];
   const SPECIAL_HAIRS = ["afro", "mohawk", "pompadour", "bowl", "topknot", "dreads", "braids", "hime", "flame", "bald"];
