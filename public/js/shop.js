@@ -14,7 +14,17 @@ window.JELLY_SHOP = [
   { id: "o_fairy", kind: "outfit", idx: 14, price: 9000, name: { ko: "요정 날개 드레스", en: "Fairy Wing Dress", ja: "ようせいの羽ドレス" } },
   { id: "w_piano", kind: "wand", idx: 4, price: 12000, name: { ko: "그랜드 피아노 셉터", en: "Grand Piano Scepter", ja: "グランドピアノの笏" } },
   { id: "o_aurora", kind: "outfit", idx: 15, price: 15000, name: { ko: "오로라 프린세스 가운", en: "Aurora Princess Gown", ja: "オーロラプリンセス" } },
-  { id: "o_royal", kind: "outfit", idx: 16, price: 30000, name: { ko: "젤리 퀸 로열 드레스", en: "Jelly Queen Royal Gown", ja: "ゼリークイーンドレス" } },
+  // 16: 관리자(호스트 포함) 전용 — 판매하지 않음 (이름만 표시용)
+  { id: "o_royal", kind: "outfit", idx: 16, price: 30000, staff: true, name: { ko: "젤리 퀸 로열 드레스", en: "Jelly Queen Royal Gown", ja: "ゼリークイーンドレス" } },
+  // 17~24: 고급 의상 (3만~10만) — 오로라 불빛은 10만 코인 의상만
+  { id: "o_tweed", kind: "outfit", idx: 17, price: 30000, name: { ko: "샴페인 트위드 셋업", en: "Champagne Tweed Set", ja: "シャンパンツイードセット" } },
+  { id: "o_velvet", kind: "outfit", idx: 18, price: 40000, name: { ko: "블랙 벨벳 원피스", en: "Black Velvet Dress", ja: "ブラックベルベットワンピース" } },
+  { id: "o_rose", kind: "outfit", idx: 19, price: 50000, name: { ko: "로즈 새틴 이브닝 드레스", en: "Rose Satin Evening Gown", ja: "ローズサテンイブニングドレス" } },
+  { id: "o_midnight", kind: "outfit", idx: 20, price: 60000, name: { ko: "미드나잇 실크 드레스", en: "Midnight Silk Gown", ja: "ミッドナイトシルクドレス" } },
+  { id: "o_emerald", kind: "outfit", idx: 21, price: 70000, name: { ko: "에메랄드 레이스 가운", en: "Emerald Lace Gown", ja: "エメラルドレースガウン" } },
+  { id: "o_pearl", kind: "outfit", idx: 22, price: 80000, name: { ko: "화이트 펄 롱 드레스", en: "White Pearl Long Gown", ja: "ホワイトパールロングドレス" } },
+  { id: "o_burgundy", kind: "outfit", idx: 23, price: 90000, name: { ko: "버건디 벨벳 망토 드레스", en: "Burgundy Velvet Cape Gown", ja: "バーガンディベルベットケープドレス" } },
+  { id: "o_celestial", kind: "outfit", idx: 24, price: 100000, name: { ko: "오로라 셀레스티얼 가운", en: "Aurora Celestial Gown", ja: "オーロラセレスティアルガウン" } },
   // 💬 말풍선 (호스트·관리자 전용 말풍선은 판매하지 않음)
   { id: "b_yellow", kind: "bubble", idx: 1, price: 700, name: { ko: "노란 테두리 말풍선", en: "Yellow Frame Bubble", ja: "きいろフチの吹き出し" } },
   { id: "b_blue", kind: "bubble", idx: 2, price: 700, name: { ko: "파란 테두리 말풍선", en: "Blue Frame Bubble", ja: "あおフチの吹き出し" } },
@@ -22,5 +32,6 @@ window.JELLY_SHOP = [
   { id: "b_dots", kind: "bubble", idx: 4, price: 1000, name: { ko: "딸기우유 물방울 말풍선", en: "Strawberry Milk Polka Bubble", ja: "いちごミルク水玉の吹き出し" } },
   { id: "b_rainbow", kind: "bubble", idx: 5, price: 1500, name: { ko: "무지개 테두리 말풍선", en: "Rainbow Frame Bubble", ja: "にじいろフチの吹き出し" } },
   { id: "b_star", kind: "bubble", idx: 6, price: 2000, name: { ko: "반짝 별밤 말풍선", en: "Twinkling Night Bubble", ja: "きらめく星夜の吹き出し" } },
-  { id: "b_gold", kind: "bubble", idx: 7, price: 3000, name: { ko: "골드 크라운 말풍선", en: "Gold Crown Bubble", ja: "ゴールドクラウンの吹き出し" } },
+  // 왕관이 들어간 아이템은 관리자(호스트 포함) 전용 — 판매하지 않음
+  { id: "b_gold", kind: "bubble", idx: 7, price: 3000, staff: true, name: { ko: "골드 크라운 말풍선", en: "Gold Crown Bubble", ja: "ゴールドクラウンの吹き出し" } },
 ];

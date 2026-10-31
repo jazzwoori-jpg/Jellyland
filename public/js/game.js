@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "37"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "39"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -312,6 +312,8 @@
       if (o.char) {
         const c = o.char;
         if (c.artist || c.admin) drawAura(c.x, c.y, G.t, c.admin);
+        const ofit = c.av && Avatar.OUTFITS[c.av.outfit];
+        if (ofit && ofit.auroraGlow) drawAuroraGlow(c.x, c.y, G.t);
         Avatar.draw(ctx, c.av, c.x, c.y + (c.swim ? Math.round(Math.sin(G.t / 320) * 2) : 0), c.dir, c.bobby ? (Math.floor(G.t / 500) % 2 ? 1 : 0) : c.frame, { keytar: c.keytar, sit: c.sit });
         if (c.artist || c.admin) drawSparkles(c.x, c.y, G.t, c.admin);
       } else o.draw(ctx, G.t);
@@ -362,6 +364,31 @@
     }
     drawBanner();
     if (G.mode === "world" && G.t - (G.mmT || 0) > 120) { G.mmT = G.t; drawMinimapFrame(); } // 지도는 초당 8번만 (폰 부담 줄이기)
+  }
+  // 🌌 오로라 셀레스티얼 가운(10만 코인)의 오로라 불빛 — 몸 뒤로 넘실거리는 빛의 띠 + 떠다니는 빛가루
+  const AURORA_COLS = ["126,240,216", "124,200,240", "154,140,240", "200,140,240", "255,159,208"];
+  function drawAuroraGlow(x, y, tt) {
+    ctx.save();
+    // 은은한 빛무리
+    const halo = ctx.createRadialGradient(x, y - 22, 4, x, y - 22, 30);
+    halo.addColorStop(0, `rgba(${AURORA_COLS[Math.floor(tt / 1600) % 5]},0.35)`); halo.addColorStop(1, "rgba(160,200,255,0)");
+    ctx.fillStyle = halo; ctx.beginPath(); ctx.ellipse(x, y - 22, 30, 34, 0, 0, 7); ctx.fill();
+    for (let b = 0; b < 3; b++) {
+      const col = AURORA_COLS[(b + Math.floor(tt / 1600)) % AURORA_COLS.length], col2 = AURORA_COLS[(b + 2 + Math.floor(tt / 1600)) % AURORA_COLS.length];
+      const g = ctx.createLinearGradient(x - 22, 0, x + 22, 0);
+      g.addColorStop(0, `rgba(${col},0)`); g.addColorStop(0.5, `rgba(${col2},${0.42 + 0.15 * Math.sin(tt / 500 + b)})`); g.addColorStop(1, `rgba(${col},0)`);
+      ctx.fillStyle = g; ctx.beginPath();
+      const y0 = y - 52 + b * 9;
+      ctx.moveTo(x - 24, y0 + Math.sin(tt / 420 + b) * 3);
+      for (let k = 1; k <= 8; k++) { const xx = x - 24 + k * 6; ctx.lineTo(xx, y0 + Math.sin(tt / 420 + b + k * 0.8) * 4); }
+      for (let k = 8; k >= 0; k--) { const xx = x - 24 + k * 6; ctx.lineTo(xx, y0 + 14 + Math.sin(tt / 380 + b * 1.7 + k * 0.7) * 4); }
+      ctx.closePath(); ctx.fill();
+    }
+    for (let k = 0; k < 7; k++) {
+      const a = tt / 900 + k * 0.9, r = 15 + (k % 3) * 3, px = x + Math.cos(a) * r, py = y - 22 + Math.sin(a * 1.3) * 18;
+      ctx.fillStyle = `rgba(${AURORA_COLS[k % AURORA_COLS.length]},${0.6 + 0.35 * Math.sin(tt / 200 + k)})`; ctx.fillRect(px - 1, py - 1, 2, 2); ctx.fillStyle = "rgba(255,255,255,.8)"; ctx.fillRect(px - 0.5, py - 0.5, 1, 1);
+    }
+    ctx.restore();
   }
   // 둥근 사각형 경로
   function rrect(x, y, w, h, r) { ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h); }
@@ -1056,7 +1083,7 @@
   // ---------------- 젤리코인 ----------------
   const SHOP = window.JELLY_SHOP || [];
   const isHost = () => !!(G.user && G.user.role === "artist");
-  const owns = (it) => isHost() || !!(G.user && (G.user.inv || []).includes(it.id));
+  const owns = (it) => isHost() || (it.staff && G.user && staff(G.user.role)) || !!(G.user && (G.user.inv || []).includes(it.id));
   const shopItem = (kind, idx) => SHOP.find((x) => x.kind === kind && x.idx === idx);
   const kstDay = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
   function setUser(u) { if (!u) return; G.user = { ...G.user, ...u }; refreshMe(); }
@@ -1106,10 +1133,10 @@
   function renderShop() {
     const grid = $("#shop-grid"); if (!grid) return;
     const av = G.user.avatar || {};
-    const list = SHOP.filter((it) => shopTab === "all" || it.kind === shopTab);
+    const list = SHOP.filter((it) => !it.staff && (shopTab === "all" || it.kind === shopTab)); // 관리자 전용 의상은 팔지 않음
     grid.innerHTML = list.map((it) => {
       const own = owns(it), on = (av[it.kind] | 0) === it.idx;
-      const tier = it.price >= 12000 ? "t4" : it.price >= 5000 ? "t3" : it.price >= 1200 ? "t2" : "t1";
+      const tier = it.price >= 100000 ? "t4 t6" : it.price >= 30000 ? "t4 t5" : it.price >= 12000 ? "t4" : it.price >= 5000 ? "t3" : it.price >= 1200 ? "t2" : "t1";
       const btn = !own ? `<button class="btn sm pink buy ${(G.user.coins | 0) < it.price ? "poor" : ""}" data-act="buy">🪙 ${it.price.toLocaleString()} ${esc(t("buy"))}</button>`
         : on ? (it.kind === "wand" ? `<button class="btn sm" data-act="off">${esc(t("unequip"))}</button>` : `<button class="btn sm on" disabled>${esc(t("equipped"))}</button>`)
         : `<button class="btn sm grape" data-act="wear">${esc(t("equip"))}</button>`;
@@ -1991,8 +2018,16 @@
     chipRow("hairColor", Avatar.HAIR_COLORS.map((c, i) => ({ ...c, name: t("hairColors")[i] })), "hairColor", "sw");
     chipRow("skin", Avatar.SKINS.map((c, i) => ({ ...c, name: t("skins")[i] })), "skin", "sw");
     const isHost = G.user && G.user.role === "artist";
-    const outs = Avatar.OUTFITS.map((o, i) => ({ i, name: t("outfits")[i] || shopName("outfit", i) || o.id, col: o.overall || (o.top === "#f7f5ff" ? o.skirt : o.top), host: !!o.host }));
+    const outs = Avatar.OUTFITS.map((o, i) => ({ i, name: t("outfits")[i] || shopName("outfit", i) || o.id, col: o.overall || (o.top === "#f7f5ff" ? o.skirt : o.top), host: !!o.host, staffOnly: !!o.staff }));
     chipRow("outfit", outs, "outfit");
+    // 관리자 전용 의상 (젤리 퀸 로열 드레스)
+    const amStaff = G.user && staff(G.user.role);
+    $("#o-outfit").querySelectorAll(".chip").forEach((el, idx) => {
+      if (!outs[idx].staffOnly) return;
+      el.classList.add("host-only", "staff-only"); el.insertAdjacentHTML("beforeend", `<small>${amStaff ? "★" : "🔒"} ${esc(t("staffOnly"))}</small>`);
+      if (!amStaff) { el.disabled = true; el.title = t("staffOnly"); }
+    });
+    if (!amStaff && outs[draft.avatar.outfit] && outs[draft.avatar.outfit].staffOnly) draft.avatar.outfit = 0;
     // 호스트 전용 의상: 호스트가 아니면 잠금 표시
     $("#o-outfit").querySelectorAll(".chip").forEach((el, idx) => {
       if (!outs[idx].host) return;
@@ -2004,6 +2039,12 @@
     [["hair", "#o-hair"], ["outfit", "#o-outfit"], ["wand", "#o-wand"], ["bubble", "#o-bubble"]].forEach(([kind, sel]) => {
       $(sel).querySelectorAll(".chip").forEach((el, idx) => {
         const it = shopItem(kind, idx); if (!it) return;
+        if (it.staff) { // 왕관 아이템: 관리자(호스트 포함) 전용
+          if (kind === "outfit") return; // 의상은 위에서 따로 표시
+          el.classList.add("host-only", "staff-only"); el.insertAdjacentHTML("beforeend", `<small>${amStaff ? "★" : "🔒"} ${esc(t("staffOnly"))}</small>`);
+          if (!amStaff) { el.disabled = true; el.title = t("staffOnly"); if ((draft.avatar[kind] | 0) === idx) draft.avatar[kind] = 0; }
+          return;
+        }
         el.classList.add("shop-only");
         if (!owns(it)) { el.disabled = true; el.title = t("shopLock"); el.insertAdjacentHTML("beforeend", `<small>🛍️ ${esc(t("shopLock"))}</small>`); if ((draft.avatar[kind] | 0) === idx) draft.avatar[kind] = 0; }
         else el.insertAdjacentHTML("beforeend", "<small>✦</small>");

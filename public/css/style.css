@@ -690,3 +690,11 @@ body:not(.touch) #emo-pop { right: 20px; bottom: 70px; }
 .promo-cd b { font-size: 18px; color: #d8434e; letter-spacing: 1px; }
 .promo-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0 0; font-size: 13px; }
 .promo .player { max-width: min(100%, calc((100vh - 330px) * 16 / 9)); margin: 0 auto; }
+
+/* ===== v38: 👗 고급 의상 (3만~10만) ===== */
+.shop-item.t5 { border-color: #c9982c; background: linear-gradient(135deg, #fffaf0, #f7efe0, #fff8ea); box-shadow: 0 0 0 2px #f2d58a, 0 0 12px rgba(201, 152, 44, .45); }
+.shop-item.t5 .price { color: #9a6a12; }
+.shop-item.t6 { border-color: #7cc8f0; background: linear-gradient(120deg, #e6fff8, #e6f2ff, #f0e8ff, #ffe8f6, #e6fff8); background-size: 300% 300%; animation: auroraBg 6s ease-in-out infinite; box-shadow: 0 0 0 2px #b8f0e6, 0 0 18px rgba(124, 200, 240, .7), 0 0 30px rgba(200, 140, 240, .45); }
+@keyframes auroraBg { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+.chip.staff-only { border-color: #d6960a; }
+.chip.staff-only small { color: #b07a00; }

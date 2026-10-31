@@ -34,6 +34,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const LANGS = ["ko", "en", "ja"];
 const ROOMS = ["plaza", "lounge"];
 const CHAT_TTL = 5 * 60 * 1000; // 채팅은 5분 뒤 사라짐
+const STAFF_OUTFITS = [16]; // 관리자(호스트 포함) 전용 — 젤리 퀸 로열 드레스
 const HOST_OUTFITS = [1, 7, 8, 9]; // 호스트(조젤리) 전용 의상 번호 — public/js/avatar.js 의 host: true 와 같아야 함
 // ---- 젤리코인 ----
 // 젤리젤리샵 상품 — public/js/shop.js 와 같아야 함 (가격은 10코인 단위)
@@ -52,7 +53,15 @@ const SHOP = {
   o_fairy: { kind: "outfit", idx: 14, price: 9000 },
   w_piano: { kind: "wand", idx: 4, price: 12000 },
   o_aurora: { kind: "outfit", idx: 15, price: 15000 },
-  o_royal: { kind: "outfit", idx: 16, price: 30000 },
+  o_royal: { kind: "outfit", idx: 16, price: 30000, staff: true }, // 관리자·호스트 전용 (판매 안 함)
+  o_tweed: { kind: "outfit", idx: 17, price: 30000 },
+  o_velvet: { kind: "outfit", idx: 18, price: 40000 },
+  o_rose: { kind: "outfit", idx: 19, price: 50000 },
+  o_midnight: { kind: "outfit", idx: 20, price: 60000 },
+  o_emerald: { kind: "outfit", idx: 21, price: 70000 },
+  o_pearl: { kind: "outfit", idx: 22, price: 80000 },
+  o_burgundy: { kind: "outfit", idx: 23, price: 90000 },
+  o_celestial: { kind: "outfit", idx: 24, price: 100000 },
   // 말풍선 (호스트·관리자 말풍선은 역할로 자동 적용, 판매 안 함)
   b_yellow: { kind: "bubble", idx: 1, price: 700 },
   b_blue: { kind: "bubble", idx: 2, price: 700 },
@@ -60,7 +69,7 @@ const SHOP = {
   b_dots: { kind: "bubble", idx: 4, price: 1000 },
   b_rainbow: { kind: "bubble", idx: 5, price: 1500 },
   b_star: { kind: "bubble", idx: 6, price: 2000 },
-  b_gold: { kind: "bubble", idx: 7, price: 3000 },
+  b_gold: { kind: "bubble", idx: 7, price: 3000, staff: true }, // 골드 크라운 말풍선 — 관리자·호스트 전용 (판매 안 함)
 };
 // 🫧 분수대 보물상자 퀴즈 — [한국어, English, 日本語, [정답, 오답, 오답, 오답]] (보기는 문자열 하나면 3개 언어 공통, 아니면 [ko, en, ja])
 // 정답은 항상 첫 번째 보기 — 서버가 섞어서 보냄 (정답은 브라우저로 보내지 않음)
@@ -617,6 +626,18 @@ export default async (req, context) => {
     if (!user) return err("auth", 401);
     // 👑 호스트는 코인이 항상 100만 이상
     if (roleOf(user.email) === "artist" && (user.coins | 0) < 1000000) { user.coins = 1000000; await store("jl-users").setJSON(userKey(user.email), user); }
+    // 👑 젤리 퀸 로열 드레스가 관리자 전용이 되면서, 예전에 산 회원에게는 30000코인을 돌려줌 (한 번)
+    // 👑 왕관 아이템(로열 드레스 · 골드 크라운 말풍선)이 관리자 전용이 되면서, 예전에 산 일반 회원에게는 코인을 돌려줌 (한 번)
+    if (Array.isArray(user.inv) && !isStaff(roleOf(user.email))) {
+      const REFUND = [["o_royal", 30000, "outfit", 16, "젤리 퀸 로열 드레스"], ["b_gold", 3000, "bubble", 7, "골드 크라운 말풍선"]].filter(([id]) => user.inv.includes(id));
+      if (REFUND.length) {
+        let total = 0;
+        for (const [id, price, kind, idx] of REFUND) { user.inv = user.inv.filter((x) => x !== id); total += price; if (user.avatar && (user.avatar[kind] | 0) === idx) { if (kind === "bubble") delete user.avatar.bubble; else user.avatar[kind] = 0; } }
+        user.coins = (user.coins | 0) + total;
+        await store("jl-users").setJSON(userKey(user.email), user);
+        try { const ms = store("jl-mail"), k = "box/" + user.id; const box = (await ms.get(k, { type: "json" })) || []; box.unshift({ ts: Date.now(), from: "JELLY LAND", fromRole: "admin", text: `👑 왕관이 들어간 아이템(${REFUND.map((r) => r[4]).join(", ")})이 관리자 전용으로 바뀌어서, 구매하신 ${total.toLocaleString()}코인을 돌려드렸어요. 젤리젤리샵의 새 아이템도 구경해 보세요!`, read: false, gift: total }); await ms.setJSON(k, box.slice(0, MAIL_MAX)); } catch {}
+      }
+    }
     const me = publicUser(user);
     const saveUser = () => store("jl-users").setJSON(userKey(user.email), user);
 
@@ -637,9 +658,10 @@ export default async (req, context) => {
       const n = (v, max = 9) => Math.max(0, Math.min(max, v | 0));
       user.nickname = nickname;
       const isHost = me.role === "artist";
-      const owns = (kind, idx) => { const it = shopItemFor(kind, idx); return !it || isHost || (user.inv || []).includes(it[0]); };
-      let outfit = n(a.outfit, 16), hair = n(a.hair, 13), wand = n(a.wand, 4), bubble = n(a.bubble, 7);
+      const owns = (kind, idx) => { const it = shopItemFor(kind, idx); return !it || isHost || (it[1].staff && isStaff(me.role)) || (user.inv || []).includes(it[0]); };
+      let outfit = n(a.outfit, 24), hair = n(a.hair, 23), wand = n(a.wand, 4), bubble = n(a.bubble, 7);
       if (HOST_OUTFITS.includes(outfit) && !isHost) outfit = 0; // 호스트 전용 의상은 호스트만
+      if (STAFF_OUTFITS.includes(outfit) && !isStaff(me.role)) outfit = 0; // 관리자 전용 의상
       if (!owns("outfit", outfit)) outfit = 0;                  // 샵 아이템은 산 사람만
       if (!owns("hair", hair)) hair = 0;
       if (!owns("wand", wand)) wand = 0;
@@ -680,7 +702,7 @@ export default async (req, context) => {
     if (route === "shop/buy" && method === "POST") {
       const id = String(body.item || "");
       const it = SHOP[id];
-      if (!it) return err("notfound", 404);
+      if (!it || it.staff) return err("notfound", 404); // 관리자 전용 의상은 판매 안 함
       user.inv = Array.isArray(user.inv) ? user.inv : [];
       if (user.inv.includes(id)) return json({ user: publicUser(user), owned: true });
       if ((user.coins | 0) < it.price) return err("coins", 400);
