@@ -283,6 +283,7 @@
       return demo;
     },
     hasToken: () => !!token,
+    get token() { return token; },
     async signup(email, password, lang) { const d = await call("signup", { method: "POST", body: { email, password, lang } }); token = d.token; ls.set(TOKEN_KEY, token); return d.user; },
     async login(email, password) { const d = await call("login", { method: "POST", body: { email, password } }); token = d.token; ls.set(TOKEN_KEY, token); return d.user; },
     logout() { token = null; ls.del(TOKEN_KEY); },
