@@ -46,6 +46,15 @@ window.JELLY_CONFIG = {
     { src: "img/photos/jojelly-03.jpg", caption: { ko: "프로필 · 앤티크 룸", en: "Profile · Antique Room", ja: "プロフィール · アンティークルーム" } },
   ],
 
+  // 🎬 접속할 때마다 띄우는 영상 팝업 — until(한국시간)까지만 보임 · video: 위 videos 의 번호
+  promo: {
+    id: "dontstop-teaser",
+    video: 0,
+    until: "2026-11-07T18:00:00+09:00",
+    title: { ko: "🎬 Jo Jelly 'Don't Stop' 티저 공개!", en: "🎬 Jo Jelly 'Don't Stop' Teaser!", ja: "🎬 Jo Jelly 『Don't Stop』ティザー公開！" },
+    text: { ko: "새 티저 영상이 공개되었어요! 지금 바로 감상해 보세요 ♪", en: "A new teaser is out! Watch it now ♪", ja: "新しいティザー映像が公開されました！今すぐチェックしてね ♪" },
+  },
+
   // 📢 로그인할 때 한 번 띄우는 공지 (id 를 바꾸면 새 공지로 다시 한 번 보여 줌) — go: 버튼을 누르면 갈 곳
   announce: {
     id: "photos-2026-10",
@@ -79,8 +88,9 @@ window.JELLY_CONFIG = {
     },
   ],
 
-  // 젤리 시네마 — YouTube 영상 ID (주소의 v= 뒤 11자리)
+  // 젤리 시네마 — YouTube 영상 ID (주소의 v= 뒤 11자리) 또는 직접 올린 영상 파일(file + poster)
   videos: [
+    { file: "video/dontstop-teaser.mp4", poster: "img/videos/dontstop-teaser.jpg", isNew: true, title: { ko: "Don't Stop - 티저", en: "Don't Stop - Teaser", ja: "Don't Stop - ティザー" } },
     { id: "Y8aVeGVmZ8U", title: "Can't Stop! - Jo Jelly Live Session Clip. 1" },
     { id: "VwYQ7LHTiS4", title: "NORD LIVE: Seoul Sessions - Don't stop" },
     { id: "B3D7DS_C-Hg", title: "NORD LIVE: Seoul Sessions: Jo Jelly" },

@@ -268,6 +268,21 @@ const roleOf = (email) => (artistEmails().includes(email) ? "artist" : adminEmai
 const isStaff = (role) => role === "artist" || role === "admin";
 const userKey = (email) => "u/" + crypto.createHash("sha256").update(email).digest("hex");
 // 🔑 비밀번호 찾기 요청 (이메일마다 1개)
+// 닉네임 중복 방지: 공백·대소문자를 무시한 닉네임 → 회원 id
+const nickNorm = (n) => String(n || "").replace(/\s+/g, "").toLowerCase();
+const nickKey = (n) => "n/" + crypto.createHash("sha256").update(nickNorm(n)).digest("hex");
+async function ensureNickIndex() { // 처음 한 번: 기존 회원들로 닉네임 목록 만들기 (먼저 가입한 사람 우선)
+  const ns = store("jl-nick");
+  if (await ns.get("built")) return ns;
+  const us = store("jl-users");
+  const { blobs } = await us.list({ prefix: "u/" });
+  const all = (await Promise.all(blobs.map((b) => us.get(b.key, { type: "json" })))).filter((u) => u && u.nickname);
+  all.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  const seen = new Set();
+  for (const u of all) { const k = nickKey(u.nickname); if (seen.has(k)) continue; seen.add(k); await ns.set(k, u.id); }
+  await ns.set("built", String(Date.now()));
+  return ns;
+}
 const resetKey = (email) => "r/" + crypto.createHash("sha256").update(email).digest("hex");
 const sha = (s) => crypto.createHash("sha256").update(String(s)).digest("hex");
 const RESET_TTL = 24 * 3600 * 1000;       // 승인 후 24시간 안에 새 비밀번호를 정해야 함
@@ -610,6 +625,14 @@ export default async (req, context) => {
     if (route === "avatar" && method === "POST") {
       const nickname = clean(body.nickname, 12);
       if (!nickname) return err("nick");
+      // 같은 닉네임은 한 사람만 (공백·대소문자 무시). 예전부터 쓰던 자기 닉네임은 그대로 저장 가능
+      if (nickNorm(nickname) !== nickNorm(user.nickname)) {
+        const ns = await ensureNickIndex();
+        const owner = await ns.get(nickKey(nickname));
+        if (owner && owner !== user.id) return err("nickTaken", 409);
+        await ns.set(nickKey(nickname), user.id);
+        if (user.nickname && (await ns.get(nickKey(user.nickname))) === user.id) await ns.delete(nickKey(user.nickname));
+      }
       const a = body.avatar || {};
       const n = (v, max = 9) => Math.max(0, Math.min(max, v | 0));
       user.nickname = nickname;
@@ -1081,6 +1104,7 @@ export default async (req, context) => {
         if (!target) return err("notfound", 404);
         if (isStaff(roleOf(target.email))) return err("forbidden", 403); // 관리자 계정은 탈퇴시킬 수 없음
         await us.delete(target._key);
+        try { const ns = store("jl-nick"); if (target.nickname && (await ns.get(nickKey(target.nickname))) === target.id) await ns.delete(nickKey(target.nickname)); } catch {}
         const cfg = store("jl-config");
         const del = (await cfg.get("deleted", { type: "json" })) || [];
         if (!del.includes(target.id)) { del.push(target.id); await cfg.setJSON("deleted", del.slice(-2000)); }
