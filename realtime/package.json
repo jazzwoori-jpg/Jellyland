@@ -1,5 +1,5 @@
 {
-  "name": "jellyland-rt",
+  "name": "jellyland",
   "private": true,
   "type": "module",
   "scripts": { "deploy": "wrangler deploy" },
