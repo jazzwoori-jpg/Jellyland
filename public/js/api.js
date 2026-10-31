@@ -76,6 +76,8 @@
     if (!me) fail("auth", 401);
     if (route === "me") return { user: pub(me) };
     if (route === "avatar") {
+      const nn = (x) => String(x || "").replace(/\s+/g, "").toLowerCase();
+      if (nn(b.nickname) !== nn(me.nickname) && Object.values(users).some((u) => u !== me && nn(u.nickname) === nn(b.nickname))) fail("nickTaken", 409);
       me.nickname = String(b.nickname || "").slice(0, 12); me.avatar = b.avatar;
       ls.set("jl_demo_users", users);
       return { user: pub(me) };

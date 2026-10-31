@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "36"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "37"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -1001,11 +1001,47 @@
     if (!vs.length) return openModal("🎬 " + t("bCinema"), `<p>${esc(t("noVideo"))}</p>`);
     const v = vs[idx];
     const yt = CFG.artist.links.find((l) => l.label === "YouTube");
-    const html = `<div class="player"><iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(v.id)}?rel=0&playsinline=1" title="${esc(L(v.title))}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe></div>
+    const thumb = (x) => (x.file ? x.poster : `https://i.ytimg.com/vi/${encodeURIComponent(x.id)}/hqdefault.jpg`);
+    const html = `<div class="player">${videoTag(v, false)}</div>
       <h3 style="margin:12px 0 0">${esc(L(v.title))}</h3>
-      <div class="vlist">${vs.map((x, i) => `<div class="vitem ${i === idx ? "on" : ""}" data-i="${i}"><img src="https://i.ytimg.com/vi/${encodeURIComponent(x.id)}/hqdefault.jpg" alt="" loading="lazy"><p>${esc(L(x.title))}</p></div>`).join("")}</div>
+      <div class="vlist">${vs.map((x, i) => `<div class="vitem ${i === idx ? "on" : ""}" data-i="${i}">${x.isNew ? '<span class="new-badge">NEW</span>' : ""}<img src="${esc(thumb(x))}" alt="" loading="lazy"><p>${esc(L(x.title))}</p></div>`).join("")}</div>
       ${yt ? `<p style="text-align:center"><a class="btn sm" href="${esc(yt.url)}" target="_blank" rel="noopener">${esc(t("ytChannel"))}</a></p>` : ""}`;
-    openModal("🎬 " + t("bCinema"), html, (el) => el.querySelectorAll(".vitem").forEach((d) => d.addEventListener("click", () => openCinema(+d.dataset.i))));
+    openModal("🎬 " + t("bCinema"), html, (el) => { el.querySelectorAll(".vitem").forEach((d) => d.addEventListener("click", () => openCinema(+d.dataset.i))); hookVideo(el); });
+  }
+  // 영상 태그: 직접 올린 파일은 <video>, 나머지는 유튜브
+  function videoTag(v, autoplay) {
+    if (v.file) return `<video src="${esc(v.file)}" poster="${esc(v.poster || "")}" controls playsinline preload="metadata"${autoplay ? " autoplay" : ""}></video>`;
+    return `<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(v.id)}?rel=0&playsinline=1" title="${esc(L(v.title))}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe>`;
+  }
+  // 영상이 재생되는 동안은 배경음악을 끄고, 창을 닫으면 다시 켬
+  function hookVideo(el) {
+    const vid = el.querySelector("video"); if (!vid) return;
+    vid.addEventListener("play", () => { try { BGM.stop(); } catch {} });
+    const prev = G.modalCleanup;
+    G.modalCleanup = () => { try { vid.pause(); } catch {} if (prev) try { prev(); } catch {} if (!G.gameOpen) BGM.play(G.scene); };
+  }
+  // ---------------- 🎬 영상 팝업 (정해진 날짜까지 접속할 때마다) ----------------
+  function promoActive() { const p = CFG.promo; return !!(p && Date.now() < Date.parse(p.until) && CFG.videos[p.video]); }
+  function showPromo() {
+    const p = CFG.promo; if (!promoActive() || G.mode !== "world") return false;
+    try { if (localStorage.getItem("jl_promo_skip_" + p.id) === new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10)) return false; } catch {}
+    const v = CFG.videos[p.video];
+    openModal(L(p.title), `<div class="promo"><div class="player">${videoTag(v, false)}</div>
+      <p class="promo-text">${esc(L(p.text))}</p>
+      <div class="promo-cd" id="promo-cd"></div>
+      <p class="promo-foot"><label><input type="checkbox" id="promo-skip"> ${esc(t("promoSkipToday"))}</label><button class="btn sm grape" id="promo-cinema">🎬 ${esc(t("bCinema"))}</button></p></div>`, (el) => {
+      hookVideo(el);
+      const cd = el.querySelector("#promo-cd"), end = Date.parse(p.until);
+      const tick = () => {
+        if (!cd.isConnected) return clearInterval(timer);
+        const ms = Math.max(0, end - Date.now()), d = Math.floor(ms / 864e5), h = Math.floor(ms / 36e5) % 24, m = Math.floor(ms / 6e4) % 60, s = Math.floor(ms / 1e3) % 60;
+        cd.innerHTML = `${esc(t("promoUntil"))} <b>${d ? t("promoDays", { n: d }) + " " : ""}${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}</b>`;
+      };
+      const timer = setInterval(tick, 1000); tick();
+      el.querySelector("#promo-skip").addEventListener("change", (e) => { try { if (e.target.checked) localStorage.setItem("jl_promo_skip_" + p.id, new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10)); else localStorage.removeItem("jl_promo_skip_" + p.id); } catch {} });
+      el.querySelector("#promo-cinema").addEventListener("click", () => openCinema(p.video));
+    }, true);
+    return true;
   }
   function openProfile() {
     const a = CFG.artist;
@@ -2162,7 +2198,7 @@
     const goParam = new URLSearchParams(location.search).get("go");
     if (goParam === "gallery") { markAnnounceSeen(); setTimeout(openGallery, 700); try { history.replaceState(null, "", location.pathname); } catch {} }
     else if (G.user.tempPw) setTimeout(() => openPwChange(true), 900); // 임시 비밀번호로 들어왔으면 먼저 바꾸기
-    else setTimeout(showAnnounce, 1200);
+    else setTimeout(() => { showPromo(); setTimeout(showAnnounce, 400); }, 1200); // 영상 팝업 → (닫으면) 공지
     setTimeout(maybeInstallPopup, 5500);
   }
   // ---------------- 📢 로그인 공지 (공지마다 한 번만) ----------------
