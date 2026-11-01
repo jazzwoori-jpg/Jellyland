@@ -93,7 +93,7 @@ window.JELLY_CONFIG = {
 
   // 젤리 시네마 — YouTube 영상 ID (주소의 v= 뒤 11자리) 또는 직접 올린 영상 파일(file + poster)
   videos: [
-    { file: "video/dontstop-teaser.mp4", poster: "img/videos/dontstop-teaser.jpg", isNew: true, title: { ko: "Don't Stop - 티저", en: "Don't Stop - Teaser", ja: "Don't Stop - ティザー" } },
+    { id: "b0VMJio9l2Q", isNew: true, title: { ko: "Don't Stop - 티저", en: "Don't Stop - Teaser", ja: "Don't Stop - ティザー" } }, // 유튜브 (Netlify 전송량 절약)
     { id: "Y8aVeGVmZ8U", title: "Can't Stop! - Jo Jelly Live Session Clip. 1" },
     { id: "VwYQ7LHTiS4", title: "NORD LIVE: Seoul Sessions - Don't stop" },
     { id: "B3D7DS_C-Hg", title: "NORD LIVE: Seoul Sessions: Jo Jelly" },
