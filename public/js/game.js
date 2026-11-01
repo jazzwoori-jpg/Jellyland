@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "50"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "51"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -338,7 +338,8 @@
 
   // ---------------- 렌더 ----------------
   const frameOf = (moving, tt) => (moving ? [1, 0, 3, 0][Math.floor(tt * 8) % 4] : 0);
-  const msgText = (m) => (m.tr && m.tr[I.lang]) || m.text;
+  // 내가 쓴 말은 쓴 그대로, 다른 사람 말은 내 언어로 번역해서 보여 줌
+  const msgText = (m) => (m.id && G.user && m.id === G.user.id ? m.text : (m.tr && m.tr[I.lang]) || m.text);
   function render() {
     const w = scene();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
