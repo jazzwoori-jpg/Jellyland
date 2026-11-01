@@ -32,7 +32,7 @@ const err = (code, status = 400) => json({ error: code, code }, status);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const LANGS = ["ko", "en", "ja"];
-const ROOMS = ["plaza", "lounge"];
+const ROOMS = ["plaza", "lounge", "shop", "cinema"]; // 광장 · 팬 라운지(카페) · 젤리젤리샵 · 젤리 시네마
 const CAFE_MENU = 10, CAFE_PRICE = 5, CAFE_MS = 4 * 60 * 1000; // ☕ 젤리 카페
 const CHAT_TTL = 5 * 60 * 1000; // 채팅은 5분 뒤 사라짐
 const STAFF_OUTFITS = [16]; // 관리자(호스트 포함) 전용 — 젤리 퀸 로열 드레스
@@ -222,7 +222,7 @@ const QUIZ = [
   ["달걀을 낳는 동물은?", "Which animal lays the eggs we usually eat?", "私たちがふだん食べる卵を産む動物は？", [["닭", "Chicken", "ニワトリ"], ["소", "Cow", "ウシ"], ["돼지", "Pig", "ブタ"], ["양", "Sheep", "ヒツジ"]]],
   ["세계에서 가장 많은 사람이 사는 대륙은?", "Which continent has the largest population?", "世界で一番人口が多い大陸は？", [["아시아", "Asia", "アジア"], ["아프리카", "Africa", "アフリカ"], ["유럽", "Europe", "ヨーロッパ"], ["남아메리카", "South America", "南アメリカ"]]],
 ];
-const SEA_O2_MS = 15000, SEA_GRACE_MS = 2500, SEA_NEED = 2, SEA_COINS = 400, SEA_COOLDOWN = 3 * 3600 * 1000; // 숨 15초 · 2문제 · 400코인 · 3시간
+const SEA_O2_MS = 15000, SEA_GRACE_MS = 2500, SEA_NEED = 2, SEA_COINS = 400, SEA_COOLDOWN = 30 * 60 * 1000; // 숨 15초 · 2문제 · 400코인 · 30분마다
 const ART_PER_DAY = 3, ART_COINS = 50, ART_MAX = 400, ART_MAX_BYTES = 350000; // 그림 하루 3장 · 첫 그림 +50코인
 const EMOTES = 8;
 const WELCOME_COINS = 100, DAILY_COINS = 100, GB_COINS = 50;
@@ -601,15 +601,15 @@ export default async (req, context) => {
       const role = roleOf(tp.email);
       if ((await deletedIds()).has(tp.id)) return err("gone", 401); // 탈퇴 처리된 회원
       const scene = ROOMS.includes(body.scene) ? body.scene : "plaza";
-      const other = scene === "plaza" ? "lounge" : "plaza";
+      const others = ROOMS.filter((r) => r !== scene); // 다른 방들 (방을 옮기면 예전 방에서 지움)
       const ps = store("jl-presence");
       const cs = store("jl-chat");
       const now = Date.now();
       const since = +body.since || 0;
-      const [cur, oth, last] = await Promise.all([
+      const [cur, last, ...othRooms] = await Promise.all([
         ps.get("room/" + scene, { type: "json" }).then((v) => v || {}),
-        ps.get("room/" + other, { type: "json" }).then((v) => v || {}),
         cs.get("last/" + scene, { type: "json" }).then((v) => v || { ts: 0, notice: null }),
+        ...others.map((r) => ps.get("room/" + r, { type: "json" }).then((v) => v || {})),
       ]);
       const mine = cur[tp.id];
       const entry = {
@@ -644,7 +644,7 @@ export default async (req, context) => {
       const writes = [];
       for (const k of Object.keys(cur)) if (now - cur[k].ts > 15000) { delete cur[k]; }
       if (!unchanged) { cur[tp.id] = entry; writes.push(ps.setJSON("room/" + scene, cur)); }
-      if (oth[tp.id]) { delete oth[tp.id]; writes.push(ps.setJSON("room/" + other, oth)); }
+      othRooms.forEach((oth, i) => { if (oth[tp.id]) { delete oth[tp.id]; writes.push(ps.setJSON("room/" + others[i], oth)); } });
       let messages = [];
       if (last.ts > since) {
         const { blobs } = await cs.list({ prefix: `m/${scene}/` });
@@ -655,7 +655,7 @@ export default async (req, context) => {
       const fresh = (o) => Object.values(o).filter((p) => now - p.ts < 12000);
       return json({
         others: fresh(cur).filter((p) => p.id !== tp.id),
-        online: fresh(cur).length + fresh(oth).filter((p) => p.id !== tp.id).length + (cur[tp.id] ? 0 : 1),
+        online: fresh(cur).length + othRooms.reduce((n, oth) => n + fresh(oth).filter((p) => p.id !== tp.id).length, 0) + (cur[tp.id] ? 0 : 1),
         messages, notice: last.notice || null, lastTs: last.ts, now,
       });
     }
@@ -765,7 +765,7 @@ export default async (req, context) => {
     // ---------- 미니게임: 점프점프 젤리월드 ----------
     const gameLeft = () => (user.gameDay === kstDay() ? Math.max(0, GAME_DAY_MAX - (user.gameCoins | 0)) : GAME_DAY_MAX);
     // 게임 종류: jump = 점프점프 젤리월드, up = 올라올라 (코인은 두 게임 합쳐 하루 600)
-    const GAMES = { jump: { top: "top", best: "best", step: GAME_STEP_M }, up: { top: "top_up", best: "bestUp", step: GAME_STEP_M }, tet: { top: "top_tet", best: "bestTet", step: 1000 } }; // tet = 젤리 블록 (점수 1000점마다 5코인)
+    const GAMES = { jump: { top: "top", best: "best", step: GAME_STEP_M }, up: { top: "top_up", best: "bestUp", step: GAME_STEP_M }, tet: { top: "top_tet", best: "bestTet", step: 1000 }, jx: { top: "top_jx", best: "bestJx", step: 1000 } }; // tet = 젤리 블록 · jx = 젤리X젤리 (점수 1000점마다 5코인)
     const gameOf = (g) => (GAMES[g] ? g : "jump");
     const runSig = async (t0, g) => crypto.createHmac("sha256", await getSecret()).update(g === "jump" ? `run.${user.id}.${t0}` : `run.${user.id}.${t0}.${g}`).digest("base64url").slice(0, 22);
     if (route === "game/start" && method === "POST") {
@@ -781,7 +781,7 @@ export default async (req, context) => {
       if (sec > 12 * 3600) return err("forbidden", 400); // 한 판 최대 12시간 (예전 1시간 제한 때문에 긴 기록이 저장되지 않던 문제 수정)
       // 시간에 비해 너무 먼 거리(높이)는 인정 안 함 — 올라올라는 초당 최대 약 50m
       // 젤리 블록: 시간에 비해 말이 안 되게 큰 점수는 잘라냄 (초당 줄 수·레벨 상승을 아주 넉넉하게 잡은 한도)
-      const m = Math.max(0, Math.min(+body.m || 0, g === "up" ? sec * 90 + 300 : g === "tet" ? sec * 600 + 90 * sec * sec + 3000 : maxMeters(sec) * 1.1 + 20));
+      const m = Math.max(0, Math.min(+body.m || 0, g === "up" ? sec * 90 + 300 : g === "tet" ? sec * 600 + 90 * sec * sec + 3000 : g === "jx" ? sec * 500 + 40 * sec * sec + 5000 : maxMeters(sec) * 1.1 + 20));
       const left = gameLeft();
       const coins = Math.min(GAME_MAX, left, Math.floor(m / G.step) * GAME_STEP_COINS);
       if (user.gameDay !== kstDay()) { user.gameDay = kstDay(); user.gameCoins = 0; }
@@ -810,8 +810,8 @@ export default async (req, context) => {
     if (route === "game/top" && method === "GET") {
       const gs = store("jl-game");
       if (url.searchParams.get("game") === "all") { // 광장 랭킹 게시판용: 두 게임 1위
-        const [a, b, c] = await Promise.all([gs.get("top", { type: "json" }), gs.get("top_up", { type: "json" }), gs.get("top_tet", { type: "json" })]);
-        return json({ jump: (a || [])[0] || null, up: (b || [])[0] || null, tet: (c || [])[0] || null });
+        const [a, b, c, d] = await Promise.all([gs.get("top", { type: "json" }), gs.get("top_up", { type: "json" }), gs.get("top_tet", { type: "json" }), gs.get("top_jx", { type: "json" })]);
+        return json({ jump: (a || [])[0] || null, up: (b || [])[0] || null, tet: (c || [])[0] || null, jx: (d || [])[0] || null });
       }
       const g = gameOf(url.searchParams.get("game"));
       const top = (await gs.get(GAMES[g].top, { type: "json" })) || [];
@@ -1054,7 +1054,7 @@ export default async (req, context) => {
       const ms = store("jl-mail");
       const sendMail = async (id, m) => { const k = "box/" + id; const box = (await ms.get(k, { type: "json" })) || []; box.unshift(m); await ms.setJSON(k, box.slice(0, MAIL_MAX)); };
       if (route === "admin/users" && method === "GET") {
-        const list = (await allUsers()).map((u) => ({ id: u.id, email: u.email, nickname: u.nickname || "", avatar: u.avatar || null, role: roleOf(u.email), coins: u.coins | 0, createdAt: u.createdAt || 0, best: u.best | 0, bestUp: u.bestUp | 0, bestTet: u.bestTet | 0 }));
+        const list = (await allUsers()).map((u) => ({ id: u.id, email: u.email, nickname: u.nickname || "", avatar: u.avatar || null, role: roleOf(u.email), coins: u.coins | 0, createdAt: u.createdAt || 0, best: u.best | 0, bestUp: u.bestUp | 0, bestTet: u.bestTet | 0, bestJx: u.bestJx | 0 }));
         list.sort((a, b) => b.createdAt - a.createdAt);
         return json({ users: list });
       }
@@ -1094,7 +1094,7 @@ export default async (req, context) => {
       }
       // 🏆 랭킹 기록 직접 수정/삭제 {game:"jump"|"up", id, m, mode?:"remove"}
       if (route === "admin/rank" && method === "POST") {
-        const GK = { jump: { top: "top", best: "best" }, up: { top: "top_up", best: "bestUp" }, tet: { top: "top_tet", best: "bestTet" } }[body.game];
+        const GK = { jump: { top: "top", best: "best" }, up: { top: "top_up", best: "bestUp" }, tet: { top: "top_tet", best: "bestTet" }, jx: { top: "top_jx", best: "bestJx" } }[body.game];
         if (!GK) return err("msg");
         const target = (await allUsers()).find((u) => u.id === body.id);
         if (!target) return err("notfound", 404);
@@ -1184,7 +1184,7 @@ export default async (req, context) => {
         try { await ms.delete("box/" + target.id); } catch {}
         try {
           const gs2 = store("jl-game");
-          for (const k of ["top", "top_up", "top_tet"]) { const top = (await gs2.get(k, { type: "json" })) || []; if (top.some((e) => e.id === target.id)) await gs2.setJSON(k, top.filter((e) => e.id !== target.id)); }
+          for (const k of ["top", "top_up", "top_tet", "top_jx"]) { const top = (await gs2.get(k, { type: "json" })) || []; if (top.some((e) => e.id === target.id)) await gs2.setJSON(k, top.filter((e) => e.id !== target.id)); }
         } catch {}
         // 접속 중이면 광장/라운지에서 바로 사라지게
         try {
