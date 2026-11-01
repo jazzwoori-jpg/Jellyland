@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "51"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "53"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -340,6 +340,20 @@
   const frameOf = (moving, tt) => (moving ? [1, 0, 3, 0][Math.floor(tt * 8) % 4] : 0);
   // 내가 쓴 말은 쓴 그대로, 다른 사람 말은 내 언어로 번역해서 보여 줌
   const msgText = (m) => (m.id && G.user && m.id === G.user.id ? m.text : (m.tr && m.tr[I.lang]) || m.text);
+  // 🌐 번역 표시 공통: 내 언어 번역을 보여 주고 "원문 보기" 버튼으로 원문 ↔ 번역 (공지·쪽지·방명록·관리자 화면 등)
+  const trPick = (text, tr) => (tr && tr[I.lang]) || text;
+  const brHTML = (s) => esc(s).replace(/\n/g, "<br>");
+  function trBlock(text, tr, mine) {
+    const shown = mine ? text : trPick(text, tr);
+    return `<span class="tr-t">${brHTML(shown)}</span>${shown !== text ? ` <button type="button" class="tr-btn" data-o="${esc(text)}" data-t="${esc(shown)}">🌐 ${esc(t("gbOrig"))}</button>` : ""}`;
+  }
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest(".tr-btn"); if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    const on = b.classList.toggle("on"), box = b.previousElementSibling;
+    if (box) box.innerHTML = brHTML(on ? b.dataset.o : b.dataset.t);
+    b.textContent = "🌐 " + t(on ? "gbTrans" : "gbOrig");
+  });
   function render() {
     const w = scene();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -958,7 +972,7 @@
     try { r = await API.artList(art.page, art.sort); } catch (e) { grid.innerHTML = `<p class="gb-empty">${esc(e.message)}</p>`; return; }
     art.items = r.items || []; art.left = r.left;
     if (!$("#art-grid")) return;
-    grid.innerHTML = art.items.length ? art.items.map((it, i) => `<div class="art-card" data-i="${i}"><img src="${esc(API.artImg(it))}" alt="" loading="lazy"><div class="art-meta"><b>${esc(it.title || t("artUntitled"))}</b><small>${esc(it.name)} · <span class="${it.liked ? "liked" : ""}">❤️ ${it.likes}</span></small></div></div>`).join("") : `<p class="gb-empty">${esc(t("artEmpty"))}</p>`;
+    grid.innerHTML = art.items.length ? art.items.map((it, i) => `<div class="art-card" data-i="${i}"><img src="${esc(API.artImg(it))}" alt="" loading="lazy"><div class="art-meta"><b title="${esc(it.title || "")}">${esc(it.title ? trPick(it.title, it.titleTr) : t("artUntitled"))}</b><small>${esc(it.name)} · <span class="${it.liked ? "liked" : ""}">❤️ ${it.likes}</span></small></div></div>`).join("") : `<p class="gb-empty">${esc(t("artEmpty"))}</p>`;
     grid.querySelectorAll(".art-card").forEach((c) => c.addEventListener("click", () => openArtView(art.items[+c.dataset.i])));
     const pages = Math.max(1, Math.ceil((r.total || 0) / 12)), pg = $("#art-pager");
     pg.innerHTML = pages > 1 ? `<button class="btn sm" id="ap-prev" ${art.page ? "" : "disabled"}>◀</button><span>${art.page + 1} / ${pages}</span><button class="btn sm" id="ap-next" ${art.page + 1 < pages ? "" : "disabled"}>▶</button>` : "";
@@ -966,7 +980,7 @@
   }
   function openArtView(it) {
     const canDel = it.uid === G.user.id || staff(G.user.role);
-    openModal("🎨 " + (it.title || t("artUntitled")), `<div class="art-view"><img src="${esc(API.artImg(it))}" alt="">
+    openModal("🎨 " + (it.title ? trPick(it.title, it.titleTr) : t("artUntitled")), `<div class="art-view"><img src="${esc(API.artImg(it))}" alt="">
       <div class="art-by"><canvas width="32" height="26" id="av-face"></canvas><div><b>${esc(it.name)}</b>${it.role === "artist" ? " 👑" : it.role === "admin" ? " ★" : ""}<br><small>${esc(fmtTime(it.ts))}</small></div>
       <button class="btn sm ${it.liked ? "pink" : ""}" id="av-like">❤️ ${it.likes}</button></div>
       <div class="art-view-foot"><button class="btn sm" id="av-back">◀ ${esc(t("artBack"))}</button>${canDel ? `<button class="btn sm kick" id="av-del">${esc(t("del"))}</button>` : ""}</div></div>`, (el) => {
@@ -1166,9 +1180,14 @@
   }
   // ---------------- 🎬 영상 팝업 (정해진 날짜까지 접속할 때마다) ----------------
   function promoActive() { const p = CFG.promo; return !!(p && Date.now() < Date.parse(p.until) && CFG.videos[p.video]); }
-  function showPromo() {
+  // "오늘 하루 보지 않기"는 계정마다 따로 (같은 기기에서 다른 계정으로 들어와도 영상이 보이게)
+  const promoSkipKey = (p) => "jl_promo_skip_" + p.id + "_" + ((G.user && G.user.id) || "");
+  // retry: 다른 창이 열려 있으면 4초 뒤 다시 시도할 횟수
+  function showPromo(retry = 0) {
     const p = CFG.promo; if (!promoActive() || G.mode !== "world") return false;
-    try { if (localStorage.getItem("jl_promo_skip_" + p.id) === new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10)) return false; } catch {}
+    G.promoDay = kstDay(); // 오늘 영상 팝업을 확인했음 (날짜가 바뀌면 다시 띄움)
+    try { if (localStorage.getItem(promoSkipKey(p)) === kstDay()) return false; } catch {}
+    if (G.modalOpen || G.dive || G.gameOpen || G.quizOpen) { if (retry > 0) setTimeout(() => showPromo(retry - 1), 4000); return false; }
     const v = CFG.videos[p.video];
     openModal(L(p.title), `<div class="promo"><div class="player">${videoTag(v, false)}</div>
       <p class="promo-text">${esc(L(p.text))}</p>
@@ -1182,7 +1201,7 @@
         cd.innerHTML = `${esc(t("promoUntil"))} <b>${d ? t("promoDays", { n: d }) + " " : ""}${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}</b>`;
       };
       const timer = setInterval(tick, 1000); tick();
-      el.querySelector("#promo-skip").addEventListener("change", (e) => { try { if (e.target.checked) localStorage.setItem("jl_promo_skip_" + p.id, new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10)); else localStorage.removeItem("jl_promo_skip_" + p.id); } catch {} });
+      el.querySelector("#promo-skip").addEventListener("change", (e) => { try { if (e.target.checked) localStorage.setItem(promoSkipKey(p), kstDay()); else localStorage.removeItem(promoSkipKey(p)); } catch {} });
       el.querySelector("#promo-cinema").addEventListener("click", () => openCinema(p.video));
     }, true);
     return true;
@@ -1427,7 +1446,7 @@
       list.innerHTML = r.entries.map((e, i) => `<div class="rec-item${e.role === "artist" ? " host" : ""}" data-key="${esc(e.key)}">
         <button class="btn rec-play" title="▶">▶</button>
         <canvas width="32" height="26" data-av='${esc(JSON.stringify(e.avatar || null))}'></canvas>
-        <div class="rec-info"><b>${e.role === "artist" ? "✦ " : e.role === "admin" ? "★ " : ""}${esc(e.name)}</b>${e.title ? ` <span class="rec-title">「${esc(e.title)}」</span>` : ""}<br>
+        <div class="rec-info"><b>${e.role === "artist" ? "✦ " : e.role === "admin" ? "★ " : ""}${esc(e.name)}</b>${e.title ? ` <span class="rec-title" title="${esc(e.title)}">「${esc(trPick(e.title, e.titleTr))}」</span>` : ""}<br>
           <small>🎵 ${e.notes.length} · ⏱ ${(Math.min(5000, e.len + 500) / 1000).toFixed(1)}s · ${fmtTime(e.ts)}</small></div>
         ${G.user && staff(G.user.role) ? `<button class="gb-del" title="${esc(t("del"))}">✕</button>` : ""}</div>`).join("");
       list.querySelectorAll("canvas[data-av]").forEach((c) => { try { const av = JSON.parse(c.dataset.av); if (av) Avatar.face(c.getContext("2d"), av, 32, 26); } catch {} });
@@ -1636,7 +1655,7 @@
       <div class="mail-head"><b class="${m.fromRole === "artist" ? "host" : "adm"}">${m.fromRole === "artist" ? "✦" : "★"} ${esc(m.from)}</b>
       <span class="role">${esc(t(m.fromRole === "artist" ? "roleArtist" : "roleAdmin"))}${m.all ? " · " + esc(t("mailAll")) : ""}</span>
       <span class="when">${fmtTime(m.ts)}</span><button class="gb-del" title="${esc(t("del"))}">✕</button></div>
-      <div class="mail-text">${esc(m.text).replace(/\n/g, "<br>")}</div></div>`).join("");
+      <div class="mail-text">${trBlock(m.text, m.tr)}</div></div>`).join("");
     el.querySelectorAll(".mail-item .gb-del").forEach((b) => b.addEventListener("click", async () => {
       const ts = +b.closest(".mail-item").dataset.ts;
       try { const r = await API.mailDelete(ts); mailBox = r.box || []; renderMailList(); } catch (e) { toast(e.message); }
@@ -1679,7 +1698,7 @@
       return `<div class="adm-pw-row st-${q.status}" data-i="${i}">
         <div><b>${esc(q.nick)}</b> · <small>${esc(q.email)}</small> <span class="adm-pw-st">${esc(stName(q.status))}</span><br>
         <small>${q.account ? `${esc(t("pwReqAccount"))}: <b>${esc(q.account.nickname || "—")}</b> ${match ? "✅" : "⚠️ " + esc(t("pwReqMismatch"))}` : "❌ " + esc(t("pwReqNoAcc"))} · ${esc(fmtTime(q.ts))}</small>
-        ${q.note ? `<div class="adm-pw-note">💬 ${esc(q.note)}</div>` : ""}
+        ${q.note ? `<div class="adm-pw-note">💬 ${trBlock(q.note, q.noteTr)}</div>` : ""}
         ${(q.sameNick || []).map((a, j) => `<div class="adm-pw-same" data-j="${j}">👤 ${esc(t("pwSameNick"))}: <b>${esc(a.email)}</b> <small>(${a.createdAt ? esc(fmtTime(a.createdAt).slice(0, 10)) : "-"})</small>
           ${!q.account ? `<button class="btn sm grape" data-s="mv">✉️ ${esc(t("pwFixEmail", { email: q.email }))}</button>` : ""}<button class="btn sm" data-s="tmp">🔑 ${esc(t("pwTempBtn"))}</button><div class="adm-pwout hidden"></div></div>`).join("")}</div>
         <div class="adm-pw-act">${q.status === "pending" && q.account ? `<button class="btn sm pink" data-d="1">${esc(t("pwApprove"))}</button><button class="btn sm" data-d="0">${esc(t("pwReject"))}</button>` : ""}<button class="btn sm kick" data-d="del">✕</button></div></div>`;
@@ -1909,6 +1928,7 @@
       loadGb(page);
     }, true);
   }
+  // 방명록: 내가 쓴 글은 쓴 그대로, 다른 사람 글은 내 언어로 번역해서 보여 줌 (trBlock)
   async function loadGb(page) {
     const list = $("#gb-list"), pager = $("#gb-pager");
     if (!list) return;
@@ -1919,7 +1939,7 @@
         r.entries.map((e, i) => `<div class="gb-item${e.role === "artist" ? " host" : ""}" data-key="${esc(e.key)}">
           <span class="no">${r.total - page * 20 - i}</span>
           <span class="who"><canvas width="32" height="26" data-av='${esc(JSON.stringify(e.avatar || null))}'></canvas><b>${e.role === "artist" ? "✦ " : ""}${esc(e.name)}</b></span>
-          <span class="txt">${esc(e.text).replace(/\n/g, "<br>")}</span>
+          <span class="txt">${trBlock(e.text, e.tr, G.user && e.id === G.user.id)}</span>
           <span class="when">${fmtTime(e.ts)}${G.user && (staff(G.user.role) || G.user.id === e.id) ? ` <button class="gb-del" title="${esc(t("del"))}">✕</button>` : ""}</span></div>`).join("");
       list.querySelectorAll("canvas[data-av]").forEach((c) => { try { const av = JSON.parse(c.dataset.av); const x = c.getContext("2d"); x.imageSmoothingEnabled = false; Avatar.face(x, av, 32, 26); } catch {} });
       list.querySelectorAll(".gb-del").forEach((b) => b.addEventListener("click", async () => {
@@ -2252,7 +2272,7 @@
   function renderNotice() {
     const n = $("#notice"), no = G.chat.notice;
     if (!no) return n.classList.add("hidden");
-    n.innerHTML = `📢 <b>${esc(t("noticeLabel"))}</b> ${esc(msgText(no))}${staff(G.user.role) ? ` <span class="del" id="notice-del">✕</span>` : ""}`;
+    n.innerHTML = `📢 <b>${esc(t("noticeLabel"))}</b> ${trBlock(no.text, no.tr)}${staff(G.user.role) ? ` <span class="del" id="notice-del">✕</span>` : ""}`;
     n.classList.remove("hidden");
     const d = $("#notice-del");
     if (d) d.addEventListener("click", async () => { try { await API.chatDelete("notice/" + G.scene); G.chat.notice = null; renderNotice(); } catch (e) { toast(e.message); } });
@@ -2566,11 +2586,15 @@
     pushOnEnter();
     // 알림을 눌러 들어왔으면 그 화면으로 (예: ?go=gallery)
     const goParam = new URLSearchParams(location.search).get("go");
-    if (goParam === "gallery") { markAnnounceSeen(); setTimeout(openGallery, 700); try { history.replaceState(null, "", location.pathname); } catch {} }
+    if (goParam === "gallery") { markAnnounceSeen(); setTimeout(openGallery, 700); setTimeout(() => showPromo(30), 1500); try { history.replaceState(null, "", location.pathname); } catch {} } // 갤러리를 닫으면 영상 팝업
     else if (G.user.tempPw) setTimeout(() => openPwChange(true), 900); // 임시 비밀번호로 들어왔으면 먼저 바꾸기
-    else setTimeout(() => { showPromo(); setTimeout(showAnnounce, 400); }, 1200); // 영상 팝업 → (닫으면) 공지
+    else setTimeout(() => { showPromo(3); setTimeout(showAnnounce, 400); }, 1200); // 영상 팝업 → (닫으면) 공지
     setTimeout(maybeInstallPopup, 5500);
   }
+  // 📅 앱을 켜 둔 채로 날짜가 바뀐 뒤 돌아오면(휴대폰에서 다음 날 다시 열 때 등) 영상 팝업을 다시 보여 줌
+  const promoNewDay = () => { if (G.mode === "world" && G.promoDay && G.promoDay !== kstDay() && document.visibilityState === "visible") showPromo(30); };
+  document.addEventListener("visibilitychange", promoNewDay);
+  setInterval(promoNewDay, 60 * 1000);
   // ---------------- 📢 로그인 공지 (공지마다 한 번만) ----------------
   function markAnnounceSeen() { const a = CFG.announce; if (!a) return; try { localStorage.setItem("jl_ann_" + a.id, "1"); } catch {} }
   function showAnnounce() {

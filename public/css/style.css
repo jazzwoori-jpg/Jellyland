@@ -329,6 +329,11 @@ body.touch .gb-form textarea { font-size: 16px; }
 .gb-item .who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gb-item.host .who b { color: #2882e6; }
 .gb-item .txt { word-break: break-all; line-height: 1.55; }
+/* 🌐 번역된 글의 "원문 보기" 버튼 (공지·쪽지·방명록·관리자 화면 공통) */
+.tr-btn { display: inline-block; margin-left: 4px; padding: 0 7px; font: inherit; font-size: 11px; line-height: 18px; color: var(--ink); background: #fff; border: 1.5px solid #d9c9f2; border-radius: 9px; cursor: pointer; opacity: .8; white-space: nowrap; vertical-align: 1px; }
+.tr-btn:hover { opacity: 1; }
+.tr-btn.on { background: #f1e8ff; opacity: 1; }
+#notice .tr-btn { font-size: 10px; line-height: 16px; padding: 0 6px; }
 .gb-item .when { font-size: 11px; opacity: .7; white-space: nowrap; }
 .gb-del { border: 0; background: none; color: #d0304e; cursor: pointer; font-size: 12px; }
 .gb-empty { padding: 18px; text-align: center; opacity: .7; margin: 0; }
