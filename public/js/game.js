@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "49"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "50"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -88,6 +88,8 @@
     if (oldSea) { G.worlds.sea.placeChest(oldSea.chestSpot); Object.assign(G.worlds.sea.sea, oldSea.sea); G.worlds.sea.icons[0].icon = oldSea.icons[0].icon; }
   }
   function scene() { return G.worlds[G.scene]; }
+  // 장소별 배경음악 (샵은 라운지 음악, 초원은 광장 음악, 시네마·바닷속은 없음)
+  const bgmFor = (id) => (id === "shop" ? "lounge" : id === "meadow" ? "plaza" : id);
   // 혼자 들어가는 공간 (분수대 속 바다 · 젤리젤리샵 안): 다른 사람에게는 입구 앞에 서 있는 것처럼 보임
   const soloScene = (sc) => sc === "sea"; // 젤리젤리샵 · 젤리 시네마는 다른 사람과 함께 있는 방
   function setScene(id, pos) {
@@ -100,7 +102,7 @@
     buildMinimap();
     updateSceneLabels();
     resetChat();
-    if (G.mode === "world" && !G.gameOpen) BGM.play(id === "shop" ? "lounge" : id === "meadow" ? "plaza" : id);
+    if (G.mode === "world" && !G.gameOpen) BGM.play(bgmFor(id));
   }
   function updateSceneLabels() {
     if (!G.scene) return;
@@ -1152,10 +1154,14 @@
   }
   // 영상이 재생되는 동안은 배경음악을 끄고, 창을 닫으면 다시 켬
   function hookVideo(el) {
-    const vid = el.querySelector("video"); if (!vid) return;
-    vid.addEventListener("play", () => { try { BGM.stop(); } catch {} });
+    const vid = el.querySelector("video"), yt = el.querySelector("iframe");
+    if (!vid && !yt) return;
+    if (vid) vid.addEventListener("play", () => { try { BGM.stop(); } catch {} });
+    // 유튜브 영상: 영상 화면을 누르면(재생) 배경음악을 끔 — 창 포커스가 영상 쪽으로 넘어가는 걸로 알아챔
+    const onBlur = () => setTimeout(() => { if (yt && document.activeElement === yt) { try { BGM.stop(); } catch {} } }, 0);
+    if (yt) window.addEventListener("blur", onBlur);
     const prev = G.modalCleanup;
-    G.modalCleanup = () => { try { vid.pause(); } catch {} if (prev) try { prev(); } catch {} if (!G.gameOpen) BGM.play(G.scene); };
+    G.modalCleanup = () => { try { vid && vid.pause(); } catch {} if (yt) window.removeEventListener("blur", onBlur); if (prev) try { prev(); } catch {} if (!G.gameOpen) BGM.play(bgmFor(G.scene)); };
   }
   // ---------------- 🎬 영상 팝업 (정해진 날짜까지 접속할 때마다) ----------------
   function promoActive() { const p = CFG.promo; return !!(p && Date.now() < Date.parse(p.until) && CFG.videos[p.video]); }
@@ -1394,7 +1400,7 @@
         onPost: async (notes, title) => { try { const r = await API.recPost(notes, title); toast(t("recDone")); return r; } catch (e) { toast(e.message); throw e; } },
         onBoard: () => openRecBoard(),
       });
-      G.modalCleanup = () => { pn.destroy(); BGM.play(G.scene); };
+      G.modalCleanup = () => { pn.destroy(); BGM.play(bgmFor(G.scene)); };
       if (recordable) API.recList(0).then((r) => { const x = el.querySelector(".rc-left"); if (x) x.textContent = t("recLeft", { n: r.left > 3 ? "∞" : r.left }); }).catch(() => {});
     }, true);
     document.querySelector("#modal .modal").classList.add("piano");
@@ -1408,7 +1414,7 @@
       <div class="rec-list" id="rec-list"><p class="gb-empty">…</p></div><div class="gb-pager" id="rec-pager"></div>
       <p style="text-align:center"><button class="btn sm pink" id="rec-go-piano">🎹 ${esc(t("recGoPiano"))}</button></p>`, (el) => {
       el.querySelector("#rec-go-piano").addEventListener("click", () => openPiano(true));
-      G.modalCleanup = () => { if (recStop) { recStop(); recStop = null; } BGM.play(G.scene); };
+      G.modalCleanup = () => { if (recStop) { recStop(); recStop = null; } BGM.play(bgmFor(G.scene)); };
       loadRec(page);
     }, true);
   }
@@ -1512,7 +1518,7 @@
       let cur = null;
       const root = el.querySelector("#gw-root");
       const stop = () => { if (cur) { cur.destroy(); cur = null; } };
-      G.modalCleanup = () => { stop(); Chip.stop(); G.gameOpen = false; BGM.play(G.scene); };
+      G.modalCleanup = () => { stop(); Chip.stop(); G.gameOpen = false; BGM.play(bgmFor(G.scene)); };
       const setTitle = (s2) => ($("#modal-title").textContent = s2);
       function menu() {
         stop(); setTitle("🎮 " + t("bGame"));
@@ -2551,7 +2557,7 @@
     setScene("plaza");
     await fade(false);
     toast(t("welcome", { name: G.user.nickname }));
-    BGM.play(G.scene);
+    BGM.play(bgmFor(G.scene));
     checkDaily();
     loadMail(true);
     refreshRankTop();
