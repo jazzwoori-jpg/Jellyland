@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "47"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "49"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -82,6 +82,7 @@
     G.worlds.lounge = World.buildLounge();
     G.worlds.shop = World.buildShop();
     G.worlds.cinema = World.buildCinema();
+    G.worlds.meadow = World.buildMeadow();
     const oldSea = G.worlds.sea;
     G.worlds.sea = World.buildSea();
     if (oldSea) { G.worlds.sea.placeChest(oldSea.chestSpot); Object.assign(G.worlds.sea.sea, oldSea.sea); G.worlds.sea.icons[0].icon = oldSea.icons[0].icon; }
@@ -99,12 +100,12 @@
     buildMinimap();
     updateSceneLabels();
     resetChat();
-    if (G.mode === "world" && !G.gameOpen) BGM.play(id === "shop" ? "lounge" : id);
+    if (G.mode === "world" && !G.gameOpen) BGM.play(id === "shop" ? "lounge" : id === "meadow" ? "plaza" : id);
   }
   function updateSceneLabels() {
     if (!G.scene) return;
-    $("#mm-label").textContent = G.scene === "plaza" ? t("mapPlaza") : G.scene === "sea" ? t("mapSea") : G.scene === "shop" ? t("bShop") : G.scene === "cinema" ? t("bCinema") : t("mapLounge");
-    $("#chat-title").textContent = G.scene === "lounge" ? t("chatLounge") : G.scene === "shop" ? t("chatShop") : G.scene === "cinema" ? t("chatCinema") : t("chatPlaza");
+    $("#mm-label").textContent = G.scene === "plaza" ? t("mapPlaza") : G.scene === "sea" ? t("mapSea") : G.scene === "shop" ? t("bShop") : G.scene === "cinema" ? t("bCinema") : G.scene === "meadow" ? t("mapMeadow") : t("mapLounge");
+    $("#chat-title").textContent = G.scene === "lounge" ? t("chatLounge") : G.scene === "shop" ? t("chatShop") : G.scene === "cinema" ? t("chatCinema") : G.scene === "meadow" ? t("chatMeadow") : t("chatPlaza");
     $("#btn-gb").classList.toggle("hidden", G.scene !== "lounge");
   }
 
@@ -290,6 +291,11 @@
     updateNPCs(dt);
     updateDive(dt);
     const w = scene();
+    // 밟으면 바로 일어나는 자리 (북·서쪽 준비 중 통로 · 동쪽 초원 길 · 수상한 동굴)
+    if (G.mode === "world" && w.triggers && !G.modalOpen) for (const tr of w.triggers) {
+      const inside = p.x > tr.x && p.x < tr.x + tr.w && p.y > tr.y && p.y < tr.y + tr.h;
+      if (inside && !tr.inside) { tr.inside = true; runTrigger(tr.id); } else if (!inside) tr.inside = false;
+    }
     let zone = null;
     if (G.mode === "world") for (const z of w.zones) if (p.x > z.x && p.x < z.x + z.w && p.y > z.y && p.y < z.y + z.h) { zone = z; break; }
     // 벤치 · 테이블 좌석: 가까운 빈자리가 있으면 "앉기"
@@ -334,7 +340,7 @@
   function render() {
     const w = scene();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = w.id === "plaza" ? "#4a4458" : w.id === "sea" ? "#123a58" : w.id === "shop" ? "#3a2a40" : w.id === "cinema" ? "#140c1c" : "#2a2230";
+    ctx.fillStyle = w.id === "plaza" ? "#4a4458" : w.id === "sea" ? "#123a58" : w.id === "shop" ? "#3a2a40" : w.id === "cinema" ? "#140c1c" : w.id === "meadow" ? "#2f6e3a" : "#2a2230";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     const k = S * dpr;
     ctx.setTransform(k, 0, 0, k, -G.cam.x * k, -G.cam.y * k);
@@ -482,17 +488,18 @@
   function drawAmbient(w) {
     const now = performance.now(), dt = Math.min(0.05, (now - ambT) / 1000); ambT = now;
     if (w.id === "sea" || w.id === "cinema" || G.mode !== "world") return;
-    const want = w.id === "plaza" ? 26 : 10;
+    const outdoor = w.id === "plaza" || w.id === "meadow";
+    const want = outdoor ? 26 : 10;
     while (G.amb.length < want) G.amb.push({ x: Math.random() * VW, y: Math.random() * VH, vx: 0, vy: 0, ph: Math.random() * 6.3, k: G.amb.length % 4, s: 0.6 + Math.random() * 0.8 });
     if (G.amb.length > want) G.amb.length = want;
     ctx.save();
     for (const a of G.amb) {
       a.ph += dt;
-      if (w.id === "plaza") { a.x += (14 + Math.sin(a.ph * 0.7) * 10) * dt * a.s; a.y += (16 + Math.cos(a.ph) * 6) * dt * a.s; }
+      if (outdoor) { a.x += (14 + Math.sin(a.ph * 0.7) * 10) * dt * a.s; a.y += (16 + Math.cos(a.ph) * 6) * dt * a.s; }
       else { a.x += Math.sin(a.ph * 0.8) * 8 * dt; a.y -= 12 * dt * a.s; }
       if (a.x > VW + 10) a.x = -10; if (a.y > VH + 10) a.y = -10; if (a.y < -10) a.y = VH + 10;
       const tw = 0.5 + 0.5 * Math.sin(a.ph * 3);
-      if (w.id === "plaza") {
+      if (outdoor) {
         if (a.k === 3) { ctx.globalAlpha = 0.35 + tw * 0.5; ctx.fillStyle = "#fff8d8"; const r = 1.5 * a.s * S / 2; ctx.fillRect(a.x - r * 2, a.y - r / 2, r * 4, r); ctx.fillRect(a.x - r / 2, a.y - r * 2, r, r * 4); }
         else { ctx.globalAlpha = 0.55; ctx.fillStyle = a.k === 0 ? "#ffd1e1" : a.k === 1 ? "#ffb8d0" : "#ffffff"; ctx.save(); ctx.translate(a.x, a.y); ctx.rotate(a.ph * 1.3); const r = 2.2 * a.s * S / 2; ctx.fillRect(-r, -r / 2, r * 2, r); ctx.restore(); }
       } else { ctx.globalAlpha = 0.25 + tw * 0.3; ctx.fillStyle = a.k % 2 ? "#ffd1e6" : "#e2d1ff"; ctx.font = `${Math.round(10 * a.s * S / 2 + 6)}px sans-serif`; ctx.textAlign = "center"; ctx.fillText(a.k % 2 ? "♪" : "♫", a.x, a.y); }
@@ -624,7 +631,7 @@
   function buildMinimap() {
     const w = scene();
     const mm = $("#minimap");
-    const sc = w.id === "plaza" ? 0.25 : w.id === "lounge" ? 0.3 : 0.4;
+    const sc = w.id === "plaza" || w.id === "meadow" ? 0.25 : w.id === "lounge" ? 0.3 : 0.4;
     mm.width = Math.round(w.W * sc); mm.height = Math.round(w.H * sc);
     const c = document.createElement("canvas");
     c.width = w.W; c.height = w.H;
@@ -713,7 +720,14 @@
     if (st) { G.player.x = st.ax; G.player.y = st.ay; }
     G.zone = null; kickSync();
   }
+  async function runTrigger(id) {
+    if (id === "soonN" || id === "soonW") { G.keys.clear(); G.target = null; return openPushSetup({ icon: "🚧", title: t("soonTitle"), intro: t("soonMsg") }); }
+    if (id === "cave") { G.keys.clear(); G.target = null; G.player.y += 6; try { SFX.beat(); setTimeout(() => SFX.beat(), 350); } catch {} return openPushSetup({ icon: "👁️", title: t("caveTitle"), intro: t("caveMsg"), spooky: true }); }
+    if (id === "toMeadow") { await fade(true); setScene("meadow", { x: 34, y: 450, dir: "right" }); await fade(false); toast(t("enteredMeadow")); return; }
+    if (id === "toPlaza") { await fade(true); setScene("plaza", { x: 1236, y: 500, dir: "left" }); await fade(false); return; }
+  }
   async function runZone(id) {
+    if (id === "cave") return runTrigger("cave");
     if (id === "seat" && G.zone && G.zone.seat) return sitDown(G.zone.seat);
     if (id === "stand") return standUp();
     if (id === "guestbook") return openGuestbook();
@@ -1820,14 +1834,14 @@
     let asked = false; try { asked = !!localStorage.getItem("jl_push_asked"); } catch {}
     if (Notification.permission === "default" && !asked && IS_TOUCH && (isStandalone() || !ios)) setTimeout(() => { if (!G.modalOpen && G.mode === "world") openPushSetup(); }, 12000);
   }
-  function openPushSetup() {
+  function openPushSetup(custom) {
     try { localStorage.setItem("jl_push_asked", "1"); } catch {}
     const ios = document.body.classList.contains("ios");
     let state = "ok", note = "";
     if (!pushSupported()) { state = "no"; note = ios && !isStandalone() ? t("pushNeedInstall") : t("pushUnsupported"); }
     else if (Notification.permission === "denied") { state = "denied"; note = t("pushDenied"); }
     else if (Notification.permission === "granted") note = t("pushAlready");
-    openModal(t("pushTitle"), `<div class="install"><div class="push-bell">🔔</div><p>${esc(t("pushIntro"))}</p>
+    openModal(custom ? custom.title : t("pushTitle"), `<div class="install${custom && custom.spooky ? " spooky" : ""}"><div class="push-bell">${custom ? custom.icon : "🔔"}</div><p>${esc(custom ? custom.intro : t("pushIntro"))}</p>
       ${state === "ok" ? `<button class="btn pink" id="push-on">${esc(t("pushOn"))}</button>` : ""}
       ${note ? `<p class="push-note">${esc(note)}</p>` : ""}${state === "no" && ios ? `<button class="btn sm" id="push-install">${esc(t("installHelp"))}</button>` : ""}</div>`, (el) => {
       const on = el.querySelector("#push-on");
