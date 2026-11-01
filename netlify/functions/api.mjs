@@ -33,6 +33,7 @@ const err = (code, status = 400) => json({ error: code, code }, status);
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const LANGS = ["ko", "en", "ja"];
 const ROOMS = ["plaza", "lounge"];
+const CAFE_MENU = 10, CAFE_PRICE = 5, CAFE_MS = 4 * 60 * 1000; // ☕ 젤리 카페
 const CHAT_TTL = 5 * 60 * 1000; // 채팅은 5분 뒤 사라짐
 const STAFF_OUTFITS = [16]; // 관리자(호스트 포함) 전용 — 젤리 퀸 로열 드레스
 const HOST_OUTFITS = [1, 7, 8, 9]; // 호스트(조젤리) 전용 의상 번호 — public/js/avatar.js 의 host: true 와 같아야 함
@@ -323,6 +324,7 @@ const publicUser = (u) => ({
   gbToday: u.gbLastDay === kstDay(),
   slotLeft: u.slotDay === kstDay() ? Math.max(0, 20 - (u.slotCount | 0)) : 20,
   tempPw: !!u.tempPw, // 임시 비밀번호로 로그인 중 → 새 비밀번호로 바꾸라고 안내
+  drink: u.drink && u.drink.until > Date.now() ? u.drink : null, // ☕ 젤리 카페에서 산 음료 (4분)
 });
 
 // 토큰에 닉네임/아바타를 담아 두면 /sync 때 회원 정보를 읽지 않아도 돼서 빠르고 저렴해요
@@ -631,11 +633,13 @@ export default async (req, context) => {
       }
       if (path.length) entry.path = path;
       if (body.pv) entry.pv = 1; // 길 정보를 보내는 새 버전 앱
+      // ☕ 들고 있는 음료 (다른 사람에게 보이는 모습일 뿐이라 기기가 보낸 값을 그대로 쓰되 범위만 확인)
+      if (body.drink && Number.isInteger(body.drink.k) && body.drink.k >= 0 && body.drink.k < CAFE_MENU && +body.drink.until > now && +body.drink.until <= now + CAFE_MS + 5000) entry.drink = { k: body.drink.k, until: Math.round(+body.drink.until) };
       // 😊 이모티콘 반응: 새로 보낸 것만 4초 동안 다른 사람에게 보임
       if (body.emo && Number.isInteger(body.emo.e) && body.emo.e >= 0 && body.emo.e < EMOTES) entry.emo = { e: body.emo.e, k: clean(String(body.emo.k || ""), 12), t: now };
       else if (mine && mine.emo && now - mine.emo.t < 4000) entry.emo = mine.emo;
       // 위치가 그대로이고 최근에 저장했다면 쓰기를 건너뜀 (비용 절약)
-      const unchanged = mine && mine.x === entry.x && mine.y === entry.y && mine.dir === entry.dir && mine.seat === entry.seat && mine.vx === entry.vx && mine.vy === entry.vy && mine.name === entry.name && (mine.emo && mine.emo.k) === (entry.emo && entry.emo.k) && !(Array.isArray(body.path) && body.path.length) &&
+      const unchanged = mine && mine.x === entry.x && mine.y === entry.y && mine.dir === entry.dir && mine.seat === entry.seat && mine.vx === entry.vx && mine.vy === entry.vy && mine.name === entry.name && (mine.emo && mine.emo.k) === (entry.emo && entry.emo.k) && (mine.drink && mine.drink.until) === (entry.drink && entry.drink.until) && !(Array.isArray(body.path) && body.path.length) &&
         JSON.stringify(mine.avatar) === JSON.stringify(entry.avatar) && now - mine.ts < 8000;
       const writes = [];
       for (const k of Object.keys(cur)) if (now - cur[k].ts > 15000) { delete cur[k]; }
@@ -743,6 +747,17 @@ export default async (req, context) => {
       if ((user.coins | 0) < it.price) return err("coins", 400);
       user.coins = (user.coins | 0) - it.price;
       user.inv.push(id);
+      await saveUser();
+      return json({ user: publicUser(user) });
+    }
+
+    // ---------- ☕ 젤리 카페 (팬 라운지): 음료 10종, 모두 5코인, 4분 동안 들고 다님 ----------
+    if (route === "cafe/buy" && method === "POST") {
+      const k = body.k | 0;
+      if (k < 0 || k >= CAFE_MENU) return err("notfound", 404);
+      if ((user.coins | 0) < CAFE_PRICE) return err("coins", 400);
+      user.coins = (user.coins | 0) - CAFE_PRICE;
+      user.drink = { k, until: Date.now() + CAFE_MS };
       await saveUser();
       return json({ user: publicUser(user) });
     }

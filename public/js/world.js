@@ -623,45 +623,52 @@
 
   // ---------------- 팬 라운지 (커뮤니티 룸) ----------------
   function buildLounge() {
-    const W = 640, H = 420;
+    const W = 960, H = 420; // 팬 라운지 = ☕ 젤리 카페
     const [g, x] = cv(W, H);
-    // 바닥 (나무)
-    for (let yy = 0; yy < H; yy += 12) for (let xx = 0; xx < W; xx += 48) {
-      const off = (yy / 12) % 2 ? 24 : 0;
-      x.fillStyle = ((xx + off + yy) / 12) % 3 === 0 ? "#c68757" : "#cf915f"; x.fillRect(xx - off, yy, 48, 12);
-      x.fillStyle = "#a86d42"; x.fillRect(xx - off, yy + 11, 48, 1); x.fillRect(xx - off, yy, 1, 12);
+    // 바닥: 크림·살구 체크 타일 (팬 라운지 = 젤리 카페)
+    for (let yy = 84; yy < H; yy += 16) for (let xx = 0; xx < W; xx += 16) {
+      x.fillStyle = (xx / 16 + (yy - 84) / 16) % 2 ? "#fff3e4" : "#f6d6c2"; x.fillRect(xx, yy, 16, 16);
+      x.fillStyle = "rgba(160,100,70,.12)"; x.fillRect(xx, yy + 15, 16, 1);
     }
-    // 벽
+    // 벽: 민트 줄무늬 + 나무 몰딩
     x.fillStyle = OUT; x.fillRect(0, 0, W, 84);
-    for (let xx = 0; xx < W; xx += 16) { x.fillStyle = (xx / 16) % 2 ? "#efe4f7" : "#e2d3f3"; x.fillRect(xx, 0, 16, 78); }
+    for (let xx = 0; xx < W; xx += 16) { x.fillStyle = (xx / 16) % 2 ? "#dff5ec" : "#c8ecdf"; x.fillRect(xx, 0, 16, 70); }
+    x.fillStyle = "#8fd3bd"; x.fillRect(0, 64, W, 4);
     x.fillStyle = "#c98b5a"; x.fillRect(0, 70, W, 10); x.fillStyle = "#a86d42"; x.fillRect(0, 78, W, 4);
     // 창문
-    [[40, 16], [520, 16]].forEach(([wx, wy]) => {
-      x.fillStyle = OUT; x.fillRect(wx, wy, 80, 44); x.fillStyle = "#9fdcf2"; x.fillRect(wx + 2, wy + 2, 76, 40);
-      x.fillStyle = "#ffffff"; x.fillRect(wx + 10, wy + 8, 14, 5); x.fillRect(wx + 50, wy + 16, 18, 5);
-      x.fillStyle = OUT; x.fillRect(wx + 39, wy, 2, 44); x.fillStyle = "#ff8fb8"; x.fillRect(wx - 4, wy - 4, 88, 6);
+    [[24, 14], [116, 14], [786, 14], [878, 14]].forEach(([wx, wy]) => {
+      x.fillStyle = OUT; x.fillRect(wx, wy, 64, 44); x.fillStyle = "#9fdcf2"; x.fillRect(wx + 2, wy + 2, 60, 40);
+      x.fillStyle = "#ffffff"; x.fillRect(wx + 8, wy + 8, 12, 4); x.fillRect(wx + 38, wy + 18, 14, 4);
+      x.fillStyle = OUT; x.fillRect(wx + 31, wy, 2, 44); x.fillStyle = "#ff8fb8"; x.fillRect(wx - 4, wy - 4, 72, 6);
     });
-    // 스크린
-    x.fillStyle = OUT; x.fillRect(220, 6, 200, 60); x.fillStyle = "#2a2433"; x.fillRect(223, 9, 194, 54);
-    x.font = `bold 16px ${FONT}`; x.textAlign = "center"; x.textBaseline = "middle";
-    x.fillStyle = "#ff8fb8"; x.fillText("JELLY TALK ♪", 320, 30);
-    x.font = `11px ${FONT}`; x.fillStyle = "#8fe3cf"; x.fillText(T("loungeScreen"), 320, 50);
-    // 포스터
-    [[150, 20, "#9d7cf0"], [460, 20, "#ffd34d"]].forEach(([px, py, col]) => { x.fillStyle = OUT; x.fillRect(px, py, 30, 40); x.fillStyle = col; x.fillRect(px + 2, py + 2, 26, 36); x.fillStyle = "#fff"; x.fillRect(px + 8, py + 10, 14, 14); x.fillStyle = OUT; x.fillRect(px + 13, py + 13, 4, 8); });
-    // 무대
-    x.fillStyle = OUT; x.fillRect(230, 84, 180, 70); x.fillStyle = "#7a4a8f"; x.fillRect(232, 84, 176, 66); x.fillStyle = "#9d6bb3"; x.fillRect(232, 84, 176, 6);
-    x.fillStyle = "#ffd34d"; for (let i = 0; i < 9; i++) x.fillRect(240 + i * 20, 146, 6, 3);
-    // 카펫
-    x.fillStyle = OUT; x.fillRect(150, 190, 340, 150); x.fillStyle = "#f3a6c0"; x.fillRect(152, 192, 336, 146);
-    x.fillStyle = "#ffd1e1"; for (let yy = 200; yy < 332; yy += 16) for (let xx = 160; xx < 480; xx += 16) if (((xx + yy) / 16) % 2) x.fillRect(xx, yy, 6, 6);
-    x.fillStyle = "#e07aa0"; x.fillRect(156, 196, 328, 2); x.fillRect(156, 332, 328, 2);
+    // 메뉴판 (칠판) — 매대 위
+    const MB = 396;
+    x.fillStyle = OUT; x.fillRect(MB, 2, 168, 52); x.fillStyle = "#8f5a34"; x.fillRect(MB + 2, 4, 164, 48); x.fillStyle = "#2f4a3c"; x.fillRect(MB + 6, 8, 156, 40);
+    x.font = `bold 13px ${FONT}`; x.textAlign = "center"; x.textBaseline = "middle"; x.fillStyle = "#ffe8a3"; x.fillText("☕ JELLY CAFÉ", MB + 84, 19);
+    { let fs = 9; x.font = `${fs}px ${FONT}`; while (x.measureText(T("cafeBoard")).width > 148 && fs > 5) { fs--; x.font = `${fs}px ${FONT}`; } }
+    x.fillStyle = "#e8fff4"; x.fillText(T("cafeBoard"), MB + 84, 34);
+    [[MB + 12, "#7a4a2a"], [MB + 24, "#ffb347"], [MB + 36, "#ff7fae"], [MB + 132, "#7fc8ff"], [MB + 144, "#9fdc7a"], [MB + 156, "#ffd1e1"]].forEach(([cx0, col]) => { x.fillStyle = "#fff"; x.fillRect(cx0 - 3, 40, 6, 7); x.fillStyle = col; x.fillRect(cx0 - 2, 41, 4, 4); });
+    // 액자 (방명록·그림 게시판 위)
+    [[260, 14, "#9d7cf0"], [670, 14, "#ffd34d"]].forEach(([px, py, col]) => { x.fillStyle = OUT; x.fillRect(px, py, 30, 38); x.fillStyle = "#c98b5a"; x.fillRect(px + 1, py + 1, 28, 36); x.fillStyle = col; x.fillRect(px + 4, py + 4, 22, 30); x.fillStyle = "#fff"; x.fillRect(px + 9, py + 12, 12, 12); x.fillStyle = OUT; x.fillRect(px + 13, py + 15, 4, 7); });
+    // 무대 (피아노) — 왼쪽 위, 나무 무대 + 전구 줄
+    x.fillStyle = OUT; x.fillRect(30, 84, 180, 70); x.fillStyle = "#b97a4c"; x.fillRect(32, 84, 176, 66); x.fillStyle = "#d39a68"; x.fillRect(32, 84, 176, 6);
+    x.fillStyle = "#9a6038"; for (let k = 50; k < 208; k += 22) x.fillRect(k, 92, 1, 56);
+    ["#ffd34d", "#ff8fb8", "#7fe3ff", "#9fdc7a"].forEach((col, i) => { for (let k = 0; k < 3; k++) { x.fillStyle = col; x.fillRect(40 + (i + k * 4) * 14, 146, 6, 3); } });
+    // 러그 (가운데)
+    x.fillStyle = OUT; x.fillRect(372, 186, 216, 148); x.fillStyle = "#f3a6c0"; x.fillRect(374, 188, 212, 144);
+    x.fillStyle = "#ffd1e1"; for (let yy = 196; yy < 326; yy += 16) for (let xx = 382; xx < 578; xx += 16) if (((xx + yy) / 16) % 2) x.fillRect(xx, yy, 6, 6);
+    x.fillStyle = "#e07aa0"; x.fillRect(378, 192, 204, 2); x.fillRect(378, 326, 204, 2);
+    // 차양 (매대 위, 분홍·하양 줄무늬 + 물결)
+    for (let xx = 340; xx < 620; xx += 12) { x.fillStyle = (xx / 12) % 2 ? "#ff8fb8" : "#fff6f0"; x.fillRect(xx, 56, 12, 12); x.beginPath(); x.arc(xx + 6, 68, 6, 0, Math.PI); x.fill(); }
+    x.fillStyle = OUT; x.fillRect(338, 54, 284, 2);
+
     // 출입문
-    x.fillStyle = OUT; x.fillRect(296, 402, 48, 18); x.fillStyle = "#6a3f28"; x.fillRect(298, 404, 44, 16); x.fillStyle = "#ffe8a3"; x.fillRect(306, 408, 28, 4);
+    x.fillStyle = OUT; x.fillRect(456, 402, 48, 18); x.fillStyle = "#6a3f28"; x.fillRect(458, 404, 44, 16); x.fillStyle = "#ffe8a3"; x.fillRect(466, 408, 28, 4);
 
     const objects = [], colliders = [];
     const piano = pianoSprite();
-    objects.push({ y: 136, x: 300, draw: (c) => c.drawImage(piano, 300, 100) });
-    colliders.push([300, 110, 44, 22], [0, 0, W, 90]);
+    objects.push({ y: 136, x: 98, draw: (c) => c.drawImage(piano, 98, 100) });
+    colliders.push([98, 110, 44, 22], [0, 0, W, 90]);
     // 소파 (3인용: 등받이·쿠션은 캐릭터 뒤, 앞면·팔걸이는 캐릭터 앞에 그려서 실제로 앉은 느낌)
     const seats = [];
     const sofa = (sx, sy, col, id) => {
@@ -686,7 +693,7 @@
       colliders.push([sx, sy + 4, SW, 18]);
       for (let k = 0; k < 3; k++) { const px = sx + 14 + k * 25; seats.push({ id: id + k, x: px, y: sy + 17, dir: "down", ax: px, ay: sy + 30 }); }
     };
-    sofa(34, 118, "#9d7cf0", "sA"); sofa(528, 118, "#4fc3b0", "sB"); sofa(34, 352, "#ff7fae", "sC"); sofa(528, 352, "#ffb347", "sD");
+    sofa(754, 118, "#9d7cf0", "sA"); sofa(848, 118, "#4fc3b0", "sB"); sofa(34, 352, "#ff7fae", "sC"); sofa(848, 352, "#ffb347", "sD");
     // 방명록 게시판 (큰 보드) — 피아노 무대 왼편
     const gbBoard = (() => {
       const BW = 96, BH = 70;
@@ -734,20 +741,123 @@
       s.fillText(T("artBoard"), BW / 2, 10);
       return c;
     })();
-    const ABX = 420, ABY = 86;
+    const ABX = 636, ABY = 86;
     objects.push({ y: ABY + 68, x: ABX + 48, draw: (c) => blit(c, artBoard, ABX, ABY) });
     colliders.push([ABX + 8, ABY + 44, 80, 24]);
-    const GBX = 124, GBY = 86;
+    const GBX = 228, GBY = 86;
     objects.push({ y: GBY + 68, x: GBX + 48, draw: (c) => blit(c, gbBoard, GBX, GBY) });
     colliders.push([GBX + 8, GBY + 44, 80, 24]);
-    [[20, 100, "#ff8fb8"], [608, 100, "#b58cff"], [20, 390, "#ffd34d"], [608, 390, "#ff8fb8"]].forEach(([px, py, col]) => { const sp = flowerPot(col); objects.push({ y: py + 16, x: px, draw: (c) => c.drawImage(sp, px - 7, py) }); colliders.push([px - 7, py + 6, 14, 10]); });
+    // ---------- ☕ 젤리 카페: 매대 · 알바생 · 테이블 ----------
+    const counter = (() => {
+      const CW = 268, CH = 58;
+      const [c, s] = cv(CW, CH);
+      s.fillStyle = "rgba(40,30,20,.25)"; s.fillRect(4, CH - 4, CW - 4, 4);
+      // 윗판 (나무)
+      s.fillStyle = OUT; s.fillRect(0, 16, CW, 12); s.fillStyle = "#e8c39a"; s.fillRect(1, 17, CW - 2, 9); s.fillStyle = "#f6dcbc"; s.fillRect(1, 17, CW - 2, 2);
+      // 앞판 (분홍 + 크림 줄)
+      s.fillStyle = OUT; s.fillRect(2, 27, CW - 4, CH - 31); s.fillStyle = "#ff9fc0"; s.fillRect(3, 28, CW - 6, CH - 33);
+      s.fillStyle = "#ffd6e5"; for (let k = 10; k < CW - 6; k += 18) s.fillRect(k, 30, 6, CH - 37);
+      s.fillStyle = "#e0789e"; s.fillRect(3, CH - 7, CW - 6, 2);
+      s.font = `bold 10px ${FONT}`; s.textAlign = "center"; s.textBaseline = "middle"; s.fillStyle = "#ffffff"; s.fillText("JELLY CAFÉ", CW / 2, 40);
+      // 커피 머신
+      s.fillStyle = OUT; s.fillRect(12, 0, 34, 18); s.fillStyle = "#c9ced6"; s.fillRect(13, 1, 32, 16); s.fillStyle = "#e9edf2"; s.fillRect(13, 1, 32, 3);
+      s.fillStyle = "#3a2530"; s.fillRect(20, 8, 18, 3); s.fillStyle = "#ff5a5a"; s.fillRect(16, 4, 2, 2); s.fillStyle = "#5ad16a"; s.fillRect(40, 4, 2, 2);
+      s.fillStyle = "#fff"; s.fillRect(26, 12, 6, 5); s.fillStyle = "#7a4a2a"; s.fillRect(27, 13, 4, 2);
+      // 컵 탑
+      s.fillStyle = OUT; s.fillRect(54, 4, 10, 13); s.fillStyle = "#fff"; s.fillRect(55, 5, 8, 11); s.fillStyle = "#ff8fb8"; s.fillRect(55, 9, 8, 2);
+      // 시럽 병들
+      [["#ffb347", 70], ["#ff7fae", 78], ["#7fc8ff", 86]].forEach(([col, bx]) => { s.fillStyle = OUT; s.fillRect(bx, 4, 6, 13); s.fillStyle = col; s.fillRect(bx + 1, 7, 4, 9); s.fillStyle = "#fff"; s.fillRect(bx + 2, 5, 2, 2); });
+      // 계산대
+      s.fillStyle = OUT; s.fillRect(150, 6, 26, 12); s.fillStyle = "#8fd3bd"; s.fillRect(151, 7, 24, 10); s.fillStyle = "#2f4a3c"; s.fillRect(154, 9, 12, 4); s.fillStyle = "#ffe07a"; s.fillRect(168, 9, 4, 4);
+      // 진열장 (젤리 케이크 · 마카롱)
+      s.fillStyle = OUT; s.fillRect(188, 0, 72, 18); s.fillStyle = "#dff6ff"; s.fillRect(189, 1, 70, 16); s.fillStyle = "rgba(255,255,255,.7)"; s.fillRect(191, 2, 3, 13);
+      [["#ff7fae", 196], ["#ffd34d", 212], ["#9fdc7a", 228], ["#b58cff", 244]].forEach(([col, kx]) => { s.fillStyle = "#fff"; s.fillRect(kx, 11, 12, 3); s.fillStyle = col; s.fillRect(kx + 1, 6, 10, 5); s.fillStyle = "#fff"; s.fillRect(kx + 3, 7, 2, 1); s.fillStyle = "#d8434e"; s.fillRect(kx + 5, 4, 2, 2); });
+      return c;
+    })();
+    const CTX0 = 346, CTY0 = 80;
+    objects.push({ y: 136, x: CTX0 + 134, draw: (c) => blit(c, counter, CTX0, CTY0) });
+    colliders.push([CTX0 - 6, 84, 280, 54]);
+    // 의자 (방향별) · 테이블
+    const chairCol = ["#ff8fb8", "#8fd3bd", "#ffd34d", "#b58cff"];
+    const chairSpr = {};
+    const mkChair = (dir, col) => {
+      const key = dir + col; if (chairSpr[key]) return chairSpr[key];
+      const [c, s] = cv(22, 30); const dk = Avatar.mix(col, "#000000", 0.2), lt = Avatar.mix(col, "#ffffff", 0.3);
+      const X = 11, Y = 22; // 앉는 자리 = (X, Y)
+      const leg = (lx) => { s.fillStyle = OUT; s.fillRect(lx, Y + 1, 2, 6); };
+      if (dir === "down") { // 등받이가 뒤(위)쪽
+        s.fillStyle = OUT; s.fillRect(X - 9, Y - 21, 18, 16); s.fillStyle = col; s.fillRect(X - 8, Y - 20, 16, 14); s.fillStyle = lt; s.fillRect(X - 8, Y - 20, 16, 2); s.fillStyle = dk; s.fillRect(X - 1, Y - 17, 2, 9);
+      }
+      if (dir === "right" || dir === "left") { // 옆모습: 등받이가 등 쪽에
+        const bx = dir === "right" ? X - 9 : X + 6;
+        s.fillStyle = OUT; s.fillRect(bx, Y - 18, 4, 20); s.fillStyle = col; s.fillRect(bx + 1, Y - 17, 2, 18);
+      }
+      s.fillStyle = OUT; s.fillRect(X - 8, Y - 2, 16, 5); s.fillStyle = col; s.fillRect(X - 7, Y - 1, 14, 3); s.fillStyle = lt; s.fillRect(X - 7, Y - 1, 14, 1);
+      leg(X - 7); leg(X + 5);
+      return (chairSpr[key] = c);
+    };
+    const mkChairBackFront = (col) => { // 위를 보고 앉는 의자: 등받이가 캐릭터 앞(아래)쪽
+      const [c, s] = cv(22, 30); const dk = Avatar.mix(col, "#000000", 0.2), lt = Avatar.mix(col, "#ffffff", 0.3);
+      const X = 11, Y = 22;
+      s.fillStyle = OUT; s.fillRect(X - 9, Y - 14, 18, 14); s.fillStyle = col; s.fillRect(X - 8, Y - 13, 16, 12); s.fillStyle = lt; s.fillRect(X - 8, Y - 13, 16, 2); s.fillStyle = dk; s.fillRect(X - 8, Y - 3, 16, 2);
+      s.fillStyle = OUT; s.fillRect(X - 7, Y, 2, 7); s.fillRect(X + 5, Y, 2, 7);
+      return c;
+    };
+    const chair = (sx, sy, dir, col, id, ax, ay) => {
+      if (dir === "up") { const sp = mkChairBackFront(col); objects.push({ y: sy + 1, x: sx, draw: (c) => c.drawImage(sp, sx - 11, sy - 22) }); }
+      else { const sp = mkChair(dir, col); objects.push({ y: sy - 0.5, x: sx, draw: (c) => c.drawImage(sp, sx - 11, sy - 22) }); }
+      colliders.push([sx - 7, sy - 4, 14, 9]);
+      seats.push({ id, x: sx, y: sy, dir, ax, ay });
+    };
+    const roundTop = (() => { // 2인용 둥근 테이블
+      const [c, s] = cv(30, 26);
+      s.fillStyle = "rgba(40,30,20,.25)"; s.beginPath(); s.ellipse(16, 23, 10, 3, 0, 0, 7); s.fill();
+      s.fillStyle = OUT; s.fillRect(13, 10, 4, 13); s.fillRect(8, 21, 14, 3); s.fillStyle = "#8f5a34"; s.fillRect(14, 11, 2, 11);
+      s.fillStyle = OUT; s.beginPath(); s.ellipse(15, 7, 14, 7, 0, 0, 7); s.fill();
+      s.fillStyle = "#fff6ea"; s.beginPath(); s.ellipse(15, 6.5, 13, 5.8, 0, 0, 7); s.fill();
+      s.fillStyle = "#ffd1e1"; s.fillRect(9, 4, 12, 1); s.fillStyle = "#ff7fae"; s.fillRect(13, 2, 4, 3); s.fillStyle = "#9fdc7a"; s.fillRect(14, 1, 2, 1); // 작은 꽃병
+      return c;
+    })();
+    const squareTop = (() => { // 4인용 네모 테이블
+      const [c, s] = cv(50, 30);
+      s.fillStyle = "rgba(40,30,20,.25)"; s.fillRect(5, 26, 44, 4);
+      s.fillStyle = OUT; s.fillRect(4, 14, 3, 13); s.fillRect(43, 14, 3, 13);
+      s.fillStyle = OUT; s.fillRect(0, 0, 50, 20); s.fillStyle = "#e8c39a"; s.fillRect(1, 1, 48, 14); s.fillStyle = "#f6dcbc"; s.fillRect(1, 1, 48, 2); s.fillStyle = "#c99a6c"; s.fillRect(1, 15, 48, 4);
+      s.fillStyle = "#fff"; s.fillRect(14, 4, 22, 8); s.fillStyle = "#ff9fc0"; for (let k = 14; k < 36; k += 4) s.fillRect(k, 4, 2, 8); // 테이블 러너
+      s.fillStyle = OUT; s.fillRect(22, 1, 6, 6); s.fillStyle = "#ffe07a"; s.fillRect(23, 2, 4, 4); // 작은 캔들
+      return c;
+    })();
+    let tn = 0;
+    const table2 = (cx, cy, col) => {
+      const id = "t2" + tn++;
+      objects.push({ y: cy + 8, x: cx, draw: (c) => c.drawImage(roundTop, cx - 15, cy - 13) });
+      colliders.push([cx - 13, cy - 8, 26, 14]);
+      chair(cx - 23, cy + 2, "right", col, id + "a", cx - 38, cy + 8);
+      chair(cx + 23, cy + 2, "left", col, id + "b", cx + 38, cy + 8);
+    };
+    const table4 = (cx, cy, col) => {
+      const id = "t4" + tn++;
+      objects.push({ y: cy + 12, x: cx, draw: (c) => c.drawImage(squareTop, cx - 25, cy - 12) });
+      colliders.push([cx - 25, cy - 10, 50, 22]);
+      chair(cx, cy - 11, "down", col, id + "a", cx, cy - 30);
+      chair(cx, cy + 24, "up", col, id + "b", cx, cy + 38);
+      chair(cx - 34, cy + 3, "right", col, id + "c", cx - 50, cy + 8);
+      chair(cx + 34, cy + 3, "left", col, id + "d", cx + 50, cy + 8);
+    };
+    table2(92, 228, chairCol[1]); table4(250, 228, chairCol[0]); table4(710, 228, chairCol[3]); table2(868, 228, chairCol[2]);
+    table2(250, 330, chairCol[2]); table2(710, 330, chairCol[1]);
+    // 알바생 NPC (매대 뒤)
+    const staffOutfit = Math.max(0, Avatar.OUTFITS.findIndex((o) => o.id === "cherry"));
+    const staff = { x: 480, y: 104, dir: "down", av: { gender: "f", hair: 2, hairColor: 1, skin: 1, outfit: staffOutfit, eye: 0, wand: 0 } };
+
+    [[16, 170, "#b58cff"], [944, 170, "#9fdc7a"], [20, 392, "#ffd34d"], [940, 392, "#ff8fb8"], [150, 392, "#ff8fb8"], [810, 392, "#b58cff"]].forEach(([px, py, col]) => { const sp = flowerPot(col); objects.push({ y: py + 16, x: px, draw: (c) => c.drawImage(sp, px - 7, py) }); colliders.push([px - 7, py + 6, 14, 10]); });
 
     const collide = (px, py) => colliders.some(([a, b, w, h]) => px > a && px < a + w && py > b && py < b + h);
     return {
-      id: "lounge", W, H, ground: g, objects, colliders: [], zones: [{ id: "exit", x: 290, y: 388, w: 60, h: 32, label: T("zExit") }, { id: "guestbook", x: 118, y: 150, w: 108, h: 30, label: T("zGuestbook") }, { id: "piano", x: 290, y: 132, w: 64, h: 22, label: T("zPiano") }, { id: "art", x: 414, y: 150, w: 108, h: 30, label: T("zArt") }], seats,
+      id: "lounge", W, H, ground: g, objects, colliders: [], zones: [{ id: "exit", x: 450, y: 388, w: 60, h: 32, label: T("zExit") }, { id: "guestbook", x: GBX - 6, y: 150, w: 108, h: 30, label: T("zGuestbook") }, { id: "piano", x: 88, y: 132, w: 64, h: 22, label: T("zPiano") }, { id: "art", x: ABX - 6, y: 150, w: 108, h: 30, label: T("zArt") }, { id: "cafe", x: 444, y: 138, w: 72, h: 26, label: T("zCafe") }], seats, staff,
       walkable: (px, py) => px > 10 && px < W - 10 && py > 92 && py < H - 4 && !collide(px, py),
-      spawn: { x: 320, y: 380 }, artist: null, piano: { x: 322, y: 118, front: { x: 322, y: 142 } }, icons: [{ x: 172, y: 84, icon: "✍️" }, { x: 322, y: 96, icon: "🎹" }, { x: 468, y: 84, icon: "🎨" }], signs: [{ x: 172, y: 76, key: "gbSign" }, { x: 468, y: 76, key: "artSign" }],
-      clickables: [{ x: 468, y: 120, r: 40, go: "art", front: { x: 468, y: 164 } }, { x: 172, y: 120, r: 40, go: "guestbook", front: { x: 172, y: 164 } }],
+      spawn: { x: 480, y: 380 }, artist: null, piano: { x: 120, y: 118, front: { x: 120, y: 142 } }, icons: [{ x: GBX + 48, y: 84, icon: "✍️" }, { x: 120, y: 96, icon: "🎹" }, { x: ABX + 48, y: 84, icon: "🎨" }, { x: 410, y: 84, icon: "☕" }], signs: [{ x: GBX + 48, y: 76, key: "gbSign" }, { x: ABX + 48, y: 76, key: "artSign" }],
+      clickables: [{ x: 480, y: 96, r: 34, go: "cafe", front: { x: 480, y: 150 } }, { x: ABX + 48, y: 120, r: 40, go: "art", front: { x: ABX + 48, y: 164 } }, { x: GBX + 48, y: 120, r: 40, go: "guestbook", front: { x: GBX + 48, y: 164 } }],
     };
   }
 

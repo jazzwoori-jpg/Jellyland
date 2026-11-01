@@ -41,7 +41,7 @@
   };
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
   const fail = (code, s = 400) => { throw mkErr(code, s); };
-  const pub = (u) => ({ slotLeft: u.slotDay === new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10) ? Math.max(0, 20 - (u.slotCount | 0)) : 20, id: u.id, email: u.email, nickname: u.nickname, avatar: u.avatar, lang: u.lang || "ko", role: u.role || "fan", coins: u.coins | 0, inv: u.inv || [], daily: u.lastDaily || null, tempPw: !!u.tempPw });
+  const pub = (u) => ({ slotLeft: u.slotDay === new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10) ? Math.max(0, 20 - (u.slotCount | 0)) : 20, id: u.id, email: u.email, nickname: u.nickname, avatar: u.avatar, lang: u.lang || "ko", role: u.role || "fan", coins: u.coins | 0, inv: u.inv || [], daily: u.lastDaily || null, tempPw: !!u.tempPw, drink: u.drink && u.drink.until > Date.now() ? u.drink : null });
   const kstDay = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
   async function mock(path, opts = {}) {
@@ -94,6 +94,10 @@
       me.inv = me.inv || []; if (me.inv.includes(it.id)) return { user: pub(me) };
       if ((me.coins | 0) < it.price) fail("coins");
       me.coins -= it.price; me.inv.push(it.id); save(); return { user: pub(me) };
+    }
+    if (route === "cafe/buy") {
+      if ((me.coins | 0) < 5) fail("coins");
+      me.coins -= 5; me.drink = { k: b.k | 0, until: Date.now() + 240000 }; save(); return { user: pub(me) };
     }
     if (route === "game/start") return { run: Date.now() + ".demo" + (b.game === "up" ? ".up" : b.game === "tet" ? ".tet" : ""), dayLeft: me.gameDay === kstDay() ? Math.max(0, 600 - (me.gameCoins | 0)) : 600 };
     if (route === "game/finish") {
@@ -299,6 +303,7 @@
     gbDelete: (key) => call("guestbook?key=" + encodeURIComponent(key), { method: "DELETE" }),
     daily: () => call("daily", { method: "POST", body: {} }),
     buy: (item) => call("shop/buy", { method: "POST", body: { item } }),
+    cafeBuy: (k) => call("cafe/buy", { method: "POST", body: { k } }),
     gameStart: (game) => call("game/start", { method: "POST", body: { game: game || "jump" } }),
     slotSpin: () => call("slot/spin", { method: "POST", body: {} }),
     gameTop: (game) => call("game/top?game=" + (game || "jump")),
