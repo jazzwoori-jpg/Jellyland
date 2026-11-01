@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "43"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "44"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -187,6 +187,7 @@
   // ---------------- 업데이트 ----------------
   function update(dt) {
     G.t += dt * 1000;
+    cafeTick();
     const p = G.player;
     let vx = 0, vy = 0;
     if (G.mode === "world" && !G.modalOpen && !G.frozen && !G.quizOpen) {
@@ -317,7 +318,7 @@
   function renderPrompt() {
     const pr = $("#prompt"), z = G.zone;
     if (!z) return pr.classList.add("hidden");
-    const act = z.id === "exit" || z.id === "seat" || z.id === "stand" || z.id === "surface" ? "" : z.id === "piano" ? t("actPlay") : z.id === "fountain" ? t("actDive") : z.id === "chest" ? t("actOpen") : z.id === "recboard" || z.id === "rankboard" || z.id === "profile" || z.id === "guide" || z.id === "guestbook" || z.id === "art" ? t("actView") : t("actEnter");
+    const act = z.id === "exit" || z.id === "seat" || z.id === "stand" || z.id === "surface" ? "" : z.id === "piano" ? t("actPlay") : z.id === "cafe" ? t("cafeOrder") : z.id === "fountain" ? t("actDive") : z.id === "chest" ? t("actOpen") : z.id === "recboard" || z.id === "rankboard" || z.id === "profile" || z.id === "guide" || z.id === "guestbook" || z.id === "art" ? t("actView") : t("actEnter");
     pr.innerHTML = `<kbd>E</kbd>${esc(z.label)} ${esc(act)}`;
     pr.classList.remove("hidden");
   }
@@ -340,14 +341,15 @@
     for (const o of w.objects) if (o.y > vy0 && o.y < vy1 + 120 && o.x > vx0 - 200 && o.x < vx1) list.push(o);
     const chars = [];
     if (w.artist) chars.push({ y: w.artist.y, x: w.artist.x, name: L(CFG.artist.name) + " ♪", av: ARTIST_LOOK, dir: "down", frame: 0, crown: true, artist: true, bobby: true, keytar: true });
+    if (w.staff) chars.push({ x: w.staff.x, y: w.staff.y, name: t("cafeStaff"), av: w.staff.av, dir: "down", frame: 0, npc: w.staff });
     if (G.scene === "plaza") for (const n of G.npcs) chars.push({ x: n.x, y: n.y, name: t("npc")[n.i], av: n.av, dir: n.dir, frame: frameOf(n.moving, n.t), npc: n });
     const seatMap = w.seats ? Object.fromEntries(w.seats.map((st) => [st.id, st])) : {};
     for (const o of G.others.values()) {
       const st = o.seat && seatMap[o.seat];
       if (st) { o.rx = o.x = st.x; o.ry = o.y = st.y; }
-      chars.push({ emo: o.emoShow, x: o.rx, y: o.ry, name: o.name, av: o.avatar, dir: st ? st.dir : o.dir || "down", frame: frameOf(o.walking, o.t || 0), crown: o.role === "artist", id: o.id, artist: o.role === "artist", admin: o.role === "admin", sit: !!st });
+      chars.push({ emo: o.emoShow, x: o.rx, y: o.ry, name: o.name, av: o.avatar, dir: st ? st.dir : o.dir || "down", frame: frameOf(o.walking, o.t || 0), crown: o.role === "artist", id: o.id, artist: o.role === "artist", admin: o.role === "admin", sit: !!st, drink: o.drink });
     }
-    if (G.mode === "world") chars.push({ swim: G.scene === "sea", emo: G.myEmo, x: G.player.x, y: G.player.y, name: G.user.nickname, av: G.user.avatar, dir: G.player.dir, frame: frameOf(G.player.moving, G.player.t), crown: G.user.role === "artist", me: true, id: G.user.id, artist: G.user.role === "artist", admin: G.user.role === "admin", sit: !!G.seat });
+    if (G.mode === "world") chars.push({ swim: G.scene === "sea", emo: G.myEmo, x: G.player.x, y: G.player.y, name: G.user.nickname, av: G.user.avatar, dir: G.player.dir, frame: frameOf(G.player.moving, G.player.t), crown: G.user.role === "artist", me: true, id: G.user.id, artist: G.user.role === "artist", admin: G.user.role === "admin", sit: !!G.seat, drink: G.user.drink });
     for (const c of chars) list.push({ y: c.y, char: c });
     list.sort((a, b) => a.y - b.y);
     for (const o of list) {
@@ -356,7 +358,10 @@
         if (c.artist || c.admin) drawAura(c.x, c.y, G.t, c.admin);
         const ofit = c.av && Avatar.OUTFITS[c.av.outfit];
         if (ofit && ofit.auroraGlow) drawAuroraGlow(c.x, c.y, G.t);
+        const dk = c.drink && c.drink.until > serverNow_() ? c.drink : null;
+        if (dk && c.dir === "up") drawHeldDrink(c, dk); // 뒤돌아 있으면 몸 뒤에
         Avatar.draw(ctx, c.av, c.x, c.y + (c.swim ? Math.round(Math.sin(G.t / 320) * 2) : 0), c.dir, c.bobby ? (Math.floor(G.t / 500) % 2 ? 1 : 0) : c.frame, { keytar: c.keytar, sit: c.sit });
+        if (dk && c.dir !== "up") drawHeldDrink(c, dk);
         if (c.artist || c.admin) drawSparkles(c.x, c.y, G.t, c.admin);
       } else o.draw(ctx, G.t);
     }
@@ -582,7 +587,7 @@
   function buildMinimap() {
     const w = scene();
     const mm = $("#minimap");
-    const sc = w.id === "plaza" ? 0.25 : 0.4;
+    const sc = w.id === "plaza" ? 0.25 : w.id === "lounge" ? 0.3 : 0.4;
     mm.width = Math.round(w.W * sc); mm.height = Math.round(w.H * sc);
     const c = document.createElement("canvas");
     c.width = w.W; c.height = w.H;
@@ -674,6 +679,7 @@
     if (id === "seat" && G.zone && G.zone.seat) return sitDown(G.zone.seat);
     if (id === "stand") return standUp();
     if (id === "guestbook") return openGuestbook();
+    if (id === "cafe") return openCafe();
     if (id === "gallery") return openGallery();
     if (id === "albums") return openAlbums();
     if (id === "cinema") return openCinema();
@@ -1153,6 +1159,97 @@
   }
   document.addEventListener("visibilitychange", () => { if (!document.hidden && G.user && G.user.daily !== kstDay()) checkDaily(); });
   $("#coin-pill").addEventListener("click", () => toast(`🪙 ${t("myCoins")}: ${(G.user.coins | 0).toLocaleString()}`));
+
+  // ---------------- ☕ 젤리 카페 (팬 라운지) ----------------
+  // 음료 10종 · 모두 5코인 · 4분 동안 손에 들고 다님 (따뜻한 음료는 김이 모락모락)
+  const CAFE_DRINKS = [
+    { hot: 1, liq: "#6b3e22", top: "#e8c39a", mug: "#ffffff" },            // 따뜻한 젤리커피
+    { liq: "#8a5a36", top: "#f2e2cc", jelly: "#ff8fb8" },                 // 아이스 젤리커피
+    { liq: "#ffb347", top: "#fff3c4", jelly: "#ffd34d" },                 // 망고젤리 스무디
+    { liq: "#ff7fae", top: "#fff0f5", jelly: "#d8434e" },                 // 딸기젤리 스무디
+    { hot: 1, liq: "#5a3a26", top: "#c98b5a", mug: "#ffd1e1" },            // 흑당초코라떼
+    { hot: 1, liq: "#6b3a2a", top: "#ffffff", mug: "#ffe8a3" },            // 젤리 핫초코
+    { liq: "#7fa8ff", jelly: "#4a3a9f", ice: 1 },                          // 블루베리젤리 에이드
+    { liq: "#7fe08a", top: "#ffffff", jelly: "#ff5a5a", ice: 1 },          // 메론젤리 소다
+    { liq: "#ffb08a", jelly: "#ffd1a8", ice: 1 },                          // 복숭아젤리 아이스티
+    { hot: 1, liq: "#8fc76a", top: "#f4f9e8", mug: "#c8ecdf" },            // 말차젤리 라떼
+  ];
+  // 컵 그리기: (x, y) = 컵 바닥 가운데 (월드 픽셀 단위)
+  function drawCupAt(g, k, x, y, tt) {
+    const D = CAFE_DRINKS[k] || CAFE_DRINKS[0];
+    x = Math.round(x); y = Math.round(y);
+    const R = (a, b, w, h, c) => { g.fillStyle = c; g.fillRect(a, b, w, h); };
+    if (D.hot) { // 머그컵
+      R(x - 4, y - 7, 8, 8, "#3a2530"); R(x - 3, y - 6, 6, 6, D.mug);
+      R(x - 3, y - 6, 6, 2, D.liq); R(x - 2, y - 6, 3, 1, D.top);
+      R(x + 4, y - 5, 2, 4, "#3a2530"); R(x + 4, y - 4, 1, 2, D.mug);
+      R(x - 3, y - 2, 6, 1, "#ff8fb8");
+      // 김이 모락모락: 동글동글한 김이 피어오르며 커지고 옅어짐
+      for (let i = 0; i < 4; i++) {
+        const ph = ((tt / 1300) + i / 4) % 1;
+        const sx = x + Math.sin(tt / 300 + i * 1.7 + ph * 5) * 1.6, sy = y - 8 - ph * 13, r = 0.9 + ph * 1.8;
+        g.globalAlpha = (1 - ph) * 0.35; g.fillStyle = "#8a7f9e"; g.beginPath(); g.arc(sx + 0.4, sy + 0.4, r + 0.5, 0, 7); g.fill();
+        g.globalAlpha = (1 - ph) * 0.9; g.fillStyle = "#ffffff"; g.beginPath(); g.arc(sx, sy, r, 0, 7); g.fill();
+      }
+      g.globalAlpha = 1;
+    } else { // 투명 컵 + 빨대
+      R(x - 4, y - 11, 8, 12, "#3a2530"); R(x - 3, y - 10, 6, 10, "#eaf8ff");
+      R(x - 3, y - 8, 6, 8, D.liq);
+      if (D.top) R(x - 3, y - 9, 6, 2, D.top);
+      if (D.ice || !D.top) { g.globalAlpha = 0.75; R(x - 2, y - 7, 2, 2, "#ffffff"); R(x + 1, y - 5, 2, 2, "#ffffff"); g.globalAlpha = 1; }
+      if (D.jelly) { R(x - 2, y - 2, 1, 1, D.jelly); R(x, y - 1, 1, 1, D.jelly); R(x + 2, y - 2, 1, 1, D.jelly); R(x - 1, y - 3, 1, 1, D.jelly); }
+      R(x - 4, y - 12, 8, 1, "#3a2530"); R(x + 1, y - 16, 1, 5, "#ff5f9f"); R(x + 2, y - 16, 2, 1, "#ff5f9f");
+      R(x + 2, y - 10, 1, 4, "rgba(255,255,255,.7)"); // 반짝
+    }
+  }
+  function drawHeldDrink(c, dk) {
+    const handY = (c.sit ? c.y - 29 : c.y - 38) + 27;
+    const dx = c.dir === "right" ? 5 : c.dir === "left" ? -5 : c.dir === "up" ? -7 : 7;
+    drawCupAt(ctx, dk.k, c.x + dx, handY + (c.frame && !c.sit ? 1 : 0), G.t + (c.x | 0) * 13);
+  }
+  function cafeTick() {
+    const u = G.user;
+    if (u && u.drink && !(u.drink.until > serverNow_())) { u.drink = null; if (G.mode === "world") toast(t("cafeDone")); kickSync(); }
+    if (G.mode !== "world" || G.scene !== "lounge") return;
+    const st = scene() && scene().staff; if (!st) return;
+    if (!st.next || G.t > st.next) { const L = t("cafeLines"); st.say = L[(Math.random() * L.length) | 0]; st.sayUntil = G.t + 4200; st.next = G.t + 8000 + Math.random() * 4000; }
+    const d = Math.hypot(G.player.x - st.x, G.player.y - st.y - 44);
+    if (d < 60 && !st.greeted) { st.greeted = true; st.say = t("cafeWelcome"); st.sayUntil = G.t + 3200; st.next = G.t + 7000; }
+    if (d > 140) st.greeted = false;
+  }
+  function leftText(ms) { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; }
+  function openCafe() {
+    const names = t("cafeMenu");
+    const html = `<div class="shop-top"><div class="coin-big">🪙 <b id="cafe-coins">${(G.user.coins | 0).toLocaleString()}</b> <small>${esc(t("coinName"))}</small></div>
+      <p>${esc(t("cafeIntro"))}</p><p class="cafe-now" id="cafe-now"></p></div>
+      <div class="cafe-grid">${CAFE_DRINKS.map((D, k) => `<div class="cafe-item" data-k="${k}"><span class="cafe-tag ${D.hot ? "hot" : "ice"}">${esc(t(D.hot ? "cafeHot" : "cafeIce"))}</span>
+        <canvas width="72" height="84"></canvas><b>${esc(names[k])}</b><button class="btn sm pink">🪙 5 ${esc(t("cafeOrder"))}</button></div>`).join("")}</div>`;
+    openModal("☕ " + t("cafeTitle"), html, (el) => {
+      const cvs = [...el.querySelectorAll(".cafe-item canvas")];
+      let raf = 0;
+      const paint = () => {
+        const tt = performance.now();
+        cvs.forEach((c, k) => { const x = c.getContext("2d"); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, c.width, c.height); x.imageSmoothingEnabled = false; x.setTransform(4, 0, 0, 4, 0, 0); drawCupAt(x, k, 9, 19, tt + k * 300); });
+        const now = el.querySelector("#cafe-now"), dk = G.user.drink;
+        if (now) now.textContent = dk && dk.until > serverNow_() ? t("cafeNow", { name: names[dk.k], left: leftText(dk.until - serverNow_()) }) : "";
+        raf = requestAnimationFrame(paint);
+      };
+      paint();
+      G.modalCleanup = () => cancelAnimationFrame(raf);
+      el.querySelectorAll(".cafe-item button").forEach((b) => b.addEventListener("click", async () => {
+        const k = +b.closest(".cafe-item").dataset.k;
+        if ((G.user.coins | 0) < 5) return toast(t("e_coins"));
+        b.disabled = true;
+        try {
+          const r = await API.cafeBuy(k);
+          setUser(r.user); G.user.drink = r.user.drink || { k, until: serverNow_() + 240000 };
+          try { SFX.coin(); } catch {}
+          const st = scene() && scene().staff; if (st) { st.say = t("cafeThanks"); st.sayUntil = G.t + 3500; st.next = G.t + 8000; }
+          closeModal(); toast(t("cafeBought", { name: names[k] })); kickSync();
+        } catch (e) { toast(e.message); b.disabled = false; }
+      }));
+    }, true);
+  }
 
   // ---------------- 🛍️ 젤리젤리샵 ----------------
   let shopTab = "all";
@@ -1905,7 +2002,7 @@
         if (pts.length) { path = pts.map((q) => [Math.round(q[0] + G.clockOff), q[1], q[2]]); G.trailSent = pts[pts.length - 1][0]; }
       }
       if (path && !G.clockSet) path = path.map((q) => [q[0] - sendT - G.clockOff, q[1], q[2]]); // 아직 서버 시계를 모르면 "몇 ms 전"으로
-      const r = await API.sync({ pv: 1, pathAbs: !!(path && G.clockSet), scene: inSea ? "plaza" : room, x: inSea ? 640 : Math.round(G.player.x), y: inSea ? 262 : Math.round(G.player.y), dir: inSea ? "up" : G.player.dir, seat: inSea ? null : G.seat, vx: inSea ? 0 : Math.round(G.player.vx || 0), vy: inSea ? 0 : Math.round(G.player.vy || 0), since: G.chat.since, ...(emo ? { emo } : {}), ...(path ? { path } : {}) });
+      const r = await API.sync({ pv: 1, pathAbs: !!(path && G.clockSet), scene: inSea ? "plaza" : room, x: inSea ? 640 : Math.round(G.player.x), y: inSea ? 262 : Math.round(G.player.y), dir: inSea ? "up" : G.player.dir, seat: inSea ? null : G.seat, vx: inSea ? 0 : Math.round(G.player.vx || 0), vy: inSea ? 0 : Math.round(G.player.vy || 0), since: G.chat.since, ...(G.user.drink && G.user.drink.until > serverNow_() ? { drink: G.user.drink } : {}), ...(emo ? { emo } : {}), ...(path ? { path } : {}) });
       if (r.now) { const recvT = Date.now(), off = r.now - (sendT + recvT) / 2; if (!G.clockSet) { G.clockOff = off; G.clockSet = true; } else G.clockOff = G.clockOff * 0.8 + off * 0.2; }
       if (room !== G.scene) return;
       if (!inSea) applyOthers(r.others || [], r.now);
@@ -1998,7 +2095,7 @@
     const now = Date.now();
     for (const o of list) {
       const ex = G.others.get(o.id);
-      const upd = { x: o.x, y: o.y, dir: o.dir, name: o.name, avatar: o.avatar, role: o.role, seat: o.seat || null,
+      const upd = { x: o.x, y: o.y, dir: o.dir, name: o.name, avatar: o.avatar, role: o.role, seat: o.seat || null, drink: o.drink || null,
         vx: o.vx || 0, vy: o.vy || 0, pv: !!o.pv, age: serverNow ? Math.max(0, serverNow - o.ts) : 0, recv: now, seen: now };
       if (ex && o.role === "artist" && upd.seat === "throne" && ex.seat !== "throne") { const st = (scene().seats || []).find((x) => x.id === "throne"); if (st) celebrate(st); }
       const tgt = ex || { id: o.id, rx: o.x, ry: o.y };
