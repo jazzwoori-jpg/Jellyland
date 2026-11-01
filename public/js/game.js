@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "45"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "47"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -80,27 +80,31 @@
   function buildWorlds() {
     G.worlds.plaza = World.buildPlaza();
     G.worlds.lounge = World.buildLounge();
+    G.worlds.shop = World.buildShop();
+    G.worlds.cinema = World.buildCinema();
     const oldSea = G.worlds.sea;
     G.worlds.sea = World.buildSea();
     if (oldSea) { G.worlds.sea.placeChest(oldSea.chestSpot); Object.assign(G.worlds.sea.sea, oldSea.sea); G.worlds.sea.icons[0].icon = oldSea.icons[0].icon; }
   }
   function scene() { return G.worlds[G.scene]; }
+  // 혼자 들어가는 공간 (분수대 속 바다 · 젤리젤리샵 안): 다른 사람에게는 입구 앞에 서 있는 것처럼 보임
+  const soloScene = (sc) => sc === "sea"; // 젤리젤리샵 · 젤리 시네마는 다른 사람과 함께 있는 방
   function setScene(id, pos) {
     G.scene = id;
     const w = scene();
     const p = pos || w.spawn;
     G.player.x = p.x; G.player.y = p.y; G.player.dir = pos && pos.dir ? pos.dir : "up";
-    G.target = null; G.pendingZone = null; G.others.clear(); setTimeout(rtEnsure, 0); G.zone = null; G.seat = null; G.seatObj = null;
+    G.target = null; G.pendingZone = null; G.others.clear(); setTimeout(rtEnsure, 0); setTimeout(() => { if (G.mode === "world") kickSync(); }, 60); // 방을 옮기면 바로 알리고 그 방 사람들을 불러옴 G.zone = null; G.seat = null; G.seatObj = null;
     $("#prompt").classList.add("hidden");
     buildMinimap();
     updateSceneLabels();
     resetChat();
-    if (G.mode === "world" && !G.gameOpen) BGM.play(id);
+    if (G.mode === "world" && !G.gameOpen) BGM.play(id === "shop" ? "lounge" : id);
   }
   function updateSceneLabels() {
     if (!G.scene) return;
-    $("#mm-label").textContent = G.scene === "plaza" ? t("mapPlaza") : G.scene === "sea" ? t("mapSea") : t("mapLounge");
-    $("#chat-title").textContent = G.scene === "lounge" ? t("chatLounge") : t("chatPlaza");
+    $("#mm-label").textContent = G.scene === "plaza" ? t("mapPlaza") : G.scene === "sea" ? t("mapSea") : G.scene === "shop" ? t("bShop") : G.scene === "cinema" ? t("bCinema") : t("mapLounge");
+    $("#chat-title").textContent = G.scene === "lounge" ? t("chatLounge") : G.scene === "shop" ? t("chatShop") : G.scene === "cinema" ? t("chatCinema") : t("chatPlaza");
     $("#btn-gb").classList.toggle("hidden", G.scene !== "lounge");
   }
 
@@ -222,14 +226,14 @@
     }
     // 내 이동 기록: 0.1초마다 위치를 남겨 다음 sync 때 함께 보냄 (다른 사람 화면에서 그대로 재생)
     const nowMs = Date.now();
-    if (G.mode === "world" && G.scene !== "sea") {
+    if (G.mode === "world" && !soloScene(G.scene)) {
       if (!G.trail) G.trail = [];
       const lt = G.trail[G.trail.length - 1];
       if (p.moving || wasMoving) { if (!lt || nowMs - lt[0] >= 100 || (!p.moving && (lt[1] !== Math.round(p.x) || lt[2] !== Math.round(p.y)))) G.trail.push([nowMs, Math.round(p.x), Math.round(p.y)]); }
       if (G.trail.length > 40) G.trail.splice(0, G.trail.length - 40);
     }
     // ⚡ 실시간 서버로 내 위치 보내기 (걷는 동안 1초에 15번, 멈추는 순간 1번)
-    if (RT.ok && G.mode === "world" && G.scene !== "sea" && RT.room === G.scene) {
+    if (RT.ok && G.mode === "world" && !soloScene(G.scene) && RT.room === G.scene) {
       if (p.moving && nowMs - RT.lastSend >= 66) rtSend(1);
       else if (!p.moving && (wasMoving || (nowMs - RT.lastSend > 250 && (Math.abs(p.x - RT.lx) > 2 || Math.abs(p.y - RT.ly) > 2)))) rtSend(0); // 멈춤 · 순간이동(문 출입 등)
     }
@@ -289,11 +293,12 @@
     let zone = null;
     if (G.mode === "world") for (const z of w.zones) if (p.x > z.x && p.x < z.x + z.w && p.y > z.y && p.y < z.y + z.h) { zone = z; break; }
     // 벤치 · 테이블 좌석: 가까운 빈자리가 있으면 "앉기"
-    if (G.mode === "world" && G.seat) zone = G.standZone || (G.standZone = { id: "stand", label: t("actStand") });
+    if (G.mode === "world" && G.seat && G.seatObj && G.seatObj.watch) zone = G.watchZone || (G.watchZone = { id: "watch", label: t("actWatch") }); // 영화관 좌석: 다시 영상 보기 (움직이면 일어남)
+    else if (G.mode === "world" && G.seat) zone = G.standZone || (G.standZone = { id: "stand", label: t("actStand") });
     else if (G.mode === "world" && !zone && w.seats) {
       let best = null, bd = 26;
       for (const st of w.seats) { if (st.hostOnly && G.user.role !== "artist") continue; const d = Math.hypot(p.x - st.ax, p.y - st.ay); if (d < bd && !seatTaken(st.id)) { bd = d; best = st; } }
-      if (best) zone = best.zone || (best.zone = { id: "seat", seat: best, label: t("actSit") });
+      if (best) zone = best.zone || (best.zone = { id: "seat", seat: best, label: t(best.labelKey || "actSit") });
     }
     if (zone !== G.zone) { G.zone = zone; renderPrompt(); }
     // 카메라
@@ -318,7 +323,7 @@
   function renderPrompt() {
     const pr = $("#prompt"), z = G.zone;
     if (!z) return pr.classList.add("hidden");
-    const act = z.id === "exit" || z.id === "seat" || z.id === "stand" || z.id === "surface" ? "" : z.id === "piano" ? t("actPlay") : z.id === "cafe" ? t("cafeOrder") : z.id === "fountain" ? t("actDive") : z.id === "chest" ? t("actOpen") : z.id === "recboard" || z.id === "rankboard" || z.id === "profile" || z.id === "guide" || z.id === "guestbook" || z.id === "art" ? t("actView") : t("actEnter");
+    const act = z.id === "exit" || z.id === "exitShop" || z.id === "exitCinema" || z.id === "watch" || z.id === "seat" || z.id === "stand" || z.id === "surface" ? "" : z.id === "piano" ? t("actPlay") : z.id === "cafe" ? t("cafeOrder") : z.id === "clerk" ? t("actShopTalk") : z.id === "fountain" ? t("actDive") : z.id === "chest" ? t("actOpen") : z.id === "recboard" || z.id === "rankboard" || z.id === "profile" || z.id === "guide" || z.id === "guestbook" || z.id === "art" ? t("actView") : t("actEnter");
     pr.innerHTML = `<kbd>E</kbd>${esc(z.label)} ${esc(act)}`;
     pr.classList.remove("hidden");
   }
@@ -329,7 +334,7 @@
   function render() {
     const w = scene();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = w.id === "plaza" ? "#4a4458" : w.id === "sea" ? "#123a58" : "#2a2230";
+    ctx.fillStyle = w.id === "plaza" ? "#4a4458" : w.id === "sea" ? "#123a58" : w.id === "shop" ? "#3a2a40" : w.id === "cinema" ? "#140c1c" : "#2a2230";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     const k = S * dpr;
     ctx.setTransform(k, 0, 0, k, -G.cam.x * k, -G.cam.y * k);
@@ -341,7 +346,7 @@
     for (const o of w.objects) if (o.y > vy0 && o.y < vy1 + 120 && o.x > vx0 - 200 && o.x < vx1) list.push(o);
     const chars = [];
     if (w.artist) chars.push({ y: w.artist.y, x: w.artist.x, name: L(CFG.artist.name) + " ♪", av: ARTIST_LOOK, dir: "down", frame: 0, crown: true, artist: true, bobby: true, keytar: true });
-    if (w.staff) chars.push({ x: w.staff.x, y: w.staff.y, name: t("cafeStaff"), av: w.staff.av, dir: "down", frame: 0, npc: w.staff });
+    if (w.staff) chars.push({ x: w.staff.x, y: w.staff.y, name: t(w.staff.nameKey || "cafeStaff"), av: w.staff.av, dir: "down", frame: 0, npc: w.staff });
     if (G.scene === "plaza") for (const n of G.npcs) chars.push({ x: n.x, y: n.y, name: t("npc")[n.i], av: n.av, dir: n.dir, frame: frameOf(n.moving, n.t), npc: n });
     const seatMap = w.seats ? Object.fromEntries(w.seats.map((st) => [st.id, st])) : {};
     for (const o of G.others.values()) {
@@ -366,6 +371,7 @@
       } else o.draw(ctx, G.t);
     }
     drawFx(Math.min(0.05, (performance.now() - (G.fxT || performance.now())) / 1000)); G.fxT = performance.now();
+    if (w.id === "cinema") drawCinemaLight(w);
     if (G.target) { ctx.fillStyle = "rgba(255,127,174,.8)"; const r = 3 + (Math.floor(G.t / 150) % 2); ctx.fillRect(G.target.x - r, G.target.y - 1, r * 2, 2); ctx.fillRect(G.target.x - 1, G.target.y - r, 2, r * 2); }
 
     // ---- 화면 해상도 오버레이 (이름표, 말풍선, 아이콘) ----
@@ -412,6 +418,37 @@
     drawBanner();
     if (G.mode === "world" && G.t - (G.mmT || 0) > 120) { G.mmT = G.t; drawMinimapFrame(); } // 지도는 초당 8번만 (폰 부담 줄이기)
   }
+  // 🎬 영화관 조명: 실내는 어둡게, 스크린에서 영상 빛이 깜빡이며 객석으로 퍼짐
+  function drawCinemaLight(w) {
+    const sc = w.screen, tt = G.t;
+    const hue = (tt / 45) % 360;
+    const flick = 0.72 + 0.18 * Math.sin(tt / 95) * Math.sin(tt / 241) + 0.1 * Math.sin(tt / 37);
+    ctx.save();
+    // 1) 전체를 어둡게
+    ctx.fillStyle = "rgba(3,1,10,0.62)"; ctx.fillRect(-20, -20, w.W + 40, w.H + 40);
+    // 2) 스크린은 다시 밝게 + 영상처럼 색이 바뀌는 빛
+    ctx.drawImage(w.ground, sc.x, sc.y, sc.w, sc.h, sc.x, sc.y, sc.w, sc.h);
+    World.blitText(ctx, w.ground, 0, 0);
+    ctx.globalCompositeOperation = "lighter";
+    ctx.fillStyle = `hsla(${hue},75%,62%,${0.22 * flick})`; ctx.fillRect(sc.x, sc.y, sc.w, sc.h);
+    for (let k = 0; k < 4; k++) { // 화면 속 움직이는 장면 조각
+      const bw = 40 + k * 14, bx = sc.x + ((tt / (28 + k * 9) + k * 77) % (sc.w + bw)) - bw;
+      ctx.fillStyle = `hsla(${(hue + k * 70) % 360},85%,60%,${0.16 * flick})`;
+      ctx.fillRect(Math.max(sc.x, bx), sc.y + 6 + k * 13, Math.min(bw, sc.x + sc.w - Math.max(sc.x, bx)), 10);
+    }
+    // 3) 스크린 주변 빛무리
+    const halo = ctx.createRadialGradient(sc.x + sc.w / 2, sc.y + sc.h / 2, sc.h * 0.4, sc.x + sc.w / 2, sc.y + sc.h / 2, sc.w * 0.75);
+    halo.addColorStop(0, `hsla(${hue},70%,70%,${0.22 * flick})`); halo.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = halo; ctx.fillRect(sc.x - sc.w * 0.4, sc.y - 20, sc.w * 1.8, sc.h + sc.w * 0.8);
+    // 4) 객석으로 퍼지는 빛줄기
+    const cone = ctx.createLinearGradient(0, sc.y + sc.h, 0, w.H);
+    cone.addColorStop(0, `hsla(${hue},65%,75%,${0.2 * flick})`); cone.addColorStop(0.55, `hsla(${hue},60%,70%,${0.06 * flick})`); cone.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = cone; ctx.beginPath(); ctx.moveTo(sc.x + 6, sc.y + sc.h); ctx.lineTo(sc.x + sc.w - 6, sc.y + sc.h); ctx.lineTo(w.W + 30, w.H); ctx.lineTo(-30, w.H); ctx.closePath(); ctx.fill();
+    // 5) 통로 바닥 조명 · 비상구 표시
+    for (const [lx, ly] of w.aisleLights || []) { const gl = ctx.createRadialGradient(lx, ly, 0, lx, ly, 7); gl.addColorStop(0, "rgba(255,200,110,.55)"); gl.addColorStop(1, "rgba(255,200,110,0)"); ctx.fillStyle = gl; ctx.fillRect(lx - 7, ly - 7, 14, 14); ctx.fillStyle = "rgba(255,230,160,.9)"; ctx.fillRect(lx - 1, ly - 1, 2, 2); }
+    const ex = w.exitSign; if (ex) { const gl = ctx.createRadialGradient(ex.x + ex.w / 2, ex.y + ex.h / 2, 2, ex.x + ex.w / 2, ex.y + ex.h / 2, 26); gl.addColorStop(0, "rgba(60,230,110,.35)"); gl.addColorStop(1, "rgba(60,230,110,0)"); ctx.fillStyle = gl; ctx.fillRect(ex.x - 12, ex.y - 18, ex.w + 24, ex.h + 36); }
+    ctx.restore();
+  }
   // 🌌 오로라 셀레스티얼 가운(10만 코인)의 오로라 불빛 — 몸 뒤로 넘실거리는 빛의 띠 + 떠다니는 빛가루
   const AURORA_COLS = ["126,240,216", "124,200,240", "154,140,240", "200,140,240", "255,159,208"];
   function drawAuroraGlow(x, y, tt) {
@@ -444,7 +481,7 @@
   let ambT = performance.now();
   function drawAmbient(w) {
     const now = performance.now(), dt = Math.min(0.05, (now - ambT) / 1000); ambT = now;
-    if (w.id === "sea" || G.mode !== "world") return;
+    if (w.id === "sea" || w.id === "cinema" || G.mode !== "world") return;
     const want = w.id === "plaza" ? 26 : 10;
     while (G.amb.length < want) G.amb.push({ x: Math.random() * VW, y: Math.random() * VH, vx: 0, vy: 0, ph: Math.random() * 6.3, k: G.amb.length % 4, s: 0.6 + Math.random() * 0.8 });
     if (G.amb.length > want) G.amb.length = want;
@@ -623,6 +660,7 @@
     G.seat = st.id; G.seatObj = st; G.target = null; G.pendingZone = null;
     G.player.x = st.x; G.player.y = st.y; G.player.dir = st.dir; G.player.moving = false;
     G.zone = null; kickSync();
+    if (st.watch) setTimeout(() => { if (G.seat === st.id && !G.modalOpen) openCinema(); }, 350); // 🎬 영화관 좌석에 앉으면 영상 팝업
     if (st.id === "throne" && G.user.role === "artist") {
       celebrate(st);
     }
@@ -682,10 +720,14 @@
     if (id === "cafe") return openCafe();
     if (id === "gallery") return openGallery();
     if (id === "albums") return openAlbums();
-    if (id === "cinema") return openCinema();
+    if (id === "cinema") { await fade(true); setScene("cinema"); await fade(false); showCinemaGuide(); return; }
+    if (id === "watch") return openCinema();
+    if (id === "exitCinema") { const b = G.worlds.plaza.buildings.find((x) => x.id === "cinema"); await fade(true); setScene("plaza", { x: b.door.x, y: b.door.y + 22, dir: "down" }); await fade(false); return; }
     if (id === "profile") return openProfile();
     if (id === "guide") return openGuide();
-    if (id === "shop") return openShop();
+    if (id === "shop") { await fade(true); setScene("shop"); await fade(false); toast(t("enteredShop")); return; }
+    if (id === "clerk") return openShop();
+    if (id === "exitShop") { const b = G.worlds.plaza.buildings.find((x) => x.id === "shop"); await fade(true); setScene("plaza", { x: b.door.x, y: b.door.y + 22, dir: "down" }); await fade(false); return; }
     if (id === "piano") return openPiano(G.scene === "plaza");
     if (id === "recboard") return openRecBoard();
     if (id === "rankboard") return openRankBoard();
@@ -1071,6 +1113,12 @@
       </div>`).join("");
     openModal("💿 " + t("bAlbums"), html);
   }
+  // 🎬 젤리 시네마 입장 안내: 자리에 앉으면 영상을 볼 수 있어요
+  function showCinemaGuide() {
+    G.banner = { text: t("cinemaBanner"), until: performance.now() + 4500 };
+    toast(t("cinemaGuide"));
+    setTimeout(() => { if (G.scene === "cinema" && !G.seat) toast(t("cinemaGuide")); }, 2600);
+  }
   function openCinema(idx = 0) {
     const vs = CFG.videos;
     if (!vs.length) return openModal("🎬 " + t("bCinema"), `<p>${esc(t("noVideo"))}</p>`);
@@ -1210,11 +1258,11 @@
   function cafeTick() {
     const u = G.user;
     if (u && u.drink && !(u.drink.until > serverNow_())) { u.drink = null; if (G.mode === "world") toast(t("cafeDone")); kickSync(); }
-    if (G.mode !== "world" || G.scene !== "lounge") return;
+    if (G.mode !== "world") return;
     const st = scene() && scene().staff; if (!st) return;
-    if (!st.next || G.t > st.next) { const L = t("cafeLines"); st.say = L[(Math.random() * L.length) | 0]; st.sayUntil = G.t + 4200; st.next = G.t + 8000 + Math.random() * 4000; }
+    if (!st.next || G.t > st.next) { const L = t(st.linesKey || "cafeLines"); st.say = L[(Math.random() * L.length) | 0]; st.sayUntil = G.t + 4200; st.next = G.t + 8000 + Math.random() * 4000; }
     const d = Math.hypot(G.player.x - st.x, G.player.y - st.y - 44);
-    if (d < 60 && !st.greeted) { st.greeted = true; st.say = t("cafeWelcome"); st.sayUntil = G.t + 3200; st.next = G.t + 7000; }
+    if (d < 60 && !st.greeted) { st.greeted = true; st.say = t(st.welcomeKey || "cafeWelcome"); st.sayUntil = G.t + 3200; st.next = G.t + 7000; }
     if (d > 140) st.greeted = false;
   }
   function leftText(ms) { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; }
@@ -1304,7 +1352,7 @@
           if ((G.user.coins | 0) < it.price) return toast(t("e_coins"));
           if (!b.classList.contains("sure")) { b.classList.add("sure"); b.textContent = t("buySure") + " 🪙" + it.price.toLocaleString(); setTimeout(() => { if (b.isConnected && b.classList.contains("sure")) { b.classList.remove("sure"); b.textContent = `🪙 ${it.price.toLocaleString()} ${t("buy")}`; } }, 3500); return; }
           b.disabled = true;
-          try { const r = await API.buy(it.id); setUser(r.user); toast(t("bought", { name: L(it.name) })); await wear(it); }
+          try { const r = await API.buy(it.id); setUser(r.user); toast(t("bought", { name: L(it.name) })); { const st = scene() && scene().staff; if (st && st.thanksKey) { st.say = t(st.thanksKey); st.sayUntil = G.t + 3500; st.next = G.t + 8000; } } await wear(it); }
           catch (e) { toast(e.message); }
           renderShop();
           return;
@@ -1383,11 +1431,11 @@
   // ---------------- 🏆 랭킹 1위 게시판 ----------------
   async function refreshRankTop() {
     if (!G.user) return;
-    try { const r = await API.gameTop("all"); World.rankTops = { jump: r.jump || null, up: r.up || null, tet: r.tet || null }; } catch {}
+    try { const r = await API.gameTop("all"); World.rankTops = { jump: r.jump || null, up: r.up || null, tet: r.tet || null, jx: r.jx || null }; } catch {}
   }
   setInterval(() => { if (G.mode === "world" && G.scene === "plaza" && !document.hidden) refreshRankTop(); }, 60000);
   function openRankBoard() {
-    openModal("🏆 " + t("rankBoardZ"), `<div class="chips shop-tabs rk-tabs"><button class="chip on" data-g="jump">🏃 ${esc(t("gameTitle"))}</button><button class="chip" data-g="up">⬆️ ${esc(t("upTitle"))}</button><button class="chip" data-g="tet">🧱 ${esc(t("tgTitle"))}</button></div>
+    openModal("🏆 " + t("rankBoardZ"), `<div class="chips shop-tabs rk-tabs"><button class="chip on" data-g="jump">🏃 ${esc(t("gameTitle"))}</button><button class="chip" data-g="up">⬆️ ${esc(t("upTitle"))}</button><button class="chip" data-g="tet">🧱 ${esc(t("tgTitle"))}</button><button class="chip" data-g="jx">🍬 ${esc(t("jxTitle"))}</button></div>
       <div id="jg-rank" class="jg-rank rank-modal"><div class="rk-list"><p class="rk-empty">…</p></div></div>
       <p style="text-align:center"><button class="btn sm pink" id="rk-go-game">🎮 ${esc(t("bGame"))}</button></p>`, (el) => {
       let g = "jump";
@@ -1460,6 +1508,7 @@
           <button class="gw-card jump" data-g="jump"><span class="gw-ico">🏃</span><b>${esc(t("gameTitle"))}</b><small>${esc(t("gwJump"))}</small></button>
           <button class="gw-card up" data-g="up"><span class="gw-ico">⬆️</span><b>${esc(t("upTitle"))}</b><small>${esc(t("gwUp"))}</small></button>
           <button class="gw-card tet" data-g="tet"><span class="gw-ico">🧱</span><b>${esc(t("tgTitle"))}</b><small>${esc(t("gwTet"))}</small></button>
+          <button class="gw-card jx" data-g="jx"><span class="gw-ico">🍬</span><b>${esc(t("jxTitle"))}</b><small>${esc(t("gwJx"))}</small></button>
           <button class="gw-card lucky" data-g="slot"><span class="gw-ico">🎰</span><b>${esc(t("slTitle"))}</b><small>${esc(t("gwSlot"))}</small></button>
           <button class="gw-card ft" data-g="fortune"><span class="gw-ico">🔮</span><b>${esc(t("ftBtn").replace(/^🔮\s*/, ""))}</b><small>${esc(t("gwFortune"))}</small></button></div>
           <p class="gw-day">🪙 ${esc(t("gameDayLeft", { n: G.user.gameLeft ?? 600 }))}</p>`;
@@ -1487,13 +1536,13 @@
           });
           return;
         }
-        const up = g === "up", tet = g === "tet";
-        setTitle((tet ? "🧱 " : up ? "⬆️ " : "🏃 ") + t(tet ? "tgTitle" : up ? "upTitle" : "gameTitle"));
-        document.querySelector("#modal .modal").classList.toggle("up", up || tet);
-        root.innerHTML = backBtn() + `<div id="gw-play"></div><div id="jg-rank" class="jg-rank"><h3>${esc(t(tet ? "tgRankTitle" : up ? "upRankTitle" : "rankTitle"))}</h3><div class="rk-list"><p class="rk-empty">…</p></div></div>`;
+        const up = g === "up", tet = g === "tet", jx = g === "jx";
+        setTitle((jx ? "🍬 " : tet ? "🧱 " : up ? "⬆️ " : "🏃 ") + t(jx ? "jxTitle" : tet ? "tgTitle" : up ? "upTitle" : "gameTitle"));
+        document.querySelector("#modal .modal").classList.toggle("up", up || tet || jx);
+        root.innerHTML = backBtn() + `<div id="gw-play"></div><div id="jg-rank" class="jg-rank"><h3>${esc(t(jx ? "jxRankTitle" : tet ? "tgRankTitle" : up ? "upRankTitle" : "rankTitle"))}</h3><div class="rk-list"><p class="rk-empty">…</p></div></div>`;
         root.querySelector("#gw-back").addEventListener("click", menu);
         rankGame = g;
-        const Game = tet ? TetrisGame : up ? UpGame : JumpGame;
+        const Game = jx ? JellyXGame : tet ? TetrisGame : up ? UpGame : JumpGame;
         cur = Game.mount(root.querySelector("#gw-play"), {
           t, avatar: () => G.user.avatar, dayLeft: G.user.gameLeft,
           onStart: () => API.gameStart(g),
@@ -1516,7 +1565,7 @@
 
   // 랭킹 TOP 10 (점프점프·올라올라는 m, 젤리 블록은 점)
   let rankGame = "jump";
-  const rankUnit = (g) => (g === "tet" ? " " + t("ptsUnit") : " m");
+  const rankUnit = (g) => (g === "tet" || g === "jx" ? " " + t("ptsUnit") : " m");
   function renderRank(top) {
     const list = document.querySelector("#jg-rank .rk-list"); if (!list) return;
     if (!top.length) { list.innerHTML = `<p class="rk-empty">${esc(t("rankEmpty"))}</p>`; return; }
@@ -1653,7 +1702,7 @@
       <div class="adm-email hidden"><input class="inp" type="email" autocapitalize="off" value="${esc(u.email)}"><button class="btn sm pink" data-em="save">${esc(t("pwEmailSave"))}</button><small>${esc(t("pwEmailHint"))}</small></div>
       <div class="adm-coin hidden"><input class="inp" type="number" min="0" step="10" inputmode="numeric" placeholder="${esc(t("adminCoinPh"))}">
         <button class="btn sm pink" data-mode="add">${esc(t("adminCoinAdd"))}</button><button class="btn sm" data-mode="sub">${esc(t("adminCoinSub"))}</button><button class="btn sm grape" data-mode="set">${esc(t("adminCoinSet"))}</button></div>
-      <div class="adm-rank hidden"><select class="inp"><option value="jump">🏃 ${esc(t("rkJump"))}</option><option value="up">🪜 ${esc(t("upTitle"))}</option><option value="tet">🧱 ${esc(t("tgTitle"))}</option></select>
+      <div class="adm-rank hidden"><select class="inp"><option value="jump">🏃 ${esc(t("rkJump"))}</option><option value="up">🪜 ${esc(t("upTitle"))}</option><option value="tet">🧱 ${esc(t("tgTitle"))}</option><option value="jx">🍬 ${esc(t("jxTitle"))}</option></select>
         <input class="inp" type="number" min="0" step="1" inputmode="numeric" placeholder="${esc(t("adminRankPh"))}" value="${u.best | 0}">
         <button class="btn sm pink" data-rk="save">${esc(t("adminRankSave"))}</button><button class="btn sm kick" data-rk="remove">${esc(t("adminRankDel"))}</button></div>
       <div class="adm-compose hidden"><textarea maxlength="500" rows="3" placeholder="${esc(t("adminMsgPh"))}"></textarea><button class="btn sm pink" data-act="send">${esc(t("adminSend"))}</button></div></div>`).join("");
@@ -1674,7 +1723,7 @@
       }));
       const rk = row.querySelector(".adm-rank"), rkSel = rk.querySelector("select"), rkIn = rk.querySelector("input");
       row.querySelector("[data-act=rank]").addEventListener("click", () => { rk.classList.toggle("hidden"); rkIn.focus(); });
-      const BK = { jump: "best", up: "bestUp", tet: "bestTet" };
+      const BK = { jump: "best", up: "bestUp", tet: "bestTet", jx: "bestJx" };
       rkSel.addEventListener("change", () => { rkIn.value = u[BK[rkSel.value]] | 0; });
       rk.querySelectorAll("[data-rk]").forEach((b) => b.addEventListener("click", async () => {
         const game = rkSel.value, remove = b.dataset.rk === "remove";
@@ -1686,7 +1735,7 @@
           u[BK[game]] = r.m;
           if (u.id === G.user.id) { try { setUser(await API.me()); } catch {} }
           if (typeof refreshRankTop === "function") refreshRankTop();
-          toast(t(r.m > 0 ? "adminRankDone" : "adminRankRemoved", { name: u.nickname || u.email, game: t(game === "tet" ? "tgTitle" : game === "up" ? "upTitle" : "rkJump"), m: r.m.toLocaleString() + (game === "tet" ? t("ptsUnit") : "m"), r: r.rank || "-" }));
+          toast(t(r.m > 0 ? "adminRankDone" : "adminRankRemoved", { name: u.nickname || u.email, game: t(game === "jx" ? "jxTitle" : game === "tet" ? "tgTitle" : game === "up" ? "upTitle" : "rkJump"), m: r.m.toLocaleString() + (game === "tet" || game === "jx" ? t("ptsUnit") : "m"), r: r.rank || "-" }));
           renderAdmin();
         } catch (x) { toast(x.message); b.disabled = false; }
       }));
@@ -1989,7 +2038,9 @@
     if (syncBusy) return scheduleSync(G.trail && G.trail.length && G.trail[G.trail.length - 1][0] > (G.trailSent || 0) ? 120 : undefined); // 보낼 길이 남았으면 곧 다시
     syncBusy = true; lastSync = Date.now();
     const room = G.scene;
-    const inSea = room === "sea"; // 분수대 속: 다른 사람에게는 분수대 앞에 서 있는 것처럼 보임
+    const inSea = soloScene(room); // 분수대 속 · 젤리젤리샵 안: 다른 사람에게는 입구 앞에 서 있는 것처럼 보임
+    const shopDoor = room === "shop" || room === "cinema" ? (G.worlds.plaza.buildings.find((b) => b.id === room) || {}).door : null;
+    const soloX = shopDoor ? Math.round(shopDoor.x) : 640, soloY = shopDoor ? Math.round(shopDoor.y + 22) : 262;
     const emo = G.sendEmo; G.sendEmo = null;
     try {
       // 지난번 이후 새로 걸은 길
@@ -2002,7 +2053,7 @@
         if (pts.length) { path = pts.map((q) => [Math.round(q[0] + G.clockOff), q[1], q[2]]); G.trailSent = pts[pts.length - 1][0]; }
       }
       if (path && !G.clockSet) path = path.map((q) => [q[0] - sendT - G.clockOff, q[1], q[2]]); // 아직 서버 시계를 모르면 "몇 ms 전"으로
-      const r = await API.sync({ pv: 1, pathAbs: !!(path && G.clockSet), scene: inSea ? "plaza" : room, x: inSea ? 640 : Math.round(G.player.x), y: inSea ? 262 : Math.round(G.player.y), dir: inSea ? "up" : G.player.dir, seat: inSea ? null : G.seat, vx: inSea ? 0 : Math.round(G.player.vx || 0), vy: inSea ? 0 : Math.round(G.player.vy || 0), since: G.chat.since, ...(G.user.drink && G.user.drink.until > serverNow_() ? { drink: G.user.drink } : {}), ...(emo ? { emo } : {}), ...(path ? { path } : {}) });
+      const r = await API.sync({ pv: 1, pathAbs: !!(path && G.clockSet), scene: inSea ? "plaza" : room, x: inSea ? soloX : Math.round(G.player.x), y: inSea ? soloY : Math.round(G.player.y), dir: inSea ? (shopDoor ? "down" : "up") : G.player.dir, seat: inSea ? null : G.seat, vx: inSea ? 0 : Math.round(G.player.vx || 0), vy: inSea ? 0 : Math.round(G.player.vy || 0), since: G.chat.since, ...(G.user.drink && G.user.drink.until > serverNow_() ? { drink: G.user.drink } : {}), ...(emo ? { emo } : {}), ...(path ? { path } : {}) });
       if (r.now) { const recvT = Date.now(), off = r.now - (sendT + recvT) / 2; if (!G.clockSet) { G.clockOff = off; G.clockSet = true; } else G.clockOff = G.clockOff * 0.8 + off * 0.2; }
       if (room !== G.scene) return;
       if (!inSea) applyOthers(r.others || [], r.now);
@@ -2026,7 +2077,7 @@
   }
   function rtClose() { const ws = RT.ws; RT.ws = null; RT.room = null; rtDrop(); if (ws) try { ws.close(); } catch {} }
   function rtEnsure() {
-    const want = !API.demo && rtUrl() && API.token && G.mode === "world" && G.scene !== "sea" && G.user && Date.now() > RT.blockUntil; // 분수대 속에서는 잠시 끊음 (다른 사람에게는 분수대 앞으로 보이게)
+    const want = !API.demo && rtUrl() && API.token && G.mode === "world" && !soloScene(G.scene) && G.user && Date.now() > RT.blockUntil; // 분수대 속에서는 잠시 끊음 (다른 사람에게는 분수대 앞으로 보이게)
     const room = G.scene;
     if (!want) { if (RT.ws) rtClose(); return; }
     if (RT.ws && RT.room === room) {
@@ -2063,8 +2114,9 @@
       RT.off = RT.offN ? RT.off * 0.7 + off * 0.3 : off; RT.offN++;
       return;
     }
+    if (m.t === "join") { if (!G.others.has(m.id)) kickSync(); return; } // 같은 방에 누가 들어옴 → 바로 불러오기
     if (m.t === "bye") { const o = G.others.get(m.id); if (o && o.rt) { o.rt = false; o.buf = null; o.rtMov = 0; } return; }
-    if (m.t !== "p" || G.scene === "sea" || RT.room !== G.scene) return;
+    if (m.t !== "p" || soloScene(G.scene) || RT.room !== G.scene) return;
     const o = G.others.get(m.id);
     if (!o) return; // 아직 sync 로 이름·모습을 못 받은 사람 → 곧 생김
     const rNow = now + RT.off;
@@ -2235,7 +2287,7 @@
       $("#chat-log").scrollTop = $("#chat-log").scrollHeight;
     }
     try {
-      const r = await API.chatSend(G.scene, text, notice);
+      const r = await API.chatSend(G.scene === "sea" ? "plaza" : G.scene, text, notice);
       if (notice) { $("#chat-notice").checked = false; toast(t("noticeDone")); G.chat.notice = r.notice; renderNotice(); }
       else if (r.message) { G.chat.seen.add(r.message.key); Object.assign(temp, r.message, { pending: false }); temp.el && temp.el.replaceWith(makeChatLine(temp)); }
       kickSync();

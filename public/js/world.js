@@ -534,10 +534,10 @@
     c.fillStyle = "#fffaf2"; c.fillRect(x0 + 5, y0 + 18, W - 10, H - 40);
     // 점프점프 1위 → 올라올라 1위 → 젤리 블록 1위 를 6초마다 번갈아 보여 줌 (기록 없는 게임은 건너뜀)
     const tops = window.World.rankTops || {};
-    const ORDER = ["jump", "up", "tet"], have = ORDER.filter((g) => tops[g]);
+    const ORDER = ["jump", "up", "tet", "jx"], have = ORDER.filter((g) => tops[g]);
     const which = have.length ? have[Math.floor(t / 6000) % have.length] : ORDER[Math.floor(t / 6000) % 3];
-    const title = T(which === "up" ? "rankBoardUp" : which === "tet" ? "rankBoardTet" : "rankBoard");
-    c.fillStyle = which === "up" ? "#8fe07a" : which === "tet" ? "#c9b0ff" : "#f2c14e"; c.fillRect(x0 + 1, y0 + 1, W - 2, 16);
+    const title = T(which === "up" ? "rankBoardUp" : which === "tet" ? "rankBoardTet" : which === "jx" ? "rankBoardJx" : "rankBoard");
+    c.fillStyle = which === "up" ? "#8fe07a" : which === "tet" ? "#c9b0ff" : which === "jx" ? "#ffb3d6" : "#f2c14e"; c.fillRect(x0 + 1, y0 + 1, W - 2, 16);
     c.textAlign = "center"; c.textBaseline = "middle";
     let fs = 10; c.font = `bold ${fs}px ${FONT}`; while (c.measureText(title).width > W - 10 && fs > 6) { fs--; c.font = `bold ${fs}px ${FONT}`; }
     c.fillStyle = OUT; c.fillText(title, bx, y0 + 10);
@@ -553,7 +553,7 @@
       c.fillStyle = "#d8434e"; c.fillRect(bx - 38, cy0 + 2, 14, 12); c.fillStyle = "#fff"; c.font = `bold 9px ${FONT}`; c.fillText("1", bx - 31, cy0 + 8);
       c.font = `bold 10px ${FONT}`; c.fillStyle = OUT;
       const name = String(top.name || "?"); c.fillText(name.length > 12 ? name.slice(0, 11) + "…" : name, bx, y0 + H - 30);
-      c.fillStyle = "#7a3fc0"; c.font = `bold 9px ${FONT}`; c.fillText(`${Number(top.m).toLocaleString()}${which === "tet" ? " " + T("ptsUnit") : " m"}`, bx, y0 + H - 22 + 2);
+      c.fillStyle = "#7a3fc0"; c.font = `bold 9px ${FONT}`; c.fillText(`${Number(top.m).toLocaleString()}${which === "tet" || which === "jx" ? " " + T("ptsUnit") : " m"}`, bx, y0 + H - 22 + 2);
     } else {
       c.fillStyle = "#9a8a9a"; c.font = `10px ${FONT}`; c.fillText("?", bx, cy0 + 28);
     }
@@ -848,7 +848,7 @@
     table2(250, 330, chairCol[2]); table2(710, 330, chairCol[1]);
     // 알바생 NPC (매대 뒤)
     const staffOutfit = Math.max(0, Avatar.OUTFITS.findIndex((o) => o.id === "cherry"));
-    const staff = { x: 480, y: 104, dir: "down", av: { gender: "f", hair: 2, hairColor: 1, skin: 1, outfit: staffOutfit, eye: 0, wand: 0 } };
+    const staff = { x: 480, y: 104, dir: "down", nameKey: "cafeStaff", linesKey: "cafeLines", welcomeKey: "cafeWelcome", thanksKey: "cafeThanks", av: { gender: "f", hair: 2, hairColor: 1, skin: 1, outfit: staffOutfit, eye: 0, wand: 0 } };
 
     [[16, 170, "#b58cff"], [944, 170, "#9fdc7a"], [20, 392, "#ffd34d"], [940, 392, "#ff8fb8"], [150, 392, "#ff8fb8"], [810, 392, "#b58cff"]].forEach(([px, py, col]) => { const sp = flowerPot(col); objects.push({ y: py + 16, x: px, draw: (c) => c.drawImage(sp, px - 7, py) }); colliders.push([px - 7, py + 6, 14, 10]); });
 
@@ -858,6 +858,193 @@
       walkable: (px, py) => px > 10 && px < W - 10 && py > 92 && py < H - 4 && !collide(px, py),
       spawn: { x: 480, y: 380 }, artist: null, piano: { x: 120, y: 118, front: { x: 120, y: 142 } }, icons: [{ x: GBX + 48, y: 84, icon: "✍️" }, { x: 120, y: 96, icon: "🎹" }, { x: ABX + 48, y: 84, icon: "🎨" }, { x: 410, y: 84, icon: "☕" }], signs: [{ x: GBX + 48, y: 76, key: "gbSign" }, { x: ABX + 48, y: 76, key: "artSign" }],
       clickables: [{ x: 480, y: 96, r: 34, go: "cafe", front: { x: 480, y: 150 } }, { x: ABX + 48, y: 120, r: 40, go: "art", front: { x: ABX + 48, y: 164 } }, { x: GBX + 48, y: 120, r: 40, go: "guestbook", front: { x: GBX + 48, y: 164 } }],
+    };
+  }
+
+  // ---------------- 🛍️ 젤리젤리샵 내부 ----------------
+  function buildShop() {
+    const W = 640, H = 400;
+    const [g, x] = cv(W, H);
+    // 바닥: 연보라 마루 + 가운데 분홍 러그
+    for (let yy = 84; yy < H; yy += 10) for (let xx = 0; xx < W; xx += 40) {
+      const off = ((yy - 84) / 10) % 2 ? 20 : 0;
+      x.fillStyle = ((xx + off + yy) / 10) % 3 === 0 ? "#e6dbf2" : "#efe6f8"; x.fillRect(xx - off, yy, 40, 10);
+      x.fillStyle = "#cdbfe0"; x.fillRect(xx - off, yy + 9, 40, 1); x.fillRect(xx - off, yy, 1, 10);
+    }
+    x.fillStyle = OUT; x.fillRect(224, 170, 192, 150); x.fillStyle = "#ffb8d4"; x.fillRect(226, 172, 188, 146);
+    x.fillStyle = "#ffe0ee"; x.fillRect(232, 178, 176, 134); x.fillStyle = "#ffb8d4"; x.fillRect(238, 184, 164, 122);
+    x.fillStyle = "#fff4f9"; for (let k = 0; k < 6; k++) { x.beginPath(); x.arc(250 + k * 28, 245, 5, 0, 7); x.fill(); }
+    // 벽: 분홍 줄무늬 + 금색 몰딩
+    x.fillStyle = OUT; x.fillRect(0, 0, W, 84);
+    for (let xx = 0; xx < W; xx += 14) { x.fillStyle = (xx / 14) % 2 ? "#ffe3ef" : "#ffd1e3"; x.fillRect(xx, 0, 14, 72); }
+    for (let xx = 7; xx < W; xx += 28) for (let yy = 10; yy < 66; yy += 18) { x.fillStyle = "rgba(255,255,255,.55)"; x.fillRect(xx - 1, yy, 3, 1); x.fillRect(xx, yy - 1, 1, 3); }
+    x.fillStyle = "#f2c14e"; x.fillRect(0, 70, W, 4); x.fillStyle = "#c98b5a"; x.fillRect(0, 74, W, 6); x.fillStyle = "#a86d42"; x.fillRect(0, 80, W, 4);
+    // 간판
+    x.fillStyle = OUT; x.fillRect(236, 4, 168, 32); x.fillStyle = "#fff8ea"; x.fillRect(238, 6, 164, 28); x.fillStyle = "#ff7fae"; x.fillRect(238, 30, 164, 4);
+    x.font = `bold 13px ${FONT}`; x.textAlign = "center"; x.textBaseline = "middle"; x.fillStyle = "#d1559a"; x.fillText("🛍️ " + T("bShop"), 320, 18);
+    // 벽 선반 (접은 옷 · 모자 · 가방)
+    const shelf = (sx, items) => {
+      x.fillStyle = OUT; x.fillRect(sx, 46, 150, 6); x.fillStyle = "#c98b5a"; x.fillRect(sx + 1, 47, 148, 4);
+      x.fillStyle = OUT; x.fillRect(sx + 8, 52, 3, 6); x.fillRect(sx + 139, 52, 3, 6);
+      items.forEach(([kind, col], i) => {
+        const ix = sx + 10 + i * 28;
+        if (kind === "fold") { for (let k = 0; k < 3; k++) { x.fillStyle = OUT; x.fillRect(ix, 40 - k * 6, 20, 6); x.fillStyle = Avatar.mix(col, "#ffffff", k * 0.25); x.fillRect(ix + 1, 41 - k * 6, 18, 4); } }
+        if (kind === "hat") { x.fillStyle = OUT; x.fillRect(ix - 1, 38, 22, 8); x.fillRect(ix + 4, 28, 12, 12); x.fillStyle = col; x.fillRect(ix, 39, 20, 6); x.fillRect(ix + 5, 29, 10, 10); x.fillStyle = "#fff"; x.fillRect(ix + 5, 36, 10, 2); }
+        if (kind === "bag") { x.fillStyle = OUT; x.fillRect(ix + 2, 30, 16, 16); x.fillStyle = col; x.fillRect(ix + 3, 31, 14, 14); x.strokeStyle = OUT; x.lineWidth = 1.5; x.beginPath(); x.arc(ix + 10, 30, 5, Math.PI, 0); x.stroke(); x.fillStyle = "#f2c14e"; x.fillRect(ix + 9, 36, 2, 2); }
+      });
+    };
+    shelf(30, [["fold", "#a77ce0"], ["fold", "#8fe0cc"], ["hat", "#ff9fc8"], ["fold", "#ffd34d"], ["bag", "#d8434e"]]);
+    shelf(460, [["hat", "#2c3e7a"], ["bag", "#ff9fc8"], ["fold", "#f4b6c4"], ["hat", "#efe2c6"], ["fold", "#2f8f6a"]]);
+    // 출입문
+    x.fillStyle = OUT; x.fillRect(296, 382, 48, 18); x.fillStyle = "#6a3f28"; x.fillRect(298, 384, 44, 16); x.fillStyle = "#ffe8a3"; x.fillRect(306, 388, 28, 4);
+
+    const objects = [], colliders = [[0, 0, W, 90]];
+    // 계산대 (매대)
+    const counter = (() => {
+      const CW = 184, CH = 56;
+      const [c, s] = cv(CW, CH);
+      s.fillStyle = "rgba(40,30,20,.25)"; s.fillRect(4, CH - 4, CW - 4, 4);
+      s.fillStyle = OUT; s.fillRect(0, 16, CW, 12); s.fillStyle = "#fff8ea"; s.fillRect(1, 17, CW - 2, 9); s.fillStyle = "#ffffff"; s.fillRect(1, 17, CW - 2, 2);
+      s.fillStyle = OUT; s.fillRect(2, 27, CW - 4, CH - 31); s.fillStyle = "#c9a0ef"; s.fillRect(3, 28, CW - 6, CH - 33);
+      s.fillStyle = "#e2cff8"; for (let k = 10; k < CW - 6; k += 16) s.fillRect(k, 30, 2, CH - 37);
+      s.fillStyle = "#f2c14e"; s.fillRect(3, 28, CW - 6, 2); s.fillRect(3, CH - 8, CW - 6, 2);
+      // 계산기 · 쇼핑백 · 꽃병 · 리본 롤
+      s.fillStyle = OUT; s.fillRect(14, 4, 26, 14); s.fillStyle = "#ffd1e6"; s.fillRect(15, 5, 24, 12); s.fillStyle = "#3a2530"; s.fillRect(18, 7, 12, 4); s.fillStyle = "#ffe07a"; s.fillRect(32, 7, 4, 4);
+      [["#ff7fae", 120], ["#a77ce0", 140], ["#7fd3bd", 160]].forEach(([col, bx]) => { s.fillStyle = OUT; s.fillRect(bx, 2, 16, 16); s.fillStyle = col; s.fillRect(bx + 1, 3, 14, 14); s.strokeStyle = OUT; s.lineWidth = 1.2; s.beginPath(); s.arc(bx + 8, 3, 4, Math.PI, 0); s.stroke(); s.fillStyle = "#fff"; s.fillRect(bx + 5, 8, 6, 2); });
+      s.fillStyle = OUT; s.fillRect(56, 6, 10, 12); s.fillStyle = "#9fe8ff"; s.fillRect(57, 7, 8, 10); s.fillStyle = "#ff5f9f"; s.fillRect(55, 0, 5, 5); s.fillStyle = "#ffd34d"; s.fillRect(62, 1, 5, 5); s.fillStyle = "#3fa04a"; s.fillRect(60, 4, 1, 4);
+      s.font = `bold 9px ${FONT}`; s.textAlign = "center"; s.textBaseline = "middle"; s.fillStyle = "#ffffff"; s.fillText("JELLY JELLY", CW / 2, 40);
+      return c;
+    })();
+    const CTX0 = 228, CTY0 = 82;
+    objects.push({ y: 136, x: 320, draw: (c) => blit(c, counter, CTX0, CTY0) });
+    colliders.push([CTX0 - 4, 84, 192, 54]);
+    // 옷걸이 행거 (드레스 5벌)
+    const rack = (rx, ry, outfits) => {
+      const RW = 124, RH = 64;
+      const [c, s] = cv(RW, RH);
+      s.fillStyle = "rgba(40,30,20,.22)"; s.fillRect(6, RH - 4, RW - 8, 4);
+      s.fillStyle = OUT; s.fillRect(4, 6, 4, RH - 8); s.fillRect(RW - 8, 6, 4, RH - 8); s.fillRect(0, RH - 6, 14, 4); s.fillRect(RW - 14, RH - 6, 14, 4); s.fillRect(2, 4, RW - 4, 4);
+      s.fillStyle = "#e8e2f0"; s.fillRect(3, 5, RW - 6, 2); s.fillRect(5, 8, 2, RH - 12); s.fillRect(RW - 7, 8, 2, RH - 12);
+      outfits.forEach((oi, i) => {
+        const o = Avatar.OUTFITS[oi] || Avatar.OUTFITS[0], hx = 16 + i * 22;
+        s.strokeStyle = OUT; s.lineWidth = 1; s.beginPath(); s.moveTo(hx + 6, 4); s.lineTo(hx + 6, 9); s.moveTo(hx, 12); s.lineTo(hx + 6, 9); s.lineTo(hx + 12, 12); s.stroke();
+        s.fillStyle = OUT; s.fillRect(hx, 11, 13, 10); s.beginPath(); s.moveTo(hx - 3, 36); s.lineTo(hx + 16, 36); s.lineTo(hx + 12, 19); s.lineTo(hx + 1, 19); s.closePath(); s.fill();
+        s.fillStyle = o.top; s.fillRect(hx + 1, 12, 11, 8);
+        s.fillStyle = o.skirt || o.top; s.beginPath(); s.moveTo(hx - 1, 35); s.lineTo(hx + 14, 35); s.lineTo(hx + 11, 20); s.lineTo(hx + 2, 20); s.closePath(); s.fill();
+        s.fillStyle = o.skirtS || o.topS || o.top; s.fillRect(hx, 33, 13, 2);
+        if (o.frill || o.sleeve) { s.fillStyle = o.frill || o.sleeve; s.fillRect(hx + 1, 12, 2, 3); s.fillRect(hx + 10, 12, 2, 3); }
+        s.fillStyle = "#ffffff"; s.fillRect(hx + 9, 22 + (i % 2) * 4, 2, 2);
+      });
+      objects.push({ y: ry + RH - 4, x: rx + RW / 2, draw: (cc) => cc.drawImage(c, rx, ry) });
+      colliders.push([rx + 2, ry + RH - 18, RW - 4, 16]);
+    };
+    const OF = (id) => Math.max(0, Avatar.OUTFITS.findIndex((o) => o.id === id));
+    rack(28, 120, [OF("rose"), OF("fairy"), OF("idol"), OF("mint"), OF("berry")]);
+    rack(488, 120, [OF("midnight"), OF("emerald"), OF("pearl"), OF("burgundy"), OF("velvet")]);
+    rack(28, 250, [OF("tweed"), OF("gingham"), OF("sailor"), OF("aurora"), OF("magic")]);
+    rack(488, 250, [OF("tux"), OF("black"), OF("cherry"), OF("moon"), OF("bear")]);
+    // 마네킹 (받침대 위 전신 코디)
+    const mannequin = (mx, my, av) => {
+      const [pc, p] = cv(36, 14);
+      p.fillStyle = OUT; p.beginPath(); p.ellipse(18, 7, 17, 6, 0, 0, 7); p.fill(); p.fillStyle = "#fff8ea"; p.beginPath(); p.ellipse(18, 6, 16, 5, 0, 0, 7); p.fill(); p.fillStyle = "#f2c14e"; p.fillRect(4, 8, 28, 2);
+      objects.push({ y: my + 2, x: mx, draw: (cc) => { cc.drawImage(pc, mx - 18, my - 6); Avatar.draw(cc, av, mx, my - 2, "down", 0); } });
+      colliders.push([mx - 14, my - 6, 28, 10]);
+    };
+    const pale = { gender: "f", hair: 23, hairColor: 0, skin: 0, eye: 0, wand: 0 };
+    mannequin(196, 220, { ...pale, outfit: OF("celestial") });
+    mannequin(444, 220, { ...pale, outfit: OF("rose"), gender: "f" });
+    // 전신 거울 · 피팅룸 커튼
+    const mirror = (() => { const [c, s] = cv(30, 60); s.fillStyle = OUT; s.beginPath(); s.ellipse(15, 26, 14, 25, 0, 0, 7); s.fill(); s.fillStyle = "#f2c14e"; s.beginPath(); s.ellipse(15, 26, 13, 24, 0, 0, 7); s.fill(); s.fillStyle = "#cfefff"; s.beginPath(); s.ellipse(15, 26, 10, 21, 0, 0, 7); s.fill(); s.fillStyle = "rgba(255,255,255,.8)"; s.fillRect(9, 12, 3, 16); s.fillRect(14, 10, 2, 8); s.fillStyle = OUT; s.fillRect(8, 50, 14, 8); s.fillStyle = "#c98b5a"; s.fillRect(9, 51, 12, 6); return c; })();
+    objects.push({ y: 372, x: 600, draw: (c) => c.drawImage(mirror, 586, 314) });
+    colliders.push([588, 360, 26, 12]);
+    const fitting = (() => { const [c, s] = cv(64, 76); s.fillStyle = OUT; s.fillRect(0, 0, 64, 6); s.fillStyle = "#c98b5a"; s.fillRect(1, 1, 62, 4);
+      for (let k = 0; k < 8; k++) { s.fillStyle = OUT; s.fillRect(2 + k * 7.6, 6, 8, 66); s.fillStyle = k % 2 ? "#b58cff" : "#c9a0ef"; s.fillRect(3 + k * 7.6, 6, 6, 65); }
+      s.fillStyle = "#f2c14e"; s.fillRect(2, 40, 60, 3); s.font = `bold 8px ${FONT}`; s.textAlign = "center"; s.textBaseline = "middle"; s.fillStyle = "#fff"; s.fillText("FITTING", 32, 24); return c; })();
+    objects.push({ y: 390, x: 50, draw: (c) => blit(c, fitting, 18, 314) });
+    colliders.push([18, 370, 64, 20]);
+    [[176, 112, "#ff8fb8"], [464, 112, "#b58cff"], [560, 384, "#ffd34d"], [110, 384, "#9fdc7a"]].forEach(([px, py, col]) => { const sp = flowerPot(col); objects.push({ y: py + 16, x: px, draw: (c) => c.drawImage(sp, px - 7, py) }); colliders.push([px - 7, py + 6, 14, 10]); });
+    // 점원 NPC (계산대 뒤)
+    const staff = { x: 320, y: 106, dir: "down", nameKey: "shopStaff", linesKey: "shopLines", welcomeKey: "shopWelcome", thanksKey: "shopThanks",
+      av: { gender: "f", hair: 1, hairColor: 6, skin: 0, outfit: OF("tweed"), eye: 2, wand: 0 } };
+    const collide = (px, py) => colliders.some(([a, b, w, h]) => px > a && px < a + w && py > b && py < b + h);
+    return {
+      id: "shop", W, H, ground: g, objects, colliders: [], seats: [], staff,
+      zones: [{ id: "exitShop", x: 290, y: 368, w: 60, h: 32, label: T("zExit") }, { id: "clerk", x: 284, y: 138, w: 72, h: 26, label: T("zShopClerk") }],
+      walkable: (px, py) => px > 10 && px < W - 10 && py > 92 && py < H - 4 && !collide(px, py),
+      spawn: { x: 320, y: 362 }, artist: null, icons: [{ x: 252, y: 84, icon: "🛍️" }], signs: [],
+      clickables: [{ x: 320, y: 98, r: 34, go: "clerk", front: { x: 320, y: 150 } }],
+    };
+  }
+
+  // ---------------- 🎬 젤리 시네마 내부 (작고 아늑한 상영관) ----------------
+  function buildCinema() {
+    const W = 420, H = 330;
+    const SC = { x: 74, y: 12, w: 272, h: 62 }; // 스크린
+    const [g, x] = cv(W, H);
+    // 바닥: 아주 어두운 자주 카펫 + 무늬
+    x.fillStyle = "#1c1020"; x.fillRect(0, 0, W, H);
+    for (let yy = 96; yy < H; yy += 16) for (let xx = (yy / 16) % 2 ? 8 : 0; xx < W; xx += 16) { x.fillStyle = "#26162b"; x.fillRect(xx, yy, 3, 3); }
+    // 가운데 통로 (짙은 빨강 카펫 + 바닥 조명)
+    x.fillStyle = OUT; x.fillRect(181, 92, 58, H - 92); x.fillStyle = "#6a1824"; x.fillRect(183, 92, 54, H - 92); x.fillStyle = "#7e1e2c"; x.fillRect(187, 92, 46, H - 92);
+    // 벽
+    x.fillStyle = OUT; x.fillRect(0, 0, W, 94);
+    for (let xx = 0; xx < W; xx += 16) { x.fillStyle = (xx / 16) % 2 ? "#140e22" : "#18112a"; x.fillRect(xx, 0, 16, 88); }
+    // 무대 턱
+    x.fillStyle = OUT; x.fillRect(40, 82, 340, 10); x.fillStyle = "#3a1a26"; x.fillRect(41, 83, 338, 7);
+    // 스크린 (금색 테)
+    x.fillStyle = OUT; x.fillRect(SC.x - 6, SC.y - 6, SC.w + 12, SC.h + 12); x.fillStyle = "#8a6a20"; x.fillRect(SC.x - 4, SC.y - 4, SC.w + 8, SC.h + 8); x.fillStyle = OUT; x.fillRect(SC.x - 1, SC.y - 1, SC.w + 2, SC.h + 2);
+    const sg = x.createLinearGradient(0, SC.y, 0, SC.y + SC.h); sg.addColorStop(0, "#eef0ff"); sg.addColorStop(1, "#c8cce8"); x.fillStyle = sg; x.fillRect(SC.x, SC.y, SC.w, SC.h);
+    x.font = `bold 17px ${FONT}`; x.textAlign = "center"; x.textBaseline = "middle"; x.fillStyle = "#c0306a"; x.fillText("🎬 JELLY CINEMA", W / 2, SC.y + 24);
+    x.font = `10px ${FONT}`; x.fillStyle = "#4a3a68"; x.fillText(T("cinemaScreen"), W / 2, SC.y + 48);
+    // 빨간 커튼 (양옆)
+    const curtain = (cx0, flip) => {
+      for (let k = 0; k < 4; k++) {
+        const xx = flip ? cx0 - k * 9 - 9 : cx0 + k * 9;
+        x.fillStyle = OUT; x.fillRect(xx, 0, 9, 84 - k * 3); x.fillStyle = k % 2 ? "#7a1826" : "#9a2232"; x.fillRect(xx + 1, 0, 7, 82 - k * 3); x.fillStyle = "rgba(255,255,255,.08)"; x.fillRect(xx + 2, 0, 2, 80 - k * 3);
+      }
+      x.fillStyle = "#8a6a20"; x.fillRect(flip ? cx0 - 36 : cx0, 46, 36, 3);
+    };
+    curtain(30, false); curtain(390, true);
+    x.fillStyle = OUT; x.fillRect(26, 0, 368, 6); x.fillStyle = "#7a1826"; x.fillRect(27, 0, 366, 4); for (let xx = 30; xx < 390; xx += 10) { x.fillStyle = "#9a2232"; x.beginPath(); x.arc(xx + 5, 4, 5, 0, Math.PI); x.fill(); }
+    // 출입문 + EXIT
+    x.fillStyle = OUT; x.fillRect(186, 314, 48, 16); x.fillStyle = "#3a2418"; x.fillRect(188, 316, 44, 14); x.fillStyle = "#8a7a50"; x.fillRect(196, 319, 28, 3);
+    x.fillStyle = OUT; x.fillRect(140, 304, 32, 11); x.fillStyle = "#2fb85a"; x.fillRect(141, 305, 30, 9); x.font = `bold 7px ${FONT}`; x.fillStyle = "#eafff0"; x.fillText("EXIT", 156, 310);
+
+    const objects = [], colliders = [[0, 0, W, 96]], seats = [];
+    // 영화관 의자 (뒤에서 본 모습: 낮은 등받이가 앉은 사람 앞쪽)
+    const seatSpr = (() => {
+      const [c, s] = cv(30, 34);
+      const X = 15, Y = 24;
+      s.fillStyle = "rgba(0,0,0,.35)"; s.fillRect(X - 13, Y + 6, 28, 4);
+      s.fillStyle = OUT; s.fillRect(X - 13, Y - 4, 26, 12);
+      s.fillStyle = "#8a1e2c"; s.fillRect(X - 12, Y - 3, 24, 10); s.fillStyle = "#a82c3a"; s.fillRect(X - 12, Y - 3, 24, 3); s.fillStyle = "#6a1420"; s.fillRect(X - 1, Y, 2, 6);
+      s.fillStyle = OUT; s.fillRect(X - 15, Y - 1, 4, 10); s.fillRect(X + 11, Y - 1, 4, 10);
+      s.fillStyle = "#2a1a22"; s.fillRect(X - 14, Y, 2, 8); s.fillRect(X + 12, Y, 2, 8);
+      s.fillStyle = "#b8963a"; s.fillRect(X - 3, Y + 4, 6, 2);
+      return c;
+    })();
+    const ROWS = [146, 194, 242], LEFT = [86, 120, 154], RIGHT = [266, 300, 334];
+    ROWS.forEach((ry, ri) => {
+      [...LEFT, ...RIGHT].forEach((sx, si) => {
+        objects.push({ y: ry + 2, x: sx, draw: (c) => c.drawImage(seatSpr, sx - 15, ry - 24) });
+        colliders.push([sx - 15, ry - 8, 30, 16]);
+        seats.push({ id: "c" + ri + si, x: sx, y: ry, dir: "up", ax: sx, ay: ry + 22, labelKey: "actWatchSit", watch: true });
+      });
+    });
+    // 팝콘 판매대 · 화분
+    const popcorn = (() => { const [c, s] = cv(32, 36); s.fillStyle = OUT; s.fillRect(2, 12, 28, 24); s.fillStyle = "#e8e0e0"; s.fillRect(3, 13, 26, 22); s.fillStyle = "#9a2232"; for (let k = 4; k < 28; k += 7) s.fillRect(k, 13, 3, 22);
+      s.fillStyle = OUT; s.fillRect(5, 2, 22, 12); s.fillStyle = "#e8dc90"; for (let k = 0; k < 5; k++) { s.beginPath(); s.arc(8 + k * 4, 7 + (k % 2) * 2, 4, 0, 7); s.fill(); } return c; })();
+    objects.push({ y: 318, x: 390, draw: (c) => c.drawImage(popcorn, 372, 282) });
+    colliders.push([372, 300, 32, 18]);
+    [[24, 300, "#ff8fb8"]].forEach(([px, py, col]) => { const sp = flowerPot(col); objects.push({ y: py + 16, x: px, draw: (c) => c.drawImage(sp, px - 7, py) }); colliders.push([px - 7, py + 6, 14, 10]); });
+    const collide = (px, py) => colliders.some(([a, b, w, h]) => px > a && px < a + w && py > b && py < b + h);
+    return {
+      id: "cinema", W, H, ground: g, objects, colliders: [], seats, screen: SC,
+      aisleLights: [...[110, 140, 170, 200, 230, 260, 290].flatMap((yy) => [[185, yy], [235, yy]])], exitSign: { x: 140, y: 304, w: 32, h: 11 },
+      zones: [{ id: "exitCinema", x: 180, y: 296, w: 60, h: 34, label: T("zExit") }],
+      walkable: (px, py) => px > 10 && px < W - 10 && py > 100 && py < H - 4 && !collide(px, py),
+      spawn: { x: 210, y: 292 }, artist: null, icons: [], signs: [{ x: 210, y: 116, key: "cinemaSign", bg: "#fff3a8" }],
+      clickables: [],
     };
   }
 
@@ -981,5 +1168,5 @@
     return world;
   }
 
-  window.World = { buildPlaza, buildLounge, buildSea, rankTops: {}, blitText };
+  window.World = { buildPlaza, buildLounge, buildSea, buildShop, buildCinema, rankTops: {}, blitText };
 })();

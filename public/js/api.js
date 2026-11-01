@@ -99,11 +99,11 @@
       if ((me.coins | 0) < 5) fail("coins");
       me.coins -= 5; me.drink = { k: b.k | 0, until: Date.now() + 240000 }; save(); return { user: pub(me) };
     }
-    if (route === "game/start") return { run: Date.now() + ".demo" + (b.game === "up" ? ".up" : b.game === "tet" ? ".tet" : ""), dayLeft: me.gameDay === kstDay() ? Math.max(0, 600 - (me.gameCoins | 0)) : 600 };
+    if (route === "game/start") return { run: Date.now() + ".demo" + (b.game === "up" ? ".up" : b.game === "tet" ? ".tet" : b.game === "jx" ? ".jx" : ""), dayLeft: me.gameDay === kstDay() ? Math.max(0, 600 - (me.gameCoins | 0)) : 600 };
     if (route === "game/finish") {
       if (me.gameDay !== kstDay()) { me.gameDay = kstDay(); me.gameCoins = 0; }
-      const coins = Math.min(200, 600 - (me.gameCoins | 0), Math.floor((+b.m || 0) / (String(b.run || "").endsWith(".tet") ? 1000 : 100)) * 5); me.gameCoins = (me.gameCoins | 0) + coins;
-      const gk = String(b.run || "").endsWith(".up") ? "up" : String(b.run || "").endsWith(".tet") ? "tet" : "jump", bk = { jump: "best", up: "bestUp", tet: "bestTet" }[gk], tk = { jump: "jl_demo_top", up: "jl_demo_top_up", tet: "jl_demo_top_tet" }[gk];
+      const coins = Math.min(200, 600 - (me.gameCoins | 0), Math.floor((+b.m || 0) / (/\.(tet|jx)$/.test(String(b.run || "")) ? 1000 : 100)) * 5); me.gameCoins = (me.gameCoins | 0) + coins;
+      const gk = String(b.run || "").endsWith(".up") ? "up" : String(b.run || "").endsWith(".tet") ? "tet" : String(b.run || "").endsWith(".jx") ? "jx" : "jump", bk = { jump: "best", up: "bestUp", tet: "bestTet", jx: "bestJx" }[gk], tk = { jump: "jl_demo_top", up: "jl_demo_top_up", tet: "jl_demo_top_tet", jx: "jl_demo_top_jx" }[gk];
       me.coins = (me.coins | 0) + coins; if ((+b.m | 0) > (me[bk] | 0)) me[bk] = +b.m | 0; save();
       let top = ls.get(tk, []).filter((e) => e.id !== me.id);
       top.push({ id: me.id, name: me.nickname, avatar: me.avatar, role: me.role || "fan", m: me[bk] | 0, ts: Date.now() });
@@ -163,14 +163,14 @@
     // 🫧 데모: 분수대 퀴즈 (진짜 문제는 서버에만 있음 — 데모는 연습용 3문제)
     if (route.startsWith("sea/")) {
       const DQ = [["노르웨이의 수도는?", ["오슬로", "스톡홀름", "코펜하겐", "헬싱키"]], ["거미의 다리는 몇 개?", ["8", "6", "10", "4"]], ["태양계에서 가장 큰 행성은?", ["목성", "토성", "지구", "해왕성"]]];
-      const now = Date.now(), lock = Math.max(0, (me.seaAt || 0) + 3 * 3600e3 - now);
+      const now = Date.now(), lock = Math.max(0, (me.seaAt || 0) + 30 * 60e3 - now);
       if (route === "sea/dive") { me.sea = { t0: now, ok: 0 }; save(); return { o2: 15000, need: 2, coins: 400, lockLeft: lock }; }
       if (!me.sea || now - me.sea.t0 > 17500) fail("seaTimeout");
       if (lock > 0) fail("seaLocked");
       if (route === "sea/q") { const qi = (Math.random() * DQ.length) | 0, perm = [0, 1, 2, 3].sort(() => Math.random() - 0.5); me.sea.q = qi; me.sea.perm = perm; save(); return { q: DQ[qi][0], choices: perm.map((i) => DQ[qi][1][i]), ok: me.sea.ok, need: 2 }; }
       if (route === "sea/answer") {
         const answer = me.sea.perm.indexOf(0), correct = (b.choice | 0) === answer; if (correct) me.sea.ok++;
-        if (me.sea.ok >= 2) { me.sea = null; me.seaAt = now; me.coins = (me.coins | 0) + 400; save(); return { correct, answer, ok: 2, opened: true, coins: 400, lockLeft: 3 * 3600e3, user: pub(me) }; }
+        if (me.sea.ok >= 2) { me.sea = null; me.seaAt = now; me.coins = (me.coins | 0) + 400; save(); return { correct, answer, ok: 2, opened: true, coins: 400, lockLeft: 30 * 60e3, user: pub(me) }; }
         save(); return { correct, answer, ok: me.sea.ok, opened: false };
       }
     }
@@ -202,7 +202,7 @@
     if (route === "password") { if (me.pw !== (await sha(b.old || ""))) fail("pwWrong"); if (String(b.password || "").length < 6) fail("pw6"); me.pw = await sha(b.password); me.tempPw = false; save(); return { ok: true, user: pub(me) }; }
     if (route === "admin/rank") {
       const e = Object.keys(users).find((k) => users[k].id === b.id); if (!e) fail("notfound", 404);
-      const u = users[e], bk = { jump: "best", up: "bestUp", tet: "bestTet" }[b.game] || "best", tk = { jump: "jl_demo_top", up: "jl_demo_top_up", tet: "jl_demo_top_tet" }[b.game] || "jl_demo_top";
+      const u = users[e], bk = { jump: "best", up: "bestUp", tet: "bestTet", jx: "bestJx" }[b.game] || "best", tk = { jump: "jl_demo_top", up: "jl_demo_top_up", tet: "jl_demo_top_tet", jx: "jl_demo_top_jx" }[b.game] || "jl_demo_top";
       const m = b.mode === "remove" ? 0 : Math.max(0, Math.floor(+b.m || 0)); u[bk] = m; save();
       let top = ls.get(tk, []); const old = top.find((x) => x.id === u.id); top = top.filter((x) => x.id !== u.id);
       if (m > 0) top.push({ id: u.id, name: u.nickname, avatar: u.avatar, role: u.role || "fan", m, ts: old ? old.ts : Date.now() });
@@ -211,9 +211,9 @@
     }
     if (route === "admin/delete") { const e = Object.keys(users).find((k) => users[k].id === b.id); if (e) delete users[e]; save(); return { ok: true }; }
     if (route === "game/top") {
-      if (q.get("game") === "all") return { jump: ls.get("jl_demo_top", [])[0] || null, up: ls.get("jl_demo_top_up", [])[0] || null, tet: ls.get("jl_demo_top_tet", [])[0] || null };
-      const gk = ["up", "tet"].includes(q.get("game")) ? q.get("game") : "jump";
-      return { top: ls.get({ jump: "jl_demo_top", up: "jl_demo_top_up", tet: "jl_demo_top_tet" }[gk], []), best: me[{ jump: "best", up: "bestUp", tet: "bestTet" }[gk]] | 0 };
+      if (q.get("game") === "all") return { jump: ls.get("jl_demo_top", [])[0] || null, up: ls.get("jl_demo_top_up", [])[0] || null, tet: ls.get("jl_demo_top_tet", [])[0] || null, jx: ls.get("jl_demo_top_jx", [])[0] || null };
+      const gk = ["up", "tet", "jx"].includes(q.get("game")) ? q.get("game") : "jump";
+      return { top: ls.get({ jump: "jl_demo_top", up: "jl_demo_top_up", tet: "jl_demo_top_tet", jx: "jl_demo_top_jx" }[gk], []), best: me[{ jump: "best", up: "bestUp", tet: "bestTet", jx: "bestJx" }[gk]] | 0 };
     }
     if (route === "settings") { if (b.lang) me.lang = b.lang; ls.set("jl_demo_users", users); return { user: pub(me) }; }
     if (route === "presence") return { others: [], online: 1 };

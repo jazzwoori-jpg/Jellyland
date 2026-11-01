@@ -708,3 +708,7 @@ body:not(.touch) #emo-pop { right: 20px; bottom: 70px; }
 .cafe-tag { position: absolute; top: 6px; left: 6px; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 8px; color: #fff; }
 .cafe-tag.hot { background: #ff7043; }
 .cafe-tag.ice { background: #4fa8ff; }
+
+/* 🍬 젤리X젤리 (v46) */
+.gw-card.jx { background: linear-gradient(#ffe3f0, #ffb3d6); }
+.tg.jx { aspect-ratio: 256 / 320; height: min(64vh, 600px); background: #9ad8aa; }

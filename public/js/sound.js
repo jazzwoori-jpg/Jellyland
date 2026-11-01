@@ -177,6 +177,22 @@
       });
       return { bpm: 150, spb: 16, bars: 8, parts: [{ wave: "triangle", vol: 0.45, notes: bass }, { wave: "square", vol: 0.05, notes: arp }, { wave: "square", vol: 0.14, notes: mel }], drums };
     })(),
+    // 🍬 젤리X젤리: 통통 튀는 G장조 퍼즐 BGM (144bpm, 오리지널)
+    jx: (() => {
+      const prog = [[43, 0], [40, 1], [48, 0], [50, 0], [43, 0], [47, 1], [45, 1], [50, 0]];
+      const bass = [], arp = [], mel = [], drums = [];
+      const ph = [[[0, 79, 1], [2, 83, 1], [4, 86, 2], [6, 83, 1], [8, 81, 2], [10, 79, 2], [12, 74, 3]],
+        [[0, 76, 1], [2, 79, 1], [4, 83, 2], [6, 79, 1], [8, 76, 2], [10, 74, 2], [12, 76, 3]],
+        [[0, 84, 2], [2, 83, 1], [3, 81, 1], [4, 79, 2], [6, 76, 2], [8, 79, 2], [10, 81, 2], [12, 84, 3]],
+        [[0, 86, 1], [1, 84, 1], [2, 83, 1], [3, 81, 1], [4, 79, 2], [6, 81, 2], [8, 78, 2], [10, 81, 2], [12, 79, 4]]];
+      prog.forEach(([r, mi], b) => {
+        [0, 3, 6, 8, 11, 14].forEach((st) => bass.push([b, st, r - 12 + (st === 8 || st === 14 ? 7 : 0), 1.2]));
+        const ch = chordNotes(r + 24, mi); for (let st = 0; st < 16; st += 2) arp.push([b, st, ch[(st >> 1) % 3], 0.6]);
+        ph[b % 4].forEach(([st, m, l]) => mel.push([b, st, m, l]));
+        for (let st = 0; st < 16; st++) { if (st % 8 === 0 || st === 10) drums.push([b, st, "k"]); if (st % 8 === 4) drums.push([b, st, "s"]); if (st % 2 === 0) drums.push([b, st, "h"]); }
+      });
+      return { bpm: 144, spb: 16, bars: 8, parts: [{ wave: "triangle", vol: 0.45, notes: bass }, { wave: "bell", vol: 0.07, notes: arp }, { wave: "square", vol: 0.13, notes: mel }], drums };
+    })(),
     // 🫧 바닷속: 몽글몽글 신비로운 D단조 (96bpm) — 오르골 + 물방울 아르페지오
     sea: (() => {
       const prog = [[50, 1], [46, 0], [53, 0], [45, 0], [50, 1], [46, 0], [43, 1], [45, 0]];
