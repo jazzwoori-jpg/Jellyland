@@ -711,4 +711,4 @@ body:not(.touch) #emo-pop { right: 20px; bottom: 70px; }
 
 /* 🍬 젤리X젤리 (v46) */
 .gw-card.jx { background: linear-gradient(#ffe3f0, #ffb3d6); }
-.tg.jx { aspect-ratio: 256 / 320; height: min(64vh, 600px); background: #9ad8aa; }
+.tg.jx { aspect-ratio: 256 / 356; height: min(64vh, 600px); background: #9ad8aa; }
