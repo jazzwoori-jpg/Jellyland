@@ -712,3 +712,9 @@ body:not(.touch) #emo-pop { right: 20px; bottom: 70px; }
 /* 🍬 젤리X젤리 (v46) */
 .gw-card.jx { background: linear-gradient(#ffe3f0, #ffb3d6); }
 .tg.jx { aspect-ratio: 256 / 356; height: min(64vh, 600px); background: #9ad8aa; }
+
+/* 🌿 젤리 초원 · 수상한 동굴 (v49) */
+.install.spooky { background: radial-gradient(circle at 50% 20%, #4a2266, #1c0f2a 70%); color: #f4e8ff; border-radius: 14px; padding: 16px 12px; }
+.install.spooky .push-bell { animation: spookyPulse 1.6s ease-in-out infinite; filter: drop-shadow(0 0 10px #c060ff); }
+.install.spooky .push-note { color: #e2d0ff; }
+@keyframes spookyPulse { 0%, 100% { transform: scale(1); opacity: .85; } 50% { transform: scale(1.15); opacity: 1; } }

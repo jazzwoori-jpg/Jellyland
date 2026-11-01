@@ -208,7 +208,8 @@
     for (const b of buildings) { const nw = Math.round(b.w * 0.76), nh = Math.round(b.h * 0.8); b.x += Math.round((b.w - nw) / 2); b.y += b.h - nh; b.w = nw; b.h = nh; }
     const paving = (x, y) => {
       const dx = Math.abs(x - CX), dy = Math.abs(y - CY);
-      let p = (dx <= 520 && dy <= 400 && dx + dy <= 780) || (Math.abs(x - CX) <= 60 && y > CY);
+      let p = (dx <= 520 && dy <= 400 && dx + dy <= 780) || (Math.abs(x - CX) <= 60 && y > CY)
+        || (Math.abs(x - CX) <= 46 && y < CY) || (Math.abs(y - CY) <= 44); // 북 · 동 · 서쪽 통로 (북·서는 준비 중)
       if (!p) return false;
       for (const [gx, gy] of gardens) if ((x - gx) ** 2 + (y - gy) ** 2 < 46 * 46) return false;
       return true;
@@ -394,6 +395,27 @@
     objects.push({ y: 914, x: 640, draw: (c) => blit(c, gate, 640 - 80, 860) });
     colliders.push([560, 900, 18, 14], [702, 900, 18, 14]);
 
+    // 🚧 북쪽 · 서쪽 통로: 아직 준비 중 (바리케이드)
+    const barH = (() => { const [c, s2] = cv(104, 40); s2.fillStyle = OUT; s2.fillRect(6, 10, 6, 30); s2.fillRect(92, 10, 6, 30);
+      s2.fillStyle = OUT; s2.fillRect(0, 12, 104, 14); for (let k = 0; k < 104; k += 12) { s2.fillStyle = (k / 12) % 2 ? "#ffffff" : "#ff7fae"; s2.fillRect(k + 1, 13, 11, 12); }
+      s2.fillStyle = OUT; s2.fillRect(30, 0, 44, 14); s2.fillStyle = "#ffe07a"; s2.fillRect(31, 1, 42, 12); s2.font = `bold 8px ${FONT}`; s2.textAlign = "center"; s2.textBaseline = "middle"; s2.fillStyle = OUT; s2.fillText("🚧 " + T("soonShort"), 52, 7); return c; })();
+    objects.push({ y: 44, x: CX, draw: (c) => blit(c, barH, CX - 52, 8) });
+    colliders.push([CX - 52, 18, 104, 22]);
+    const barV = (() => { const [c, s2] = cv(30, 104); s2.fillStyle = OUT; s2.fillRect(4, 0, 22, 104); for (let k = 0; k < 104; k += 12) { s2.fillStyle = (k / 12) % 2 ? "#ffffff" : "#ff7fae"; s2.fillRect(5, k + 1, 20, 11); } s2.fillStyle = OUT; s2.fillRect(0, 0, 30, 6); s2.fillRect(0, 98, 30, 6); return c; })();
+    objects.push({ y: CY + 52, x: 30, draw: (c) => c.drawImage(barV, 18, CY - 52) });
+    colliders.push([0, CY - 52, 46, 104]);
+    // 🌿 동쪽 통로: 젤리 초원으로 (꽃 아치 + 표지판)
+    const arch = (() => { const [c, s2] = cv(40, 120); s2.fillStyle = OUT; s2.fillRect(14, 0, 12, 120); s2.fillStyle = "#3fa04a"; s2.fillRect(15, 0, 10, 120); for (let k = 4; k < 120; k += 10) { s2.fillStyle = ["#ff8fb8", "#ffe07a", "#ffffff"][(k / 10 | 0) % 3]; s2.fillRect(13 + (k % 3) * 4, k, 4, 4); } return c; })();
+    objects.push({ y: CY - 48, x: 1200, draw: (c) => c.drawImage(arch, 1180, CY - 150) });
+    objects.push({ y: CY + 58, x: 1200, draw: (c) => c.drawImage(arch, 1180, CY - 62) });
+    colliders.push([1186, CY - 56, 28, 8], [1186, CY + 50, 28, 8]);
+    const eastSign = (() => { const [c, s2] = cv(80, 50); s2.fillStyle = OUT; s2.fillRect(37, 22, 6, 28); s2.fillStyle = "#8f5a34"; s2.fillRect(38, 23, 4, 27);
+      s2.fillStyle = OUT; s2.beginPath(); s2.moveTo(0, 2); s2.lineTo(68, 2); s2.lineTo(80, 13); s2.lineTo(68, 24); s2.lineTo(0, 24); s2.closePath(); s2.fill();
+      s2.fillStyle = "#8fd474"; s2.beginPath(); s2.moveTo(1, 3); s2.lineTo(67, 3); s2.lineTo(78, 13); s2.lineTo(67, 23); s2.lineTo(1, 23); s2.closePath(); s2.fill();
+      let fs = 10; s2.font = `bold ${fs}px ${FONT}`; const tt = "🌿 " + T("mapMeadow"); while (s2.measureText(tt).width > 64 && fs > 6) { fs--; s2.font = `bold ${fs}px ${FONT}`; }
+      s2.textAlign = "center"; s2.textBaseline = "middle"; s2.fillStyle = OUT; s2.fillText(tt, 36, 13); return c; })();
+    objects.push({ y: CY + 112, x: 1190, draw: (c) => blit(c, eastSign, 1150, CY + 64) });
+
     // 안내 게시판
     const board = boardSprite(T("zGuide"));
     objects.push({ y: 812, x: 532, draw: (c) => blit(c, board, 492, 748) });
@@ -417,6 +439,7 @@
       clickables: [{ x: RX, y: RY - 20, r: 24, go: "recboard", front: { x: RX, y: RY + 16 } }, { x: BX, y: BY - 50, r: 56, go: "rankboard", front: { x: BX, y: BY + 16 } }, { x: FX, y: FY - 6, r: 38, go: "fountain", front: { x: FX, y: FY + 32 } }],
       icons: [...buildings.map((b) => ({ x: b.x + b.w / 2 + 2, y: b.y - 4, icon: b.icon, label: b.name })), { x: PX, y: PY - 34, icon: "🎹" }, { x: RX, y: RY - 48, icon: "📼" }, { x: BX, y: BY - 122, icon: "🏆" }, { x: 532, y: 744, icon: "ℹ️" }],
       signs: [{ x: FX, y: FY - 34, key: "fountainSign", bg: "#e8dcfa", type: true }],
+      triggers: [{ id: "soonN", x: CX - 50, y: 40, w: 100, h: 34 }, { id: "soonW", x: 44, y: CY - 46, w: 34, h: 92 }, { id: "toMeadow", x: W - 16, y: CY - 46, w: 16, h: 92 }],
       npcArea: [300, 300, 700, 500],
     };
   }
@@ -1048,6 +1071,123 @@
     };
   }
 
+  // ---------------- 🌿 젤리 초원 (광장 동쪽) · 북쪽 암석산 · 수상한 동굴 ----------------
+  function warnSign() {
+    const [c, x] = cv(40, 46);
+    x.fillStyle = OUT; x.fillRect(18, 16, 5, 30); x.fillStyle = "#6e4a2c"; x.fillRect(19, 17, 3, 28);
+    x.fillStyle = OUT; x.fillRect(1, 1, 38, 22); x.fillStyle = "#a88a5e"; x.fillRect(2, 2, 36, 20); x.fillStyle = "#866a44"; x.fillRect(2, 16, 36, 2);
+    x.font = `bold 10px ${FONT}`; x.textAlign = "center"; x.textBaseline = "middle"; x.fillStyle = "#9a2232"; x.fillText("⚠???", 20, 10);
+    return c;
+  }
+  function buildMeadow() {
+    const W = 1280, H = 900;
+    const r = rng(77);
+    // 북쪽 암석산의 아랫선 (울퉁불퉁)
+    const cliffY = (px) => 196 + Math.round(Math.sin(px / 61) * 9 + Math.sin(px / 23 + 1) * 5 + Math.sin(px / 137) * 12);
+    const CVX = 1000, CVB = cliffY(CVX); // 동굴 입구 (오른쪽 위, 바위산 아래)
+    const [g, x] = cv(W, H);
+    // 풀밭
+    x.fillStyle = "#6cbf55"; x.fillRect(0, 0, W, H);
+    for (let k = 0; k < 9000; k++) { const px = (r() * W) | 0, py = (r() * H) | 0, n = r(); x.fillStyle = n < 0.45 ? "#62b24c" : n < 0.8 ? "#78c862" : "#8fd474"; x.fillRect(px, py, 3, 2); }
+    // 꽃밭
+    for (let k = 0; k < 1400; k++) { const px = (r() * W) | 0, py = (r() * H) | 0; if (py < cliffY(px) + 20 || Math.hypot(px - CVX, py - CVB) < 150) continue; x.fillStyle = ["#ffd1e1", "#fff3a8", "#ffffff", "#f58fb0", "#c9b0ff"][k % 5]; x.fillRect(px, py, 2, 2); }
+    // 흙길: 서쪽 입구 → 동굴 앞
+    const path = () => { x.beginPath(); x.moveTo(-20, 450); x.bezierCurveTo(260, 470, 420, 420, 600, 380); x.bezierCurveTo(780, 340, 900, 320, CVX, CVB + 30); };
+    x.lineCap = "round"; x.strokeStyle = "#a8845a"; x.lineWidth = 44; path(); x.stroke(); x.strokeStyle = "#d9bb8a"; x.lineWidth = 36; path(); x.stroke();
+    // 동굴 앞 시든 땅
+    const dg = x.createRadialGradient(CVX, CVB + 20, 20, CVX, CVB + 20, 170); dg.addColorStop(0, "rgba(40,20,40,.55)"); dg.addColorStop(0.6, "rgba(70,50,50,.22)"); dg.addColorStop(1, "rgba(0,0,0,0)");
+    x.fillStyle = dg; x.beginPath(); x.ellipse(CVX, CVB + 30, 200, 140, 0, 0, 7); x.fill();
+    for (let k = 0; k < 220; k++) { const a = r() * Math.PI, d = 40 + r() * 140, px = CVX + Math.cos(a) * d * 1.3, py = CVB + 10 + Math.sin(a) * d * 0.7; x.fillStyle = r() < 0.5 ? "#7d7046" : "#5f5638"; x.fillRect(px | 0, py | 0, 2, 3); }
+    // ⛰️ 북쪽 암석산: 먼 봉우리 → 바위 절벽 → 아래 돌무더기
+    for (let px = 0; px < W; px += 2) { const top = 18 + Math.round(Math.abs(Math.sin(px / 90)) * 30 + Math.sin(px / 31) * 6); x.fillStyle = "#5e5868"; x.fillRect(px, 0, 2, top + 30); x.fillStyle = "#7a7484"; x.fillRect(px, top, 2, 3); }
+    for (let px = 0; px < W; px++) {
+      const base = cliffY(px);
+      for (let py = 40; py < base; py++) {
+        const band = Math.floor((py + Math.sin(px / 17) * 6) / 14), k = (py - 40) / (base - 40);
+        const sh = (band % 3 === 0 ? 0 : band % 3 === 1 ? 10 : -8) + Math.round(Math.sin(px / 9 + band) * 4);
+        const cval = 128 - k * 40 + sh;
+        x.fillStyle = `rgb(${cval + 6},${cval},${cval + 14})`; x.fillRect(px, py, 1, 1);
+      }
+      x.fillStyle = OUT; x.fillRect(px, base, 1, 2);
+    }
+    // 바위 덩어리 (절벽 면)
+    for (let k = 0; k < 160; k++) {
+      const px = (r() * W) | 0, base = cliffY(px), py = 50 + r() * (base - 70), rw = 10 + r() * 22, rh = 7 + r() * 12;
+      if (Math.abs(px - CVX) < 70 && py > CVB - 90) continue;
+      x.fillStyle = "#4a4454"; x.beginPath(); x.ellipse(px + 1, py + 2, rw / 2 + 1, rh / 2 + 1, 0, 0, 7); x.fill();
+      x.fillStyle = r() < 0.5 ? "#8a8494" : "#9a94a4"; x.beginPath(); x.ellipse(px, py, rw / 2, rh / 2, 0, 0, 7); x.fill();
+      x.fillStyle = "#b8b2c2"; x.fillRect(px - rw / 4, py - rh / 3, rw / 3, 2);
+    }
+    // 절벽 틈의 풀 · 이끼
+    for (let k = 0; k < 120; k++) { const px = (r() * W) | 0, py = 60 + r() * (cliffY(px) - 70); x.fillStyle = r() < 0.5 ? "#4f8f41" : "#5fa04e"; x.fillRect(px, py, 3, 2); }
+    // 절벽 아래 돌무더기
+    for (let px = 0; px < W; px += 9) { if (Math.abs(px - CVX) < 46) continue; const base = cliffY(px), rw = 8 + r() * 10; x.fillStyle = OUT; x.beginPath(); x.ellipse(px, base + 3, rw / 2 + 1, 5, 0, 0, 7); x.fill(); x.fillStyle = r() < 0.5 ? "#8a8494" : "#7a7484"; x.beginPath(); x.ellipse(px, base + 2, rw / 2, 4, 0, 0, 7); x.fill(); }
+    // 🕳️ 동굴 입구: 절벽을 파고 들어간 어두운 아치 + 둘레 바위 + 종유석
+    x.fillStyle = "#3a3444"; x.beginPath(); x.ellipse(CVX, CVB + 2, 52, 74, 0, Math.PI, 0); x.closePath(); x.fill();
+    for (let k = 0; k <= 10; k++) { const a = Math.PI + (k / 10) * Math.PI, rx = CVX + Math.cos(a) * 48, ry = CVB + Math.sin(a) * 70; x.fillStyle = OUT; x.beginPath(); x.ellipse(rx, ry, 11, 9, a, 0, 7); x.fill(); x.fillStyle = k % 2 ? "#6e687a" : "#807a8c"; x.beginPath(); x.ellipse(rx, ry, 9, 7, a, 0, 7); x.fill(); x.fillStyle = "#9a94a4"; x.fillRect(rx - 4, ry - 4, 5, 2); }
+    const hole = x.createRadialGradient(CVX, CVB - 20, 4, CVX, CVB - 20, 60); hole.addColorStop(0, "#000000"); hole.addColorStop(0.6, "#0c0614"); hole.addColorStop(1, "#24122e");
+    x.fillStyle = hole; x.beginPath(); x.ellipse(CVX, CVB + 2, 38, 60, 0, Math.PI, 0); x.closePath(); x.fill();
+    x.fillStyle = "#4a4454"; [[-24, 9], [-12, 13], [2, 8], [14, 14], [26, 9]].forEach(([dx, len]) => { const top = CVB - Math.sqrt(Math.max(0, 1 - (dx / 38) ** 2)) * 58; x.beginPath(); x.moveTo(CVX + dx - 4, top); x.lineTo(CVX + dx + 4, top); x.lineTo(CVX + dx, top + len); x.closePath(); x.fill(); });
+    // 입구 아래 바닥 돌
+    x.fillStyle = "#5a5464"; x.fillRect(CVX - 38, CVB, 76, 4);
+
+    const objects = [], colliders = [];
+    // 서쪽 입구 표지 (광장으로)
+    const signBoard = (() => { const [c, s] = cv(70, 44); s.fillStyle = OUT; s.fillRect(32, 18, 6, 26); s.fillStyle = "#8f5a34"; s.fillRect(33, 19, 4, 25); s.fillStyle = OUT; s.fillRect(2, 2, 66, 20); s.fillStyle = "#fff8ea"; s.fillRect(3, 3, 64, 18);
+      s.font = `bold 9px ${FONT}`; s.textAlign = "center"; s.textBaseline = "middle"; s.fillStyle = OUT; s.fillText("◀ " + T("mapPlaza"), 35, 12); return c; })();
+    objects.push({ y: 412, x: 60, draw: (c) => blit(c, signBoard, 26, 368) });
+    colliders.push([56, 404, 14, 8]);
+    // 나무 (남·서·동쪽 가장자리 + 군데군데)
+    const trees = [0, 1, 2].map((v) => treeSprite(v));
+    const spots = [];
+    for (let xx = 20; xx < W; xx += 46) spots.push([xx + 20, H - 6 - (xx % 2) * 12]);
+    for (let yy = 260; yy < H; yy += 50) { if (Math.abs(yy - 450) > 70) spots.push([14 + (yy % 3) * 8, yy]); spots.push([W - 16 - (yy % 2) * 10, yy]); }
+    [[230, 300], [380, 270], [700, 290], [300, 700], [520, 760], [800, 760], [180, 600], [1150, 520], [640, 560]].forEach((p) => spots.push(p));
+    spots.forEach(([tx, ty], i) => { const sp = trees[i % 3]; objects.push({ y: ty, x: tx, draw: (c) => c.drawImage(sp, tx - 17, ty - 42) }); colliders.push([tx - 8, ty - 8, 16, 8]); });
+    // 바위
+    [[420, 560], [760, 640], [1180, 330], [240, 820], [520, 280], [820, 280]].forEach(([bx, by]) => { objects.push({ y: by + 6, x: bx, draw: (c) => { c.fillStyle = OUT; c.beginPath(); c.ellipse(bx, by, 15, 10, 0, 0, 7); c.fill(); c.fillStyle = "#9a93a8"; c.beginPath(); c.ellipse(bx, by - 1, 13, 8, 0, 0, 7); c.fill(); c.fillStyle = "#c2bcce"; c.fillRect(bx - 7, by - 6, 6, 2); } }); colliders.push([bx - 14, by - 6, 28, 12]); });
+    // 연못
+    x.fillStyle = OUT; x.beginPath(); x.ellipse(960, 700, 96, 50, 0, 0, 7); x.fill(); x.fillStyle = "#5fb8e0"; x.beginPath(); x.ellipse(960, 700, 92, 46, 0, 0, 7); x.fill();
+    x.fillStyle = "#9fe0f5"; x.fillRect(920, 684, 20, 3); x.fillRect(980, 708, 26, 3); x.fillStyle = "#3fa04a"; [[910, 716], [1000, 690]].forEach(([a, b]) => { x.beginPath(); x.ellipse(a, b, 9, 5, 0, 0, 7); x.fill(); });
+    colliders.push([960 - 92, 700 - 40, 184, 80]);
+    // 동굴: 안쪽 보랏빛 · 가끔 깜빡이는 빨간 눈 · 피어나오는 검보라 안개
+    objects.push({ y: CVB - 1, x: CVX, anim: true, draw: (c, t) => {
+      const tt = t || 0, k = 0.55 + 0.45 * Math.sin(tt / 380);
+      const gl = c.createRadialGradient(CVX, CVB - 18, 2, CVX, CVB - 18, 44); gl.addColorStop(0, `rgba(170,60,220,${0.5 * k})`); gl.addColorStop(1, "rgba(120,30,170,0)");
+      c.fillStyle = gl; c.beginPath(); c.ellipse(CVX, CVB, 38, 58, 0, Math.PI, 0); c.closePath(); c.fill();
+      const ph = (tt / 1000) % 7;
+      if (ph > 5.6 && ph < 6.6 && !(ph > 6.0 && ph < 6.08)) { c.fillStyle = "#ff2a4a"; c.fillRect(CVX - 9, CVB - 30, 4, 2); c.fillRect(CVX + 5, CVB - 30, 4, 2); c.fillStyle = "rgba(255,60,80,.35)"; c.fillRect(CVX - 11, CVB - 32, 8, 6); c.fillRect(CVX + 3, CVB - 32, 8, 6); }
+    } });
+    objects.push({ y: CVB + 160, x: CVX, anim: true, draw: (c, t) => {
+      for (let i = 0; i < 8; i++) {
+        const ph = (((t || 0) / 2800) + i / 8) % 1, sx = CVX + Math.sin((t || 0) / 700 + i * 2.1) * (10 + ph * 34), sy = CVB - 6 + ph * 46 - ph * ph * 30, rad = 5 + ph * 12;
+        c.fillStyle = `rgba(${90 + i * 8},40,${130 + i * 6},${(1 - ph) * 0.32})`; c.beginPath(); c.arc(sx, sy, rad, 0, 7); c.fill();
+      }
+    } });
+    const ws = warnSign();
+    objects.push({ y: CVB + 46, x: CVX + 64, draw: (c) => blit(c, ws, CVX + 44, CVB + 2) });
+    colliders.push([CVX + 60, CVB + 40, 10, 8]);
+    // 나비
+    objects.push({ y: H + 100, x: 0, anim: true, draw: (c, t) => {
+      for (let i = 0; i < 7; i++) {
+        const tt = (t || 0) / 1000 + i * 13, bx = 160 + ((i * 173 + tt * 22) % 900), by = 300 + i * 80 + Math.sin(tt * 1.7) * 18;
+        if (Math.hypot(bx - CVX, by - CVB) < 150) continue;
+        const flap = Math.sin(tt * 14) > 0 ? 3 : 1; c.fillStyle = ["#ffd1e1", "#fff3a8", "#c9b0ff", "#9fe8ff"][i % 4];
+        c.fillRect(bx - 3, by - flap, 3, flap * 2); c.fillRect(bx + 1, by - flap, 3, flap * 2); c.fillStyle = OUT; c.fillRect(bx, by - 1, 1, 3);
+      }
+    } });
+    const collide = (px, py) => colliders.some(([a, b, w, h]) => px > a && px < a + w && py > b && py < b + h);
+    return {
+      id: "meadow", W, H, ground: g, objects, colliders: [], seats: [],
+      zones: [],
+      triggers: [{ id: "toPlaza", x: 0, y: 400, w: 12, h: 100 }, { id: "cave", x: CVX - 34, y: CVB + 4, w: 68, h: 26 }],
+      walkable: (px, py) => px > 4 && px < W - 24 && py < H - 20 && py > cliffY(px) + 8 && !collide(px, py),
+      spawn: { x: 40, y: 450 }, artist: null, icons: [{ x: CVX, y: CVB - 74, icon: "❓" }],
+      signs: [{ x: CVX, y: CVB - 92, key: "caveSign", bg: "#e8dcfa", type: true }],
+      clickables: [{ x: CVX, y: CVB - 20, r: 44, go: "cave", front: { x: CVX, y: CVB + 24 } }],
+    };
+  }
+
   // ---------------- 🫧 분수대 속 바닷속 (보물상자) ----------------
   function chestSprites() {
     const mk = (open) => {
@@ -1168,5 +1308,5 @@
     return world;
   }
 
-  window.World = { buildPlaza, buildLounge, buildSea, buildShop, buildCinema, rankTops: {}, blitText };
+  window.World = { buildPlaza, buildLounge, buildSea, buildShop, buildCinema, buildMeadow, rankTops: {}, blitText };
 })();

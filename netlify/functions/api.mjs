@@ -32,7 +32,7 @@ const err = (code, status = 400) => json({ error: code, code }, status);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const LANGS = ["ko", "en", "ja"];
-const ROOMS = ["plaza", "lounge", "shop", "cinema"]; // 광장 · 팬 라운지(카페) · 젤리젤리샵 · 젤리 시네마
+const ROOMS = ["plaza", "lounge", "shop", "cinema", "meadow"]; // 광장 · 팬 라운지(카페) · 젤리젤리샵 · 젤리 시네마 · 젤리 초원
 const CAFE_MENU = 10, CAFE_PRICE = 5, CAFE_MS = 4 * 60 * 1000; // ☕ 젤리 카페
 const CHAT_TTL = 5 * 60 * 1000; // 채팅은 5분 뒤 사라짐
 const STAFF_OUTFITS = [16]; // 관리자(호스트 포함) 전용 — 젤리 퀸 로열 드레스
