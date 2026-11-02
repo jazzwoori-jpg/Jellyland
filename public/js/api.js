@@ -41,7 +41,7 @@
   };
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
   const fail = (code, s = 400) => { throw mkErr(code, s); };
-  const pub = (u) => ({ slotLeft: u.slotDay === new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10) ? Math.max(0, 20 - (u.slotCount | 0)) : 20, id: u.id, email: u.email, nickname: u.nickname, avatar: u.avatar, lang: u.lang || "ko", role: u.role || "fan", coins: u.coins | 0, inv: u.inv || [], daily: u.lastDaily || null, tempPw: !!u.tempPw, drink: u.drink && u.drink.until > Date.now() ? u.drink : null });
+  const pub = (u) => ({ slotLeft: u.slotDay === new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10) ? Math.max(0, 20 - (u.slotCount | 0)) : 20, id: u.id, email: u.email, nickname: u.nickname, avatar: u.avatar, lang: u.lang || "ko", role: u.role || "fan", coins: u.coins | 0, inv: u.inv || [], daily: u.lastDaily || null, tempPw: !!u.tempPw, drink: u.drink && u.drink.until > Date.now() ? u.drink : null, fish: { have: u.fishHave || {}, total: u.fishTotal || {}, best: u.fishBest || {} }, bait: u.fishDay === kstDay() ? Math.max(0, 30 - (u.fishCount | 0)) : 30 });
   const kstDay = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
   async function mock(path, opts = {}) {
@@ -159,6 +159,39 @@
       const e = Object.keys(users).find((k) => users[k].id === b.id); if (!e) fail("notfound", 404);
       const u = users[e], before = u.coins | 0; u.coins = Math.max(0, b.mode === "set" ? +b.amount | 0 : before + (+b.amount | 0)); save();
       return { ok: true, id: u.id, coins: u.coins, diff: u.coins - before, user: u.id === me.id ? pub(u) : undefined };
+    }
+    // 🎣 데모: 젤리 해변 낚시 (진짜 확률·시간 검사는 서버에 — 표는 api.mjs 의 FISH 와 같게)
+    if (route.startsWith("fish/")) {
+      const F = [["goldfish", 30, 30, 1, 0.4, 80, 3, 0, 0, 8, 16], ["minnow", 40, 22, 1, 0.48, 70, 3, 0, 0, 5, 10], ["puffer", 60, 16, 2, 0.5, 64, 3, 0, 0, 14, 30], ["mackerel", 80, 11, 2, 0.58, 56, 3, 0, 0, 24, 45], ["flounder", 110, 7.5, 3, 0.6, 52, 3, 1, 0, 25, 50], ["halibut", 150, 5, 3, 0.68, 46, 2, 1, 0, 40, 85], ["cutlass", 220, 3.2, 4, 0.72, 42, 2, 1, 0, 80, 150], ["tuna", 320, 2, 4, 0.82, 38, 2, 1, 0, 100, 220], ["grouper", 500, 1.2, 5, 0.88, 34, 2, 1, 0, 60, 130], ["shark", 900, 0.7, 6, 0.95, 30, 2, 1, 1, 200, 420], ["orca", 1600, 0.35, 7, 1.05, 27, 1, 1, 1, 500, 820], ["cloudwhale", 4000, 0.15, 8, 1.12, 24, 1, 1, 1, 1000, 1800], ["furwhale", 20000, 0.08, 10, 1.1, 26, 2, 1, 1, 2500, 3600]];
+      if (route === "fish/hall") return { hall: ls.get("jl_demo_whale", []) };
+      if (route === "fish/cast") {
+        if (me.fishDay !== kstDay()) { me.fishDay = kstDay(); me.fishCount = 0; }
+        if ((me.fishCount | 0) >= 30) fail("fishNoBait", 429);
+        let roll = Math.random() * F.reduce((a, f) => a + f[2], 0), f = F[0];
+        for (const x of F) { roll -= x[2]; if (roll <= 0) { f = x; break; } }
+        const id = Math.random().toString(36).slice(2, 10), tier = F.indexOf(f), size = Math.round(f[9] + (f[10] - f[9]) * Math.pow(Math.random(), 1.6));
+        me.fishCast = { id, sp: f[0], size }; me.fishCount = (me.fishCount | 0) + 1; save();
+        return { cast: { id, biteMs: Math.round(1500 + Math.random() * 3500 + tier * 120), need: f[3], speed: f[4], zone: f[5], miss: f[6], move: f[7], rev: f[8], limit: Math.round(f[3] * (1000 / f[4]) * 2.4 + 6000), tier }, user: pub(me) };
+      }
+      if (route === "fish/end") {
+        const c = me.fishCast; if (!c || c.id !== b.id) fail("fishGone");
+        me.fishCast = null;
+        if (!b.ok) { save(); return { ok: false, sp: c.sp, user: pub(me) }; }
+        me.fishHave = me.fishHave || {}; me.fishTotal = me.fishTotal || {}; me.fishBest = me.fishBest || {};
+        me.fishHave[c.sp] = (me.fishHave[c.sp] | 0) + 1; me.fishTotal[c.sp] = (me.fishTotal[c.sp] | 0) + 1;
+        const best = c.size > (me.fishBest[c.sp] | 0); if (best) me.fishBest[c.sp] = c.size;
+        let hallN = 0;
+        if (c.sp === "furwhale") { const hall = ls.get("jl_demo_whale", []); hallN = (hall[0] ? hall[0].n | 0 : 0) + 1; hall.unshift({ n: hallN, id: me.id, name: me.nickname, avatar: me.avatar, role: me.role || "fan", size: c.size, ts: Date.now() }); ls.set("jl_demo_whale", hall.slice(0, 100)); }
+        save(); return { ok: true, sp: c.sp, size: c.size, best, hallN, user: pub(me) };
+      }
+      if (route === "fish/sell") {
+        const have = me.fishHave || {}; let earned = 0, sold = 0;
+        const sell = (sp, n) => { const f = F.find((x) => x[0] === sp); n = Math.max(0, Math.min(have[sp] | 0, n | 0)); if (!f || !n) return; have[sp] -= n; if (!have[sp]) delete have[sp]; earned += f[1] * n; sold += n; };
+        if (b.all) { for (const sp of Object.keys(have)) if (sp !== "furwhale" || b.whale) sell(sp, have[sp]); } else sell(String(b.sp || ""), b.n);
+        if (!sold) fail("fishNone");
+        me.fishHave = have; me.coins = (me.coins | 0) + earned; save();
+        return { earned, sold, user: pub(me) };
+      }
     }
     // 🫧 데모: 분수대 퀴즈 (진짜 문제는 서버에만 있음 — 데모는 연습용 3문제)
     if (route.startsWith("sea/")) {
@@ -304,6 +337,11 @@
     daily: () => call("daily", { method: "POST", body: {} }),
     buy: (item) => call("shop/buy", { method: "POST", body: { item } }),
     cafeBuy: (k) => call("cafe/buy", { method: "POST", body: { k } }),
+    // 🎣 낚시 · 🐠 어항 · 🐋 털보고래 명예의 전당
+    fishCast: () => call("fish/cast", { method: "POST", body: {} }),
+    fishEnd: (id, ok) => call("fish/end", { method: "POST", body: { id, ok: !!ok } }),
+    fishSell: (b) => call("fish/sell", { method: "POST", body: b }),
+    fishHall: () => call("fish/hall"),
     gameStart: (game) => call("game/start", { method: "POST", body: { game: game || "jump" } }),
     slotSpin: () => call("slot/spin", { method: "POST", body: {} }),
     gameTop: (game) => call("game/top?game=" + (game || "jump")),

@@ -32,7 +32,7 @@ const err = (code, status = 400) => json({ error: code, code }, status);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const LANGS = ["ko", "en", "ja"];
-const ROOMS = ["plaza", "lounge", "shop", "cinema", "meadow"]; // 광장 · 팬 라운지(카페) · 젤리젤리샵 · 젤리 시네마 · 젤리 초원
+const ROOMS = ["plaza", "lounge", "shop", "cinema", "meadow", "beach"]; // 광장 · 팬 라운지(카페) · 젤리젤리샵 · 젤리 시네마 · 젤리 초원 · 젤리 해변
 const CAFE_MENU = 10, CAFE_PRICE = 5, CAFE_MS = 4 * 60 * 1000; // ☕ 젤리 카페
 const CHAT_TTL = 5 * 60 * 1000; // 채팅은 5분 뒤 사라짐
 const CHAT_GAP = 600, CHAT_BURST = 12, CHAT_WIN = 30 * 1000; // 채팅 도배 방지
@@ -229,7 +229,30 @@ const EMOTES = 8;
 const WELCOME_COINS = 100, DAILY_COINS = 100, GB_COINS = 50;
 const GAME_MAX = 200, GAME_DAY_MAX = 600, GAME_STEP_M = 100, GAME_STEP_COINS = 5; // 한 판 최대 200 · 하루 최대 600
 const MAIL_MAX = 60;
-const REC_PER_DAY = 3, REC_MAX_MS = 5000, REC_MAX_NOTES = 300, REC_TTL = 7 * 24 * 3600 * 1000; // 하루 3개 · 5초 · 1주일 뒤 자동 삭제
+// 🎣 젤리 해변 낚시 — public/js/fish.js 의 물고기 목록과 같은 순서·가격이어야 함
+//   [id, 판매가, 나올 확률(가중치), Great 필요 수, 바늘 속도(바퀴/초), 성공 칸 넓이(도), 실수 허용, 칸 이동, 방향 바뀜, 크기 cm [최소, 최대]]
+const FISH = [
+  ["goldfish", 30, 30, 1, 0.40, 80, 3, 0, 0, [8, 16]],       // 빨간입술 금붕어
+  ["minnow", 40, 22, 1, 0.48, 70, 3, 0, 0, [5, 10]],         // 졸린눈 송사리
+  ["puffer", 60, 16, 2, 0.50, 64, 3, 0, 0, [14, 30]],        // 뿡뿡 복어
+  ["mackerel", 80, 11, 2, 0.58, 56, 3, 0, 0, [24, 45]],      // 재즈 고등어
+  ["flounder", 110, 7.5, 3, 0.60, 52, 3, 1, 0, [25, 50]],    // 납작납작 가자미
+  ["halibut", 150, 5, 3, 0.68, 46, 2, 1, 0, [40, 85]],       // 콧수염 광어
+  ["cutlass", 220, 3.2, 4, 0.72, 42, 2, 1, 0, [80, 150]],    // 반짝이 은갈치
+  ["tuna", 320, 2, 4, 0.82, 38, 2, 1, 0, [100, 220]],        // 왕눈이 참치
+  ["grouper", 500, 1.2, 5, 0.88, 34, 2, 1, 0, [60, 130]],    // 황금 다금바리
+  ["shark", 900, 0.7, 6, 0.95, 30, 2, 1, 1, [200, 420]],     // 선글라스 상어
+  ["orca", 1600, 0.35, 7, 1.05, 27, 1, 1, 1, [500, 820]],    // 노래하는 범고래
+  ["cloudwhale", 4000, 0.15, 8, 1.12, 24, 1, 1, 1, [1000, 1800]], // 구름 고래
+  ["furwhale", 20000, 0.08, 10, 1.1, 26, 2, 1, 1, [2500, 3600]],  // 👑 털보고래 (최종 보스): Great 10번 · 칸이 매번 옮겨 가고 바늘 방향도 바뀜
+].map(([id, price, w, need, speed, zone, miss, move, rev, size]) => ({ id, price, w, need, speed, zone, miss, move, rev, size }));
+const FISH_BY = Object.fromEntries(FISH.map((f) => [f.id, f]));
+const FISH_W = FISH.reduce((a, f) => a + f.w, 0);
+const FISH_DAY = 30;      // 하루 미끼 30개 (코인이 너무 빨리 늘지 않게)
+const FISH_GAP = 2000;    // 던지기 사이 최소 간격
+const fishLimitMs = (f) => Math.round(f.need * (1000 / f.speed) * 2.4 + 6000); // 싸움 제한 시간
+
+const REC_PER_DAY = 3, REC_MAX_MS = 60000, REC_MAX_NOTES = 1500, REC_TTL = 7 * 24 * 3600 * 1000; // 하루 3개 · 1분 · 1주일 뒤 자동 삭제
 // 미니게임 속도 공식 (public/js/minigame.js 와 같음): 속도 = min(400, 150 + 4·t) px/s, 10px = 1m
 // 10만 m(100만 px)부터는 속도 = 400 + 0.001·(거리 − 100만 px) → 끝없이 조금씩 빨라짐 (지수적으로 증가)
 function maxMeters(sec) {
@@ -326,6 +349,8 @@ const publicUser = (u) => ({
   slotLeft: u.slotDay === kstDay() ? Math.max(0, 20 - (u.slotCount | 0)) : 20,
   tempPw: !!u.tempPw, // 임시 비밀번호로 로그인 중 → 새 비밀번호로 바꾸라고 안내
   drink: u.drink && u.drink.until > Date.now() ? u.drink : null, // ☕ 젤리 카페에서 산 음료 (4분)
+  fish: { have: u.fishHave || {}, total: u.fishTotal || {}, best: u.fishBest || {} }, // 🐠 어항
+  bait: isStaff(roleOf(u.email)) ? 99 : u.fishDay === kstDay() ? Math.max(0, FISH_DAY - (u.fishCount | 0)) : FISH_DAY, // 🪱 오늘 남은 미끼
 });
 
 // 토큰에 닉네임/아바타를 담아 두면 /sync 때 회원 정보를 읽지 않아도 돼서 빠르고 저렴해요
@@ -526,21 +551,16 @@ function parseTr(raw, text) {
   if (!trDone(tr)) return null;
   return { lang, tr };
 }
-let claudeTemp = true; // temperature 를 못 받는 모델이면 한 번 실패 후 끔
 async function trClaude(text, ms) {
   const creds = aiCreds("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY");
   if (!creds.length) throw new Error("no anthropic");
   const messages = [...TR_SHOTS.flatMap(([t, o]) => [{ role: "user", content: trIn(t) }, { role: "assistant", content: JSON.stringify(o) }]), { role: "user", content: trIn(text) }];
-  const call = (withTemp) => aiFetch("claude", creds, "/v1/messages", {
+  // ※ claude-haiku-5-5 는 temperature 설정을 받지 않아요 (400 "temperature is deprecated") → 보내지 않음
+  const r = await aiFetch("claude", creds, "/v1/messages", {
     method: "POST",
     headers: (key) => ({ "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" }),
-    body: JSON.stringify({ model: "claude-haiku-5-5", max_tokens: 1600, system: TR_SYSTEM, messages, ...(withTemp ? { temperature: 0.3 } : {}) }),
+    body: JSON.stringify({ model: "claude-haiku-5-5", max_tokens: 1600, system: TR_SYSTEM, messages }),
   }, ms);
-  let r = await call(claudeTemp);
-  if (!r.ok && r.status === 400 && claudeTemp) {
-    const t = await r.text().catch(() => "");
-    if (/temperature/i.test(t)) { claudeTemp = false; r = await call(false); } else throw new Error("claude 400 " + t.slice(0, 200));
-  }
   if (!r.ok) throw new Error("claude " + r.status + " " + (await r.text().catch(() => "")).slice(0, 200));
   const d = await r.json();
   const out = parseTr((d.content || []).map((c) => c.text || "").join(""), text);
@@ -647,6 +667,14 @@ async function trFill(text) {
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 // 시스템 쪽지: 한국어·영어·일본어 문장을 직접 넣어서 받는 사람 언어로 보여 줌 (AI 번역 없이)
 const sysText = (ko, en, ja) => ({ text: ko, lang: "ko", tr: { ko, en, ja } });
+// 📣 JELLY LAND 알림을 채팅에 올리기 (번역은 sysText 로 미리 3개 언어)
+async function postSystemChat(room, sys) {
+  const cs = store("jl-chat"), ts = Date.now();
+  const key = `m/${room}/${String(ts).padStart(15, "0")}-${crypto.randomBytes(3).toString("hex")}`;
+  await cs.setJSON(key, { id: "system", name: "JELLY LAND", role: "system", ...sys, ts });
+  const lst = (await cs.get("last/" + room, { type: "json" })) || {};
+  await cs.setJSON("last/" + room, { ts, notice: lst.notice || null });
+}
 // 📢 번역이 빠진 공지는 뒤에서 한 번 번역해서 저장 (같은 공지는 1분에 한 번만 시도)
 const NOTICE_TRY = new Map();
 async function fillNotice(room, n) {
@@ -830,13 +858,14 @@ export default async (req, context) => {
       }
       if (path.length) entry.path = path;
       if (body.pv) entry.pv = 1; // 길 정보를 보내는 새 버전 앱
+      const fsv = body.fs | 0; if (fsv > 0 && fsv < 3 && entry.seat) entry.fs = fsv; // 🎣 낚시 중인 모습 (낚시 의자에 앉아 있을 때만)
       // ☕ 들고 있는 음료 (다른 사람에게 보이는 모습일 뿐이라 기기가 보낸 값을 그대로 쓰되 범위만 확인)
       if (body.drink && Number.isInteger(body.drink.k) && body.drink.k >= 0 && body.drink.k < CAFE_MENU && +body.drink.until > now && +body.drink.until <= now + CAFE_MS + 5000) entry.drink = { k: body.drink.k, until: Math.round(+body.drink.until) };
       // 😊 이모티콘 반응: 새로 보낸 것만 4초 동안 다른 사람에게 보임
       if (body.emo && Number.isInteger(body.emo.e) && body.emo.e >= 0 && body.emo.e < EMOTES) entry.emo = { e: body.emo.e, k: clean(String(body.emo.k || ""), 12), t: now };
       else if (mine && mine.emo && now - mine.emo.t < 4000) entry.emo = mine.emo;
       // 위치가 그대로이고 최근에 저장했다면 쓰기를 건너뜀 (비용 절약)
-      const unchanged = mine && mine.x === entry.x && mine.y === entry.y && mine.dir === entry.dir && mine.seat === entry.seat && mine.vx === entry.vx && mine.vy === entry.vy && mine.name === entry.name && (mine.emo && mine.emo.k) === (entry.emo && entry.emo.k) && (mine.drink && mine.drink.until) === (entry.drink && entry.drink.until) && !(Array.isArray(body.path) && body.path.length) &&
+      const unchanged = mine && mine.x === entry.x && mine.y === entry.y && mine.dir === entry.dir && mine.seat === entry.seat && (mine.fs | 0) === (entry.fs | 0) && mine.vx === entry.vx && mine.vy === entry.vy && mine.name === entry.name && (mine.emo && mine.emo.k) === (entry.emo && entry.emo.k) && (mine.drink && mine.drink.until) === (entry.drink && entry.drink.until) && !(Array.isArray(body.path) && body.path.length) &&
         JSON.stringify(mine.avatar) === JSON.stringify(entry.avatar) && now - mine.ts < 8000;
       const writes = [];
       for (const k of Object.keys(cur)) if (now - cur[k].ts > 15000) { delete cur[k]; }
@@ -885,6 +914,10 @@ export default async (req, context) => {
       const fp = (v) => crypto.createHash("sha256").update(v).digest("hex").slice(0, 8);
       const keys = (k) => envAll(k).map((v) => { const t = jwtTimes(v); return { fp: fp(v), len: v.length, jwt: !!t, expInMin: t && t.exp ? Math.round((t.exp * 1000 - Date.now()) / 60000) : null, iatAgoMin: t && t.iat ? Math.round((Date.now() - t.iat * 1000) / 60000) : null }; });
       return json({ instanceAgeMin: Math.round((Date.now() - INST_AT) / 60000), aiStale: !!aiStale, aiLastErr, recycle: aiShouldRecycle(), anthropic: keys("ANTHROPIC_API_KEY"), gemini: keys("GEMINI_API_KEY"), gateway: keys("NETLIFY_AI_GATEWAY_KEY"), geminiModel: GEMINI_MODELS[geminiAt] || null });
+    }
+    if (route === "fish/hall" && method === "GET") { // 🐋 털보고래 명예의 전당
+      const hall = (await store("jl-config").get("whaleHall", { type: "json" })) || [];
+      return json({ hall: hall.slice(0, 50) });
     }
     if (route === "tr/test" && method === "POST") {
       if (!isStaff(me.role)) return err("forbidden", 403);
@@ -976,6 +1009,63 @@ export default async (req, context) => {
       user.drink = { k, until: Date.now() + CAFE_MS };
       await saveUser();
       return json({ user: publicUser(user) });
+    }
+
+    // ---------- 🎣 젤리 해변 낚시 ----------
+    // 1) 던지기: 서버가 물고기를 미리 정하고(확률), 기기에는 난이도만 알려 줌
+    // 2) 끝: 기기가 성공/실패를 알려 주면 시간 검사(너무 빠르면 무효) 후 어항에 넣음
+    if (route === "fish/cast" && method === "POST") {
+      const now = Date.now(), today = kstDay();
+      if (user.fishDay !== today) { user.fishDay = today; user.fishCount = 0; }
+      if (!isStaff(me.role) && (user.fishCount | 0) >= FISH_DAY) return err("fishNoBait", 429);
+      if (now - (user.fishCastAt || 0) < FISH_GAP) return err("fishTooFast", 429);
+      let roll = Math.random() * FISH_W, f = FISH[0];
+      for (const x of FISH) { roll -= x.w; if (roll <= 0) { f = x; break; } }
+      const [lo, hi] = f.size, size = Math.round(lo + (hi - lo) * Math.pow(Math.random(), 1.6)); // 작은 쪽이 더 흔함
+      const biteMs = Math.round(1500 + Math.random() * 3500 + FISH.indexOf(f) * 120);
+      const id = crypto.randomBytes(6).toString("hex");
+      user.fishCast = { id, sp: f.id, size, at: now, bite: now + biteMs };
+      user.fishCount = (user.fishCount | 0) + 1; user.fishCastAt = now;
+      await saveUser();
+      return json({ cast: { id, biteMs, need: f.need, speed: f.speed, zone: f.zone, miss: f.miss, move: f.move, rev: f.rev, limit: fishLimitMs(f), tier: FISH.indexOf(f) }, user: publicUser(user) });
+    }
+    if (route === "fish/end" && method === "POST") {
+      const c = user.fishCast, now = Date.now();
+      if (!c || c.id !== String(body.id || "")) return err("fishGone", 400);
+      user.fishCast = null;
+      const f = FISH_BY[c.sp], period = 1000 / f.speed;
+      const minEnd = c.bite + f.need * period * (f.move ? 0.25 : 0.5) - 300; // 사람이 아무리 잘해도 이보다 빠를 수는 없음
+      const ok = !!body.ok && now >= minEnd && now <= c.bite + fishLimitMs(f) + 120000; // (앱을 잠깐 내렸다 와도 괜찮게 넉넉히)
+      if (!ok) { await saveUser(); return json({ ok: false, sp: c.sp, user: publicUser(user) }); }
+      user.fishHave = user.fishHave || {}; user.fishTotal = user.fishTotal || {}; user.fishBest = user.fishBest || {};
+      user.fishHave[c.sp] = (user.fishHave[c.sp] | 0) + 1;
+      user.fishTotal[c.sp] = (user.fishTotal[c.sp] | 0) + 1;
+      const best = c.size > (user.fishBest[c.sp] | 0); if (best) user.fishBest[c.sp] = c.size;
+      await saveUser();
+      let hallN = 0;
+      if (c.sp === "furwhale") { // 👑 털보고래: 명예의 전당(광장 서쪽 전광판) + 광장·해변 채팅에 알림
+        try {
+          const cfg = store("jl-config"), hall = (await cfg.get("whaleHall", { type: "json" })) || [];
+          hallN = (hall[0] ? hall[0].n | 0 : 0) + 1;
+          hall.unshift({ n: hallN, id: user.id, name: me.nickname || "?", avatar: me.avatar || null, role: me.role, size: c.size, ts: now });
+          await cfg.setJSON("whaleHall", hall.slice(0, 100));
+          const who = me.nickname || "?";
+          const sys = sysText(`🐋 ${who}님이 전설의 털보고래를 낚았어요!! 광장 서쪽 입구의 전광판을 확인해 보세요!`, `🐋 ${who} caught the legendary Fluffy Whale!! Check the billboard by the plaza's west gate!`, `🐋 ${who}さんが伝説のもふもふクジラを釣り上げました！！広場の西口の電光掲示板を見てね！`);
+          for (const room of ["plaza", "beach"]) await postSystemChat(room, sys);
+        } catch (e) { console.warn("whale hall", e.message); }
+      }
+      return json({ ok: true, sp: c.sp, size: c.size, best, hallN, user: publicUser(user) });
+    }
+    if (route === "fish/sell" && method === "POST") {
+      const have = user.fishHave || {};
+      let earned = 0, sold = 0;
+      const sell = (sp, n) => { const f = FISH_BY[sp]; n = Math.max(0, Math.min(have[sp] | 0, n | 0)); if (!f || !n) return; have[sp] = (have[sp] | 0) - n; if (!have[sp]) delete have[sp]; earned += f.price * n; sold += n; };
+      if (body.all) for (const sp of Object.keys(have)) { if (sp === "furwhale" && !body.whale) continue; sell(sp, have[sp]); } // 전부 팔기: 털보고래는 따로 확인
+      else sell(String(body.sp || ""), body.n);
+      if (!sold) return err("fishNone", 400);
+      user.fishHave = have; user.coins = (user.coins | 0) + earned;
+      await saveUser();
+      return json({ earned, sold, user: publicUser(user) });
     }
 
     // ---------- 미니게임: 점프점프 젤리월드 ----------
