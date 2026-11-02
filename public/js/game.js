@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "54"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "55"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -798,7 +798,7 @@
   // ---------------- 🎣 젤리 해변 낚시 ----------------
   // 의자에 앉기 → "낚시줄 던지기" → 찌가 둥실 → 입질(버튼이 빨개짐) → 바늘이 노란 칸에 올 때 누르기(Great!) → 어항으로
   G.fish = null; // { stage: "cast" | "wait" | "fight", at, seat }
-  const FISH_DAY = 30; // 서버 FISH_DAY 와 같게 (하루 미끼)
+  const FISH_DAY = 15; // 서버 FISH_DAY 와 같게 (하루 미끼)
   const fishName = (sp) => (Fishing.BY[sp] ? L(Fishing.BY[sp].name) : sp);
   // 한국어 조사: 받침이 있으면 "을", 없으면 "를" (한글이 아니면 "을(를)")
   const eul = (w) => { const c = String(w).trim().slice(-1).charCodeAt(0); return c >= 0xac00 && c <= 0xd7a3 ? ((c - 0xac00) % 28 ? "을" : "를") : "을(를)"; };
