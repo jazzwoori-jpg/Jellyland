@@ -3,7 +3,7 @@
 // - 위치: {t:"p", x, y, d, m}  → 같은 방의 다른 사람에게 {t:"p", id, ts, x, y, d, m}
 // - 시계: {t:"ping", c} → {t:"pong", c, s}
 // 이름·아바타·채팅 등은 그대로 Netlify 서버가 담당하고, 여기서는 "위치"만 빠르게 전달해요.
-const ROOMS = ["plaza", "lounge", "shop", "cinema", "meadow"];
+const ROOMS = ["plaza", "lounge", "shop", "cinema", "meadow", "beach"];
 const OK_ORIGIN = /^(https:\/\/([a-z0-9-]+--)?jellyland\.netlify\.app|http:\/\/localhost(:\d+)?|http:\/\/127\.0\.0\.1(:\d+)?)$/;
 
 export default {

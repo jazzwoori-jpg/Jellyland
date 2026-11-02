@@ -395,15 +395,32 @@
     objects.push({ y: 914, x: 640, draw: (c) => blit(c, gate, 640 - 80, 860) });
     colliders.push([560, 900, 18, 14], [702, 900, 18, 14]);
 
-    // 🚧 북쪽 · 서쪽 통로: 아직 준비 중 (바리케이드)
+    // 🚧 북쪽 통로: 아직 준비 중 (바리케이드)
     const barH = (() => { const [c, s2] = cv(104, 40); s2.fillStyle = OUT; s2.fillRect(6, 10, 6, 30); s2.fillRect(92, 10, 6, 30);
       s2.fillStyle = OUT; s2.fillRect(0, 12, 104, 14); for (let k = 0; k < 104; k += 12) { s2.fillStyle = (k / 12) % 2 ? "#ffffff" : "#ff7fae"; s2.fillRect(k + 1, 13, 11, 12); }
       s2.fillStyle = OUT; s2.fillRect(30, 0, 44, 14); s2.fillStyle = "#ffe07a"; s2.fillRect(31, 1, 42, 12); s2.font = `bold 8px ${FONT}`; s2.textAlign = "center"; s2.textBaseline = "middle"; s2.fillStyle = OUT; s2.fillText("🚧 " + T("soonShort"), 52, 7); return c; })();
     objects.push({ y: 44, x: CX, draw: (c) => blit(c, barH, CX - 52, 8) });
     colliders.push([CX - 52, 18, 104, 22]);
-    const barV = (() => { const [c, s2] = cv(30, 104); s2.fillStyle = OUT; s2.fillRect(4, 0, 22, 104); for (let k = 0; k < 104; k += 12) { s2.fillStyle = (k / 12) % 2 ? "#ffffff" : "#ff7fae"; s2.fillRect(5, k + 1, 20, 11); } s2.fillStyle = OUT; s2.fillRect(0, 0, 30, 6); s2.fillRect(0, 98, 30, 6); return c; })();
-    objects.push({ y: CY + 52, x: 30, draw: (c) => c.drawImage(barV, 18, CY - 52) });
-    colliders.push([0, CY - 52, 46, 104]);
+    // 🏖️ 서쪽 통로: 젤리 해변으로 (구명튜브 기둥 + 표지판) · 🐋 털보고래 전광판
+    const buoyPost = (() => { const [c, s2] = cv(18, 40); s2.fillStyle = "rgba(25,12,35,.25)"; s2.fillRect(2, 36, 15, 3);
+      s2.fillStyle = OUT; s2.fillRect(7, 8, 5, 30); for (let k = 0; k < 30; k += 6) { s2.fillStyle = (k / 6) % 2 ? "#ffffff" : "#3f8fd8"; s2.fillRect(8, 9 + k, 3, 6); }
+      s2.fillStyle = OUT; s2.beginPath(); s2.arc(9, 9, 8, 0, 7); s2.fill(); s2.fillStyle = "#ff5f5f"; s2.beginPath(); s2.arc(9, 9, 7, 0, 7); s2.fill();
+      s2.fillStyle = "#ffffff"; s2.fillRect(2, 8, 3, 3); s2.fillRect(13, 8, 3, 3); s2.fillRect(8, 2, 3, 3); s2.fillRect(8, 14, 3, 3);
+      s2.fillStyle = OUT; s2.beginPath(); s2.arc(9, 9, 3, 0, 7); s2.fill(); s2.fillStyle = "#9fd0ff"; s2.beginPath(); s2.arc(9, 9, 2, 0, 7); s2.fill(); return c; })();
+    objects.push({ y: CY - 50, x: 10, draw: (c) => c.drawImage(buoyPost, 1, CY - 88) });
+    objects.push({ y: CY + 56, x: 10, draw: (c) => c.drawImage(buoyPost, 1, CY + 18) });
+    colliders.push([2, CY - 56, 16, 8], [2, CY + 50, 16, 8]);
+    const westSign = (() => { const [c, s2] = cv(80, 50); s2.fillStyle = OUT; s2.fillRect(37, 22, 6, 28); s2.fillStyle = "#8f5a34"; s2.fillRect(38, 23, 4, 27);
+      s2.fillStyle = OUT; s2.beginPath(); s2.moveTo(12, 2); s2.lineTo(80, 2); s2.lineTo(80, 24); s2.lineTo(12, 24); s2.lineTo(0, 13); s2.closePath(); s2.fill();
+      s2.fillStyle = "#9fdcff"; s2.beginPath(); s2.moveTo(13, 3); s2.lineTo(79, 3); s2.lineTo(79, 23); s2.lineTo(13, 23); s2.lineTo(2, 13); s2.closePath(); s2.fill();
+      let fs = 10; s2.font = `bold ${fs}px ${FONT}`; const tt = "🏖️ " + T("mapBeach"); while (s2.measureText(tt).width > 64 && fs > 6) { fs--; s2.font = `bold ${fs}px ${FONT}`; }
+      s2.textAlign = "center"; s2.textBaseline = "middle"; s2.fillStyle = OUT; s2.fillText(tt, 44, 13); return c; })();
+    objects.push({ y: CY + 112, x: 64, draw: (c) => blit(c, westSign, 30, CY + 64) });
+    colliders.push([66, CY + 104, 10, 8]);
+    // 🐋 전광판: 마지막으로 털보고래를 낚은 사람의 모습 (World.whaleHall 은 게임 화면이 서버에서 받아 넣어 줌)
+    const WB = { x: 26, y: 352, w: 140, h: 92 };
+    objects.push({ y: WB.y + WB.h + 12, x: WB.x + WB.w / 2, anim: true, draw: (c, t) => drawWhaleBoard(c, t, WB) });
+    colliders.push([WB.x + 12, WB.y + WB.h - 2, 8, 12], [WB.x + WB.w - 20, WB.y + WB.h - 2, 8, 12]);
     // 🌿 동쪽 통로: 젤리 초원으로 (꽃 아치 + 표지판)
     const arch = (() => { const [c, s2] = cv(40, 120); s2.fillStyle = OUT; s2.fillRect(14, 0, 12, 120); s2.fillStyle = "#3fa04a"; s2.fillRect(15, 0, 10, 120); for (let k = 4; k < 120; k += 10) { s2.fillStyle = ["#ff8fb8", "#ffe07a", "#ffffff"][(k / 10 | 0) % 3]; s2.fillRect(13 + (k % 3) * 4, k, 4, 4); } return c; })();
     objects.push({ y: CY - 48, x: 1200, draw: (c) => c.drawImage(arch, 1180, CY - 150) });
@@ -428,6 +445,7 @@
       { id: "rankboard", x: BX - 50, y: BY + 2, w: 100, h: 30, label: T("rankBoardZ") },
       { id: "guide", x: 494, y: 810, w: 76, h: 26, label: T("zGuide") },
       { id: "fountain", x: FX - 34, y: FY + 20, w: 68, h: 26, label: T("zFountain") },
+      { id: "whaleboard", x: WB.x + 8, y: WB.y + WB.h + 14, w: WB.w - 16, h: 28, label: T("whaleBoardZ") },
     ];
 
     return {
@@ -436,10 +454,10 @@
       spawn: { x: 640, y: 840 },
       artist: null, // 조젤리 NPC 는 없앰 (피아노를 직접 연주)
       piano: { x: PX, y: PY - 10, front: { x: PX, y: PY + 20 } },
-      clickables: [{ x: RX, y: RY - 20, r: 24, go: "recboard", front: { x: RX, y: RY + 16 } }, { x: BX, y: BY - 50, r: 56, go: "rankboard", front: { x: BX, y: BY + 16 } }, { x: FX, y: FY - 6, r: 38, go: "fountain", front: { x: FX, y: FY + 32 } }],
-      icons: [...buildings.map((b) => ({ x: b.x + b.w / 2 + 2, y: b.y - 4, icon: b.icon, label: b.name })), { x: PX, y: PY - 34, icon: "🎹" }, { x: RX, y: RY - 48, icon: "📼" }, { x: BX, y: BY - 122, icon: "🏆" }, { x: 532, y: 744, icon: "ℹ️" }],
+      clickables: [{ x: RX, y: RY - 20, r: 24, go: "recboard", front: { x: RX, y: RY + 16 } }, { x: BX, y: BY - 50, r: 56, go: "rankboard", front: { x: BX, y: BY + 16 } }, { x: FX, y: FY - 6, r: 38, go: "fountain", front: { x: FX, y: FY + 32 } }, { x: WB.x + WB.w / 2, y: WB.y + WB.h / 2, r: 52, go: "whaleboard", front: { x: WB.x + WB.w / 2, y: WB.y + WB.h + 26 } }],
+      icons: [...buildings.map((b) => ({ x: b.x + b.w / 2 + 2, y: b.y - 4, icon: b.icon, label: b.name })), { x: PX, y: PY - 34, icon: "🎹" }, { x: RX, y: RY - 48, icon: "📼" }, { x: BX, y: BY - 122, icon: "🏆" }, { x: 532, y: 744, icon: "ℹ️" }, { x: WB.x + WB.w / 2, y: WB.y - 10, icon: "🐋" }],
       signs: [{ x: FX, y: FY - 34, key: "fountainSign", bg: "#e8dcfa", type: true }],
-      triggers: [{ id: "soonN", x: CX - 50, y: 40, w: 100, h: 34 }, { id: "soonW", x: 44, y: CY - 46, w: 34, h: 92 }, { id: "toMeadow", x: W - 16, y: CY - 46, w: 16, h: 92 }],
+      triggers: [{ id: "soonN", x: CX - 50, y: 40, w: 100, h: 34 }, { id: "toBeach", x: 0, y: CY - 46, w: 12, h: 92 }, { id: "toMeadow", x: W - 16, y: CY - 46, w: 16, h: 92 }],
       npcArea: [300, 300, 700, 500],
     };
   }
@@ -1134,7 +1152,7 @@
     const objects = [], colliders = [];
     // 서쪽 입구 표지 (광장으로)
     const signBoard = (() => { const [c, s] = cv(70, 44); s.fillStyle = OUT; s.fillRect(32, 18, 6, 26); s.fillStyle = "#8f5a34"; s.fillRect(33, 19, 4, 25); s.fillStyle = OUT; s.fillRect(2, 2, 66, 20); s.fillStyle = "#fff8ea"; s.fillRect(3, 3, 64, 18);
-      s.font = `bold 9px ${FONT}`; s.textAlign = "center"; s.textBaseline = "middle"; s.fillStyle = OUT; s.fillText("◀ " + T("mapPlaza"), 35, 12); return c; })();
+      s.font = `bold 9px ${FONT}`; s.textAlign = "center"; s.textBaseline = "middle"; s.fillStyle = OUT; s.fillText("◀ " + T("signPlaza"), 35, 12); return c; })();
     objects.push({ y: 412, x: 60, draw: (c) => blit(c, signBoard, 26, 368) });
     colliders.push([56, 404, 14, 8]);
     // 나무 (남·서·동쪽 가장자리 + 군데군데)
@@ -1185,6 +1203,231 @@
       spawn: { x: 40, y: 450 }, artist: null, icons: [{ x: CVX, y: CVB - 74, icon: "❓" }],
       signs: [{ x: CVX, y: CVB - 92, key: "caveSign", bg: "#e8dcfa", type: true }],
       clickables: [{ x: CVX, y: CVB - 20, r: 44, go: "cave", front: { x: CVX, y: CVB + 24 } }],
+    };
+  }
+
+  // 🐋 털보고래 전광판 그리기 (광장 서쪽 입구 옆) — 글자는 화면 해상도로 또렷하게
+  function drawWhaleBoard(c, t, B) {
+    const tt = t || 0, hall = window.World.whaleHall || [], top = hall[0];
+    const { x: X0, y: Y0, w: BW, h: BH } = B;
+    c.save();
+    c.fillStyle = "rgba(25,12,35,.25)"; c.fillRect(X0 + 6, Y0 + BH + 8, BW - 12, 4);
+    c.fillStyle = OUT; c.fillRect(X0 + 12, Y0 + BH - 2, 8, 12); c.fillRect(X0 + BW - 20, Y0 + BH - 2, 8, 12);
+    c.fillStyle = "#7a7484"; c.fillRect(X0 + 13, Y0 + BH - 2, 6, 11); c.fillRect(X0 + BW - 19, Y0 + BH - 2, 6, 11);
+    c.fillStyle = OUT; c.fillRect(X0 - 4, Y0 - 4, BW + 8, BH + 8);
+    c.fillStyle = "#5a5468"; c.fillRect(X0 - 3, Y0 - 3, BW + 6, BH + 6);
+    c.fillStyle = "#8a8494"; c.fillRect(X0 - 3, Y0 - 3, BW + 6, 1);
+    [[X0 - 2, Y0 - 2], [X0 + BW, Y0 - 2], [X0 - 2, Y0 + BH], [X0 + BW, Y0 + BH]].forEach(([a, b]) => { c.fillStyle = "#c9c2d6"; c.fillRect(a, b, 2, 2); });
+    c.fillStyle = "#0c0814"; c.fillRect(X0, Y0, BW, BH);
+    // 은은한 빛 + LED 줄무늬
+    const glow = c.createRadialGradient(X0 + 34, Y0 + 58, 2, X0 + 34, Y0 + 58, 40);
+    glow.addColorStop(0, top ? `rgba(255,210,90,${0.32 + 0.08 * Math.sin(tt / 300)})` : "rgba(120,140,255,.18)"); glow.addColorStop(1, "rgba(0,0,0,0)");
+    c.fillStyle = glow; c.fillRect(X0, Y0 + 16, BW, BH - 16);
+    c.fillStyle = "rgba(255,255,255,.04)"; for (let yy = Y0 + 1; yy < Y0 + BH; yy += 3) c.fillRect(X0, yy, BW, 1);
+    // 흐르는 제목
+    c.beginPath(); c.rect(X0 + 2, Y0 + 2, BW - 4, 14); c.save(); c.clip();
+    c.fillStyle = "#2a1404"; c.fillRect(X0 + 2, Y0 + 2, BW - 4, 14);
+    c.font = `bold 9px ${FONT}`; c.textBaseline = "middle"; c.textAlign = "left";
+    const title = "🏆 " + T("whaleBoardTitle") + " 🏆", tw = c.measureText(title).width + 36, off = (tt / 35) % tw;
+    c.fillStyle = "#ffb43a"; for (let k = -1; k < 4; k++) c.fillText(title, X0 + 4 - off + k * tw, Y0 + 9.5);
+    c.restore();
+    c.textBaseline = "middle"; c.textAlign = "left";
+    if (top) {
+      // 정복한 사람 모습 (발밑 빛 받침)
+      c.fillStyle = "rgba(255,210,90,.35)"; c.beginPath(); c.ellipse(X0 + 34, Y0 + BH - 9, 18, 4, 0, 0, 7); c.fill();
+      try { window.Avatar.draw(c, top.avatar, X0 + 34, Y0 + BH - 9, "down", Math.floor(tt / 600) % 2 ? 0 : 0); } catch {}
+      c.font = "11px sans-serif"; c.textAlign = "center"; c.fillText("👑", X0 + 34, Y0 + 24 + Math.sin(tt / 260) * 1.5);
+      c.textAlign = "left"; c.fillStyle = "#ffe9a8"; c.font = `bold 11px ${FONT}`;
+      let nm = String(top.name || "?"); while (c.measureText(nm).width > BW - 66 && nm.length > 1) nm = nm.slice(0, -1);
+      c.fillText(nm, X0 + 60, Y0 + 34);
+      c.font = `8px ${FONT}`; c.fillStyle = "#9fdcff";
+      c.fillText(T("whaleNth").replace("{n}", top.n || 1), X0 + 60, Y0 + 50);
+      const dd = new Date(top.ts || Date.now()); c.fillStyle = "#c9c2d6";
+      c.fillText(`${dd.getFullYear()}.${String(dd.getMonth() + 1).padStart(2, "0")}.${String(dd.getDate()).padStart(2, "0")}`, X0 + 60, Y0 + 62);
+      c.fillStyle = "#ffb43a"; c.fillText(`🐋 ${(top.size || 0).toLocaleString()}cm`, X0 + 60, Y0 + 75);
+      for (let k = 0; k < 6; k++) { const ph = (tt / 400 + k * 1.3) % 6.28; if (Math.sin(ph) < 0.6) continue; c.fillStyle = "#fff3a8"; const sx = X0 + 8 + ((k * 37) % (BW - 16)), sy = Y0 + 20 + ((k * 23) % (BH - 26)); c.fillRect(sx, sy, 1, 3); c.fillRect(sx - 1, sy + 1, 3, 1); }
+    } else {
+      // 아직 아무도 없음: 물음표 그림자 + 도전자 모집
+      c.fillStyle = "#2a2440"; c.beginPath(); c.ellipse(X0 + 34, Y0 + 46, 11, 12, 0, 0, 7); c.fill(); c.fillRect(X0 + 22, Y0 + 56, 24, 22);
+      c.font = `bold 16px ${FONT}`; c.textAlign = "center"; c.fillStyle = `rgba(160,180,255,${0.6 + 0.4 * Math.sin(tt / 300)})`; c.fillText("?", X0 + 34, Y0 + 47);
+      c.textAlign = "left"; c.font = `bold 9px ${FONT}`; c.fillStyle = "#9fdcff";
+      // 줄바꿈: 영어·한국어는 띄어쓰기 단위, 일본어처럼 긴 덩어리는 글자 단위
+      const maxW = BW - 66, lines = []; let line = "";
+      for (const tok of T("whaleNone").match(/\S+\s*/g) || []) {
+        if (c.measureText(line + tok).width <= maxW) { line += tok; continue; }
+        if (line.trim()) lines.push(line.trim()); line = "";
+        if (c.measureText(tok).width <= maxW) { line = tok; continue; }
+        for (const ch of tok) { if (line && c.measureText(line + ch).width > maxW) { lines.push(line); line = ""; } line += ch; }
+      }
+      if (line.trim()) lines.push(line.trim());
+      lines.slice(0, 4).forEach((l, i) => c.fillText(l, X0 + 60, Y0 + 36 + i * 13));
+    }
+    c.restore();
+  }
+
+  // ---------------- 🏖️ 젤리 해변 (광장 서쪽): 왼쪽은 바다 · 오른쪽은 모래사장 · 낚시 의자 8개 · 꽃게 · 갈매기 ----------------
+  function buildBeach() {
+    const W = 1280, H = 900;
+    const r = rng(41);
+    const shoreX = (py) => Math.round(500 + Math.sin(py / 97) * 26 + Math.sin(py / 41 + 2) * 10 + Math.sin(py / 211) * 14); // 이보다 왼쪽은 바다
+    const duneX = (py) => W - 92 + Math.round(Math.sin(py / 33) * 7 + Math.sin(py / 13) * 3); // 오른쪽 끝 풀 언덕
+    const mix3 = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+    const C = { deep: hex("#155a92"), mid: hex("#2a92c4"), shallow: hex("#55cdd8"), wet: hex("#c79d62"), sand: hex("#f1dba6"), sand2: hex("#e8cd92"), sand3: hex("#f8e9c2"), dune: hex("#86bb55"), dune2: hex("#73a74a"), dune3: hex("#9acb62") };
+    const [g, x] = cv(W, H);
+    const img = x.createImageData(W, H), d = img.data;
+    for (let py = 0; py < H; py++) {
+      const sx = shoreX(py), dx = duneX(py);
+      for (let px = 0; px < W; px++) {
+        const i = (py * W + px) * 4, n = r();
+        let col;
+        if (px < sx) { // 바다: 물가는 옥빛, 멀어질수록 깊은 파랑 + 잔물결 무늬
+          const k = Math.min(1, (sx - px) / 380);
+          const a = k < 0.45 ? mix3(C.shallow, C.mid, k / 0.45) : mix3(C.mid, C.deep, (k - 0.45) / 0.55);
+          const wob = (Math.sin(px / 11 + py / 27) + Math.sin(px / 29 - py / 15)) * 3.5 + (n - 0.5) * 5;
+          col = [a[0] + wob, a[1] + wob, a[2] + wob * 0.6];
+        } else if (px < sx + 30) col = mix3(C.wet, C.sand2, (px - sx) / 30).map((v) => v + (n - 0.5) * 10); // 젖은 모래
+        else if (px > dx) col = n < 0.4 ? C.dune : n < 0.8 ? C.dune2 : C.dune3; // 풀 언덕
+        else col = n < 0.34 ? C.sand : n < 0.68 ? C.sand2 : n < 0.985 ? C.sand3 : hex("#d9b77a"); // 마른 모래
+        d[i] = col[0]; d[i + 1] = col[1]; d[i + 2] = col[2]; d[i + 3] = 255;
+      }
+    }
+    x.putImageData(img, 0, 0);
+    // 풀 언덕 경계 · 해변 풀
+    for (let py = 0; py < H; py += 2) { const dx = duneX(py); x.fillStyle = "#5f9440"; x.fillRect(dx - 1, py, 2, 2); }
+    for (let k = 0; k < 180; k++) { const py = (r() * H) | 0, px = duneX(py) - 6 + ((r() * 40) | 0); x.fillStyle = r() < 0.5 ? "#5a8f3c" : "#6fa84a"; x.fillRect(px, py, 1, 4); x.fillRect(px + 2, py + 1, 1, 3); }
+    // 🪵 동쪽 입구 나무 데크 (광장에서 들어오는 길)
+    x.fillStyle = OUT; x.fillRect(W - 250, 420, 250, 62);
+    for (let px = W - 248; px < W; px += 12) { x.fillStyle = (px / 12) % 2 ? "#c48a55" : "#b97d4a"; x.fillRect(px, 422, 11, 58); x.fillStyle = "#8f5a34"; x.fillRect(px, 422, 1, 58); x.fillStyle = "#d9a06a"; x.fillRect(px + 1, 422, 9, 2); }
+    x.fillStyle = "#6c4429"; x.fillRect(W - 250, 478, 250, 3);
+    // 조개 · 불가사리 · 조약돌 · 발자국
+    for (let k = 0; k < 90; k++) {
+      const py = 30 + ((r() * (H - 60)) | 0), px = shoreX(py) + 40 + ((r() * (duneX(py) - shoreX(py) - 60)) | 0);
+      if (px > W - 260 && py > 410 && py < 490) continue;
+      const kind = r();
+      if (kind < 0.35) { x.fillStyle = OUT; x.fillRect(px - 1, py - 1, 6, 5); x.fillStyle = r() < 0.5 ? "#ffd1dc" : "#fff3e0"; x.fillRect(px, py, 4, 3); x.fillStyle = "#e7a3b5"; x.fillRect(px + 1, py, 1, 3); x.fillRect(px + 3, py, 1, 3); }
+      else if (kind < 0.5) { x.fillStyle = OUT; [[0, -3], [-3, 0], [3, 0], [-2, 3], [2, 3], [0, 0]].forEach(([a, b]) => x.fillRect(px + a - 1, py + b - 1, 3, 3)); x.fillStyle = "#ff9f6b"; [[0, -3], [-3, 0], [3, 0], [-2, 3], [2, 3], [0, 0]].forEach(([a, b]) => x.fillRect(px + a, py + b, 1, 1)); x.fillStyle = "#ff9f6b"; x.fillRect(px - 1, py - 1, 3, 3); }
+      else if (kind < 0.8) { x.fillStyle = r() < 0.5 ? "#c9b08a" : "#b8a27e"; x.fillRect(px, py, 3, 2); }
+      else { x.fillStyle = "rgba(160,120,70,.35)"; for (let s = 0; s < 6; s++) x.fillRect(px + s * 7, py + (s % 2) * 5, 3, 4); }
+    }
+    // 🏝️ 먼 바다의 작은 섬 (왼쪽 위)
+    x.fillStyle = OUT; x.beginPath(); x.ellipse(120, 120, 58, 26, 0, 0, 7); x.fill();
+    x.fillStyle = "#e9d29a"; x.beginPath(); x.ellipse(120, 120, 56, 24, 0, 0, 7); x.fill();
+    x.fillStyle = "#79b84f"; x.beginPath(); x.ellipse(116, 114, 40, 14, 0, 0, 7); x.fill();
+    x.fillStyle = "#e8fbff"; x.fillRect(66, 132, 108, 2);
+    // 바다 바위
+    [[260, 700], [330, 250], [180, 470]].forEach(([bx, by]) => { x.fillStyle = OUT; x.beginPath(); x.ellipse(bx, by, 17, 11, 0, 0, 7); x.fill(); x.fillStyle = "#8a8494"; x.beginPath(); x.ellipse(bx, by - 1, 15, 9, 0, 0, 7); x.fill(); x.fillStyle = "#a9a3b3"; x.fillRect(bx - 8, by - 6, 7, 2); x.fillStyle = "#e8fbff"; x.fillRect(bx - 18, by + 9, 36, 2); });
+
+    const objects = [], colliders = [], seats = [];
+    // 🌴 야자수 (풀 언덕)
+    const palm = (() => { const [c, s] = cv(44, 70);
+      s.fillStyle = "rgba(25,12,35,.25)"; s.beginPath(); s.ellipse(24, 66, 14, 4, 0, 0, 7); s.fill();
+      for (let k = 0; k < 9; k++) { const yy = 64 - k * 6, xx = 20 + Math.round(Math.sin(k / 3) * 3); s.fillStyle = OUT; s.fillRect(xx - 3, yy - 6, 8, 7); s.fillStyle = k % 2 ? "#a8784a" : "#b98a58"; s.fillRect(xx - 2, yy - 5, 6, 5); }
+      const leaf = (ang, len) => { for (let k = 0; k < len; k++) { const lx = 22 + Math.cos(ang) * k, ly = 12 + Math.sin(ang) * k + (k * k) / 40; s.fillStyle = OUT; s.fillRect(lx - 2, ly - 2, 5, 4); } for (let k = 0; k < len; k++) { const lx = 22 + Math.cos(ang) * k, ly = 12 + Math.sin(ang) * k + (k * k) / 40; s.fillStyle = k % 3 ? "#4f9a45" : "#6fbf5a"; s.fillRect(lx - 1, ly - 1, 3, 2); } };
+      [-2.8, -2.2, -1.5, -0.9, -0.35, 0.3].forEach((a, i) => leaf(a, 18 + (i % 2) * 4));
+      s.fillStyle = OUT; s.fillRect(19, 11, 8, 7); s.fillStyle = "#7a4a2a"; s.fillRect(20, 12, 3, 3); s.fillRect(23, 14, 3, 3);
+      return c; })();
+    [[W - 50, 120], [W - 36, 300], [W - 56, 610], [W - 40, 780], [W - 64, 210], [W - 30, 700]].forEach(([px, py]) => { objects.push({ y: py, x: px, draw: (c) => c.drawImage(palm, px - 22, py - 66) }); colliders.push([px - 8, py - 6, 16, 8]); });
+    // ⛱️ 파라솔 + 돗자리
+    const umbrella = (col) => { const [c, s] = cv(46, 50);
+      s.fillStyle = "rgba(25,12,35,.2)"; s.beginPath(); s.ellipse(26, 46, 18, 5, 0, 0, 7); s.fill();
+      s.fillStyle = OUT; s.fillRect(22, 14, 3, 34); s.fillStyle = "#f8f4ea"; s.fillRect(23, 15, 1, 32);
+      s.fillStyle = OUT; s.beginPath(); s.moveTo(1, 18); s.quadraticCurveTo(23, -6, 45, 18); s.closePath(); s.fill();
+      for (let k = 0; k < 6; k++) { s.fillStyle = k % 2 ? "#ffffff" : col; s.beginPath(); s.moveTo(23, 2); s.lineTo(3 + k * 7, 17); s.lineTo(3 + (k + 1) * 7, 17); s.closePath(); s.fill(); }
+      return c; };
+    const towel = (col) => { const [c, s] = cv(24, 34); s.fillStyle = OUT; s.fillRect(0, 0, 24, 34); s.fillStyle = col; s.fillRect(1, 1, 22, 32); s.fillStyle = "#ffffff"; for (let k = 3; k < 32; k += 6) s.fillRect(1, k, 22, 2); return c; };
+    [[860, 230, "#ff7fae"], [930, 640, "#5fb8ff"], [1010, 340, "#ffd34d"]].forEach(([px, py, col]) => {
+      const u = umbrella(col), tw = towel(col);
+      x.drawImage(tw, px + 8, py - 20); // 돗자리는 바닥에
+      objects.push({ y: py + 2, x: px, draw: (c) => c.drawImage(u, px - 23, py - 46) }); colliders.push([px - 4, py - 4, 8, 6]);
+    });
+    // 🏰 모래성
+    const castle = (() => { const [c, s] = cv(40, 34); s.fillStyle = "rgba(25,12,35,.2)"; s.fillRect(3, 29, 36, 4);
+      s.fillStyle = OUT; s.fillRect(2, 12, 36, 20); s.fillRect(4, 4, 10, 10); s.fillRect(26, 4, 10, 10); s.fillRect(14, 0, 12, 14);
+      s.fillStyle = "#e3c27f"; s.fillRect(3, 13, 34, 18); s.fillRect(5, 5, 8, 9); s.fillRect(27, 5, 8, 9); s.fillRect(15, 1, 10, 13);
+      s.fillStyle = "#c9a35f"; s.fillRect(17, 22, 6, 9); s.fillRect(3, 26, 34, 2);
+      s.fillStyle = "#f7dfa4"; s.fillRect(5, 5, 8, 2); s.fillRect(27, 5, 8, 2); s.fillRect(15, 1, 10, 2); return c; })();
+    objects.push({ y: 560, x: 820, draw: (c) => c.drawImage(castle, 800, 528) }); colliders.push([802, 546, 36, 14]);
+    // 🛟 안내판 (동쪽 입구 · 광장으로)
+    const signBoard = (() => { const [c, s] = cv(78, 44); s.fillStyle = OUT; s.fillRect(36, 18, 6, 26); s.fillStyle = "#8f5a34"; s.fillRect(37, 19, 4, 25);
+      s.fillStyle = OUT; s.beginPath(); s.moveTo(10, 2); s.lineTo(78, 2); s.lineTo(78, 24); s.lineTo(10, 24); s.lineTo(0, 13); s.closePath(); s.fill();
+      s.fillStyle = "#fff8ea"; s.beginPath(); s.moveTo(11, 3); s.lineTo(77, 3); s.lineTo(77, 23); s.lineTo(11, 23); s.lineTo(2, 13); s.closePath(); s.fill();
+      let fs = 9; s.font = `bold ${fs}px ${FONT}`; const tt = T("signPlaza") + " ▶"; while (s.measureText(tt).width > 62 && fs > 6) { fs--; s.font = `bold ${fs}px ${FONT}`; }
+      s.textAlign = "center"; s.textBaseline = "middle"; s.fillStyle = OUT; s.fillText(tt, 44, 13); return c; })();
+    objects.push({ y: 412, x: W - 120, draw: (c) => blit(c, signBoard, W - 160, 370) }); colliders.push([W - 124, 404, 10, 8]);
+
+    // 🎣 낚시 의자 8개 (바다를 보고 앉음) + 양동이
+    const chairSp = (() => { const [c, s] = cv(26, 30);
+      const X = 12, Y = 22; // 앉는 자리
+      s.fillStyle = "rgba(25,12,35,.25)"; s.beginPath(); s.ellipse(X + 2, Y + 6, 11, 3, 0, 0, 7); s.fill();
+      s.fillStyle = OUT; s.fillRect(X + 6, Y - 19, 5, 21); // 등받이 (등 쪽 = 오른쪽)
+      for (let k = 0; k < 4; k++) { s.fillStyle = k % 2 ? "#ffffff" : "#3f8fd8"; s.fillRect(X + 7, Y - 18 + k * 5, 3, 5); }
+      s.fillStyle = OUT; s.fillRect(X - 9, Y - 2, 19, 5); s.fillStyle = "#3f8fd8"; s.fillRect(X - 8, Y - 1, 17, 3); s.fillStyle = "#9fd0ff"; s.fillRect(X - 8, Y - 1, 17, 1);
+      s.fillStyle = OUT; s.fillRect(X - 8, Y + 2, 2, 6); s.fillRect(X + 6, Y + 2, 2, 6); s.fillRect(X - 7, Y + 4, 14, 1); // X자 다리
+      return c; })();
+    const bucket = (() => { const [c, s] = cv(12, 13); s.fillStyle = OUT; s.fillRect(1, 3, 10, 10); s.fillStyle = "#ffd34d"; s.fillRect(2, 4, 8, 8); s.fillStyle = "#e8a92a"; s.fillRect(2, 10, 8, 2); s.fillStyle = "#55cdd8"; s.fillRect(2, 4, 8, 2); s.fillStyle = OUT; s.fillRect(2, 0, 8, 1); s.fillRect(1, 1, 1, 3); s.fillRect(10, 1, 1, 3); return c; })();
+    for (let i = 0; i < 8; i++) {
+      const sy = 196 + i * 76, sx = shoreX(sy) + 46; // 물가를 따라 위에서 아래로
+      objects.push({ y: sy - 0.5, x: sx, draw: (c) => c.drawImage(chairSp, sx - 12, sy - 22) });
+      objects.push({ y: sy + 6, x: sx + 14, draw: (c) => c.drawImage(bucket, sx + 9, sy - 6) });
+      colliders.push([sx - 8, sy - 4, 16, 9], [sx + 9, sy - 2, 10, 8]);
+      seats.push({ id: "f" + i, x: sx, y: sy, dir: "left", ax: sx + 4, ay: sy + 16, fish: true, labelKey: "actFishSit", bob: { x: shoreX(sy) - 64 - (i % 3) * 12, y: sy - 6 } });
+    }
+    // 🌊 파도 · 물거품 · 햇빛 반짝임 · 지나가는 배 (바닥 바로 위에 그림)
+    objects.push({ y: -1000, x: W / 2, anim: true, always: true, draw: (c, t) => {
+      const tt = (t || 0) / 1000;
+      // 물가로 밀려오는 물결 줄
+      for (let k = 0; k < 7; k++) {
+        const ph = ((tt * 0.11 + k / 7) % 1), off = 330 * (1 - ph);
+        c.fillStyle = `rgba(232,251,255,${0.08 + ph * 0.32})`;
+        for (let py = 2; py < H; py += 7) { const sx = shoreX(py) - off - Math.sin(py / 23 + k) * 6; c.fillRect(sx, py, 5 + ph * 7, 2); }
+      }
+      // 물가 거품 (밀려왔다 빠지는 하얀 띠)
+      const sw = Math.sin(tt * 0.9) * 7;
+      for (let py = 0; py < H; py += 3) { const sx = shoreX(py) - 4 + sw + Math.sin(py / 19 + tt * 2) * 3; c.fillStyle = "rgba(255,255,255,.75)"; c.fillRect(sx, py, 6, 3); c.fillStyle = "rgba(232,251,255,.4)"; c.fillRect(sx - 6, py, 6, 3); }
+      // 반짝이는 햇빛
+      for (let k = 0; k < 26; k++) { const px = (k * 97) % 430 + 20, py = (k * 163) % (H - 40) + 20; if (px > shoreX(py) - 20) continue; const tw = Math.sin(tt * 3 + k * 1.7); if (tw < 0.55) continue; c.fillStyle = `rgba(255,255,240,${(tw - 0.55) * 2})`; c.fillRect(px - 2, py, 5, 1); c.fillRect(px, py - 2, 1, 5); }
+      // 멀리 지나가는 돛단배
+      const bx = ((tt * 6) % 560) - 60, by = 300;
+      c.fillStyle = OUT; c.fillRect(bx - 1, by - 1, 22, 7); c.fillStyle = "#ffffff"; c.fillRect(bx, by, 20, 5); c.fillStyle = "#e0405a"; c.fillRect(bx, by + 3, 20, 2);
+      c.fillStyle = OUT; c.fillRect(bx + 9, by - 18, 2, 18); c.fillStyle = "#fff8ea"; c.beginPath(); c.moveTo(bx + 11, by - 17); c.lineTo(bx + 21, by - 3); c.lineTo(bx + 11, by - 3); c.closePath(); c.fill();
+    } });
+    // 🦀 꽃게: 모래사장을 옆으로 걸어 다님 (가끔 멈춰서 집게를 흔들어요)
+    const crabs = [[700, 180], [760, 420], [640, 520], [900, 760], [720, 820], [1000, 520]].map(([cx0, cy0], i) => ({ cx0, cy0, sp: 0.45 + (i % 3) * 0.18, ph: i * 1.7, range: 40 + (i % 2) * 30 }));
+    crabs.forEach((cb) => objects.push({ y: cb.cy0, x: cb.cx0, anim: true, draw: (c, t) => {
+      const tt = (t || 0) / 1000 * cb.sp + cb.ph, walk = Math.sin(tt), stop = Math.abs(walk) > 0.92;
+      const px = Math.round(cb.cx0 + Math.sin(tt) * cb.range), py = cb.cy0;
+      const leg = stop ? 0 : Math.floor((t || 0) / 90) % 2, claw = stop ? Math.floor((t || 0) / 160) % 2 : 0;
+      c.fillStyle = "rgba(25,12,35,.25)"; c.fillRect(px - 6, py + 2, 13, 2);
+      c.fillStyle = OUT; c.fillRect(px - 6, py - 6, 13, 7); c.fillRect(px - 9, py - 9 - claw, 4, 4); c.fillRect(px + 6, py - 9 - claw, 4, 4);
+      c.fillStyle = "#e8483f"; c.fillRect(px - 5, py - 5, 11, 5); c.fillRect(px - 8, py - 8 - claw, 2, 2); c.fillRect(px + 7, py - 8 - claw, 2, 2);
+      c.fillStyle = "#ff7a6b"; c.fillRect(px - 4, py - 5, 9, 1);
+      c.fillStyle = OUT; c.fillRect(px - 2, py - 8, 1, 2); c.fillRect(px + 2, py - 8, 1, 2); c.fillStyle = "#ffffff"; c.fillRect(px - 2, py - 9, 1, 1); c.fillRect(px + 2, py - 9, 1, 1);
+      c.fillStyle = OUT; for (let k = 0; k < 3; k++) { c.fillRect(px - 7 - (leg && k === 1 ? 1 : 0), py - 3 + k * 2, 2, 1); c.fillRect(px + 6 + (leg && k === 1 ? 1 : 0), py - 3 + k * 2, 2, 1); }
+    } }));
+    // 🕊️ 갈매기 (하늘을 빙글빙글)
+    objects.push({ y: H + 999, x: W / 2, anim: true, always: true, draw: (c, t) => {
+      const tt = (t || 0) / 1000;
+      for (let k = 0; k < 4; k++) {
+        const a = tt * (0.18 + k * 0.05) + k * 1.6, gx = 380 + Math.cos(a) * (260 + k * 40), gy = 160 + k * 160 + Math.sin(a * 1.3) * 60;
+        const flap = Math.sin(tt * 9 + k) > 0;
+        c.fillStyle = "rgba(25,12,35,.12)"; c.fillRect(gx - 4, gy + 40, 9, 2);
+        c.fillStyle = OUT; c.fillRect(gx - 1, gy - 1, 4, 3);
+        if (flap) { c.fillRect(gx - 7, gy - 4, 6, 2); c.fillRect(gx + 3, gy - 4, 6, 2); c.fillStyle = "#ffffff"; c.fillRect(gx - 6, gy - 4, 4, 1); c.fillRect(gx + 4, gy - 4, 4, 1); }
+        else { c.fillRect(gx - 7, gy, 6, 2); c.fillRect(gx + 3, gy, 6, 2); c.fillStyle = "#ffffff"; c.fillRect(gx - 6, gy, 4, 1); c.fillRect(gx + 4, gy, 4, 1); }
+        c.fillStyle = "#ffffff"; c.fillRect(gx, gy, 2, 1); c.fillStyle = "#ffb03a"; c.fillRect(gx - 2, gy, 1, 1);
+      }
+    } });
+    const collide = (px, py) => colliders.some(([a, b, w, h]) => px > a && px < a + w && py > b && py < b + h);
+    const midSeat = seats[4];
+    return {
+      id: "beach", W, H, ground: g, objects, colliders: [], seats, shoreX,
+      zones: [],
+      triggers: [{ id: "toPlazaW", x: W - 14, y: 410, w: 14, h: 80 }],
+      walkable: (px, py) => px > shoreX(py) + 14 && px < W - 6 && py > 40 && py < H - 16 && !collide(px, py),
+      spawn: { x: W - 44, y: 450 }, artist: null,
+      icons: [{ x: midSeat.x + 74, y: midSeat.y - 34, icon: "🎣" }],
+      signs: [{ x: shoreX(seats[1].y) + 120, y: seats[1].y - 30, key: "beachSign", bg: "#d8f4ff", type: true }],
+      clickables: seats.map((st) => ({ x: st.x, y: st.y - 10, r: 16, go: "sit:" + st.id, front: { x: st.ax, y: st.ay } })),
     };
   }
 
@@ -1308,5 +1551,5 @@
     return world;
   }
 
-  window.World = { buildPlaza, buildLounge, buildSea, buildShop, buildCinema, buildMeadow, rankTops: {}, blitText };
+  window.World = { buildPlaza, buildLounge, buildSea, buildShop, buildCinema, buildMeadow, buildBeach, rankTops: {}, whaleHall: [], blitText };
 })();

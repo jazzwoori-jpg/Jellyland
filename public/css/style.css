@@ -459,6 +459,12 @@ body.touch .gb-form textarea { font-size: 16px; }
 .pn-k.b { height: 60%; background: linear-gradient(#3a3344, #1a1620); border: 2px solid var(--ink); border-top: none; border-radius: 0 0 5px 5px; z-index: 2; box-shadow: inset 0 -5px 0 #4a4258; }
 .pn-k.w.on { background: linear-gradient(#ffd1e6, #ff9fc8); }
 .pn-k.b.on { background: linear-gradient(#a77ce0, #7a4fc0); box-shadow: none; }
+/* 📱 휴대폰 피아노: 한 옥타브만 크게 */
+.pn-wrap.compact .pn-keys { height: clamp(200px, 44vh, 320px); }
+.pn-wrap.compact .pn-k.w span { font-size: 15px; font-weight: bold; color: #8a7a8a; }
+.pn-wrap.compact .pn-k.w span small { font-size: 10px; }
+.pn-wrap.compact .pn-k.b { height: 58%; }
+.pn-wrap.compact .pn-bar .btn { padding: 8px 12px; }
 .pn-hint { text-align: center; font-size: 12px; opacity: .75; margin: 0; }
 body.touch .pn-hint:first-of-type { display: none; }
 .ft-box { width: 100%; max-width: 520px; margin: 10px auto 0; display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
@@ -723,3 +729,89 @@ body:not(.touch) #emo-pop { right: 20px; bottom: 70px; }
 .install.spooky .push-bell { animation: spookyPulse 1.6s ease-in-out infinite; filter: drop-shadow(0 0 10px #c060ff); }
 .install.spooky .push-note { color: #e2d0ff; }
 @keyframes spookyPulse { 0%, 100% { transform: scale(1); opacity: .85; } 50% { transform: scale(1.15); opacity: 1; } }
+
+/* 🎣 젤리 해변 낚시 (v54) — 화면 가운데 반투명 원형 버튼 · 바늘 · Great! */
+#fish-ui { position: fixed; inset: 0; z-index: 25; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+#fish-ui.hidden { display: none; }
+.fu-card { pointer-events: auto; display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 6px; user-select: none; -webkit-user-select: none; }
+.fu-head { display: flex; gap: 10px; align-items: center; background: rgba(43, 29, 42, .72); color: #fff; padding: 4px 14px; border-radius: 14px; font-size: 13px; border: 2px solid rgba(255, 255, 255, .5); }
+.fu-lives { font-size: 12px; letter-spacing: 1px; }
+.fu-lives:empty { display: none; }
+.fu-dial-wrap { position: relative; width: min(240px, 58vw, 44vh); aspect-ratio: 1; cursor: pointer; touch-action: none; -webkit-touch-callout: none; }
+.fu-dial { width: 100%; height: 100%; display: block; filter: drop-shadow(0 4px 0 rgba(43, 29, 42, .35)); }
+.fu-pop { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 36px; font-weight: bold; color: #fff; pointer-events: none; opacity: 0; white-space: nowrap;
+  text-shadow: 3px 3px 0 var(--ink), -2px -2px 0 var(--ink), 2px -2px 0 var(--ink), -2px 2px 0 var(--ink), 0 3px 0 var(--ink); }
+.fu-pop.great { color: #ffe25c; }
+.fu-pop.miss { color: #c9d4e6; font-size: 28px; }
+.fu-pop.wait { font-size: 18px; }
+.fu-pop.bite { color: #fff; font-size: 44px; }
+.fu-pop.go { animation: fuPop .75s ease-out forwards; }
+@keyframes fuPop { 0% { opacity: 0; transform: translate(-50%, -30%) scale(.6); } 18% { opacity: 1; transform: translate(-50%, -55%) scale(1.15); } 70% { opacity: 1; transform: translate(-50%, -75%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -95%) scale(1); } }
+.fu-center { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.fu-prog { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; max-width: 260px; min-height: 0; }
+.fu-prog i { width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--ink); background: rgba(255, 255, 255, .55); }
+.fu-prog i.on { background: #ffe25c; box-shadow: 0 0 6px #fff3a8; }
+.fu-time { width: min(230px, 62vw); height: 9px; border: 2px solid var(--ink); border-radius: 6px; background: rgba(255, 255, 255, .45); overflow: hidden; }
+.fu-time i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #ff6f7d, #f2c14e 35%, #4fc3b0); }
+#fish-ui[data-stage="wait"] .fu-time { visibility: hidden; }
+.fu-hint { margin: 0; background: rgba(43, 29, 42, .72); color: #fff; padding: 5px 12px; border-radius: 12px; font-size: 12px; text-align: center; max-width: min(320px, 86vw); line-height: 1.4; word-break: keep-all; }
+#fish-ui[data-stage="fight"] .fu-hint { background: rgba(216, 67, 78, .85); }
+.fu-card.shake { animation: fuShake .35s; }
+@keyframes fuShake { 20% { transform: translateX(-7px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(3px); } }
+body.kb-open #fish-ui { align-items: flex-start; padding-top: 70px; }
+
+/* 🎣 낚시 결과 */
+.fish-res { text-align: center; }
+.fish-res .fr-fish { width: 260px; max-width: 100%; height: auto; display: block; margin: 0 auto; image-rendering: pixelated; }
+.fish-res h3 { margin: 6px 0 2px; font-size: 18px; word-break: keep-all; }
+.fish-res.boss h3 { color: #b07a00; text-shadow: 0 0 8px #fff3a8; }
+.fr-stars { margin: 0; color: #f2a900; letter-spacing: 2px; }
+.fr-desc { margin: 6px auto; opacity: .8; max-width: 420px; word-break: keep-all; }
+.fr-meta { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 8px 0; }
+.fr-meta span { background: #fff; border: 2px solid var(--ink); border-radius: 12px; padding: 3px 10px; font-size: 12px; }
+.fr-best { color: #d8434e; }
+.fr-tank { margin: 6px 0 0; font-size: 13px; }
+.fr-hall { display: inline-block; background: #2a1404; color: #ffb43a; border: 2px solid var(--ink); border-radius: 8px; padding: 6px 12px; margin: 10px 0 0; font-weight: bold; }
+.fr-btns { margin: 14px 0 0; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+
+/* 🐠 어항 */
+.aqua-tank { width: 100%; height: 170px; display: block; border: 3px solid var(--ink); border-radius: 10px; background: #5fbfe0; }
+.aqua-sum { text-align: center; font-weight: bold; margin: 10px 0 2px; }
+.aqua-sell { text-align: center; font-size: 12px; opacity: .75; margin: 2px 0 10px; }
+.aqua-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.aqua-card { border: 3px solid var(--ink); border-radius: 10px; background: #fff; padding: 8px 6px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; }
+.aqua-card canvas { width: 140px; height: 70px; max-width: 100%; image-rendering: pixelated; background: linear-gradient(#e3f7ff, #bfe8f8); border: 2px solid var(--ink); border-radius: 8px; }
+.aqua-card b { font-size: 13px; margin-top: 2px; }
+.aqua-card .st { color: #f2a900; font-size: 10px; letter-spacing: 1px; }
+.aqua-card span { font-size: 11px; }
+.aqua-card p { font-size: 11px; opacity: .75; margin: 4px 0 0; line-height: 1.35; word-break: keep-all; }
+.aqua-card.unknown { background: #f3f0f7; }
+.aqua-card.unknown canvas { background: #d8d2e2; }
+.aqua-card.unknown b, .aqua-card.unknown span { opacity: .6; }
+.aqua-card.boss { border-color: #c9982c; background: linear-gradient(135deg, #fffaf0, #fff1cf); box-shadow: 0 0 0 2px #f2d58a, 0 0 14px rgba(201, 152, 44, .45); }
+
+/* 🐟 젤리젤리샵: 물고기 팔기 */
+.chip.sell { background: #dff6ff; }
+.chip.sell.on { background: var(--ink); }
+.shop-grid .sell-intro, .shop-grid .sell-all, .shop-grid .sell-empty { grid-column: 1 / -1; text-align: center; margin: 0; }
+.sell-intro { font-size: 13px; }
+.sell-all { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.sell-all small { font-size: 11px; opacity: .75; }
+.shop-item.sell-item canvas { width: 120px; height: 66px; background: linear-gradient(#e3f7ff, #bfe8f8); cursor: default; }
+.sell-btns { display: flex; gap: 4px; width: 100%; }
+.shop-item .sell-btns .btn { width: auto; flex: 1; padding: 4px 2px; font-size: 11px; }
+
+/* 🐋 털보고래 전광판 (명예의 전당) */
+.whale-hall .wh-fish { width: 300px; max-width: 100%; height: auto; display: block; margin: 0 auto; border: 3px solid var(--ink); border-radius: 10px; image-rendering: pixelated; }
+.wh-intro { text-align: center; margin: 10px auto; max-width: 480px; word-break: keep-all; }
+.wh-list { display: flex; flex-direction: column; gap: 6px; }
+.wh-row { display: flex; align-items: center; gap: 8px; background: #fff; border: 2px solid var(--ink); border-radius: 8px; padding: 6px 10px; }
+.wh-row.me { background: #fff8d8; border-color: #c9982c; }
+.wh-n { background: #2a1404; color: #ffb43a; border-radius: 10px; padding: 1px 8px; font-size: 11px; white-space: nowrap; }
+.wh-row canvas { width: 32px; height: 26px; image-rendering: pixelated; background: var(--pink2); border-radius: 4px; flex: none; }
+.wh-row b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wh-meta { font-size: 11px; opacity: .75; white-space: nowrap; }
+
+/* 📣 JELLY LAND 알림 (채팅) */
+#chat .msg.system { background: #fff6d6; border-left: 3px solid #f2c14e; padding: 2px 6px; border-radius: 4px; }
+#chat .msg.system b { color: #b07a00; }

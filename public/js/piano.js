@@ -1,5 +1,6 @@
 /* 🎹 피아노 연주 — 광장 중앙 / 팬 라운지 피아노
    - 건반 2옥타브 반(C3~E5 기본), 옥타브 이동 가능
+   - 휴대폰(compact): 한 옥타브만 넓게 (가운데 도 C4 ~ 다음 도 C5), 옥타브 이동은 그대로
    - 여러 손가락 동시 터치(화음), 건반 위로 미끄러지면 글리산도
    - 키보드: A S D F G H J K L ; ' = 흰 건반, W E T Y U O P = 검은 건반, Z/X = 옥타브, Space = 페달
    - 소리는 Web Audio 로 합성 (파일 다운로드 없음) */
@@ -77,12 +78,14 @@
 
   function mount(root, opts) {
     const t = opts.t, lang = opts.lang || "ko";
-    let base = 48; // C3
-    const SPAN = 29; // C3 ~ E5 (흰 건반 17개)
+    const compact = !!opts.compact; // 📱 휴대폰: 건반을 크게 (한 옥타브)
+    let base = compact ? 60 : 48; // 휴대폰 C4 / 컴퓨터 C3
+    const SPAN = compact ? 13 : 29; // 휴대폰 C4 ~ C5 (흰 건반 8개) / 컴퓨터 C3 ~ E5 (흰 건반 17개)
+    const BASE_MAX = compact ? 84 : 72;
     let sustain = false;
     const voices = new Map(); // pointerId|key -> {midi, v}
     const held = new Map();   // midi -> voice (서스테인용)
-    root.innerHTML = `<div class="pn-wrap">
+    root.innerHTML = `<div class="pn-wrap${compact ? " compact" : ""}">
       <div class="pn-bar"><button class="btn sm" data-oct="-1">◀ ${esc(t("pianoOct"))}</button><span class="pn-oct"></span><button class="btn sm" data-oct="1">${esc(t("pianoOct"))} ▶</button>
       <button class="btn sm pn-sus">${esc(t("pianoSustain"))}</button></div>
       ${opts.record ? `<div class="pn-rec"><button class="btn sm pink rc-start">${esc(t("recStart"))}</button><button class="btn sm rc-stop hidden">${esc(t("recStop"))}</button>
@@ -106,12 +109,13 @@
           keysEl.appendChild(b);
         }
       });
-      root.querySelector(".pn-oct").textContent = `C${Math.floor(base / 12) - 1} ~ E${Math.floor((base + SPAN - 1) / 12) - 1}`;
+      const top = base + SPAN - 1;
+      root.querySelector(".pn-oct").textContent = `C${Math.floor(base / 12) - 1} ~ ${["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][top % 12]}${Math.floor(top / 12) - 1}`;
     }
     build();
     const keyEl = (m) => keysEl.querySelector(`.pn-k[data-m="${m}"]`);
     // ---- 녹음 (음표 [시작ms, 건반, 길이ms] 목록으로 저장 — 파일이 아주 작아요) ----
-    const REC_MS = 5000; // 녹음 최대 5초
+    const REC_MS = 60000; // 녹음 최대 1분 (서버 REC_MAX_MS 와 같게)
     let rec = null, recNotes = null, recTimer = null, stopPlay = null;
     const now = () => performance.now();
     function recOn(m) {
@@ -154,13 +158,13 @@
       if (!on) for (const [m, v] of held) { if (![...voices.values()].some((x) => x.m === m)) { rel(m, v); held.delete(m); } }
     }
     root.querySelector(".pn-sus").addEventListener("click", () => setSustain(!sustain));
-    root.querySelectorAll("[data-oct]").forEach((b) => b.addEventListener("click", () => { base = Math.max(24, Math.min(72, base + 12 * +b.dataset.oct)); build(); }));
+    root.querySelectorAll("[data-oct]").forEach((b) => b.addEventListener("click", () => { base = Math.max(24, Math.min(BASE_MAX, base + 12 * +b.dataset.oct)); build(); }));
     // 키보드
     const kmap = (code) => { const wi = KEY_WHITE.indexOf(code); if (wi >= 0) { const oct = Math.floor(wi / 7); return base + 12 + oct * 12 + WHITE[wi % 7]; } if (code in KEY_BLACK) return base + 12 + KEY_BLACK[code]; return null; };
     const kd = (e) => {
       if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
       if (e.code === "Space") { e.preventDefault(); e.stopPropagation(); if (!e.repeat) setSustain(true); return; }
-      if (e.code === "KeyZ" || e.code === "KeyX") { e.stopPropagation(); if (!e.repeat) { base = Math.max(24, Math.min(72, base + (e.code === "KeyX" ? 12 : -12))); build(); } return; }
+      if (e.code === "KeyZ" || e.code === "KeyX") { e.stopPropagation(); if (!e.repeat) { base = Math.max(24, Math.min(BASE_MAX, base + (e.code === "KeyX" ? 12 : -12))); build(); } return; }
       const m = kmap(e.code); if (m == null) return;
       e.preventDefault(); e.stopPropagation(); if (e.repeat) return; ctx(); down("k" + e.code, m);
     };

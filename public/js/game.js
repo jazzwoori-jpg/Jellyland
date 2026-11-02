@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "53"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "54"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -73,7 +73,7 @@
 
   // ---------------- 토스트 / 페이드 ----------------
   let toastT;
-  function toast(msg) { const el = $("#toast"); el.textContent = msg; el.style.opacity = 1; clearTimeout(toastT); toastT = setTimeout(() => (el.style.opacity = 0), 2200); }
+  function toast(msg, ms) { const el = $("#toast"); el.textContent = msg; el.style.opacity = 1; clearTimeout(toastT); toastT = setTimeout(() => (el.style.opacity = 0), ms || 2200); }
   const fade = (on) => new Promise((r) => { $("#fade").classList.toggle("on", on); setTimeout(r, 360); });
 
   // ---------------- 월드 ----------------
@@ -83,6 +83,7 @@
     G.worlds.shop = World.buildShop();
     G.worlds.cinema = World.buildCinema();
     G.worlds.meadow = World.buildMeadow();
+    G.worlds.beach = World.buildBeach();
     const oldSea = G.worlds.sea;
     G.worlds.sea = World.buildSea();
     if (oldSea) { G.worlds.sea.placeChest(oldSea.chestSpot); Object.assign(G.worlds.sea.sea, oldSea.sea); G.worlds.sea.icons[0].icon = oldSea.icons[0].icon; }
@@ -90,6 +91,13 @@
   function scene() { return G.worlds[G.scene]; }
   // 장소별 배경음악 (샵은 라운지 음악, 초원은 광장 음악, 시네마·바닷속은 없음)
   const bgmFor = (id) => (id === "shop" ? "lounge" : id === "meadow" ? "plaza" : id);
+  // 장소 음악 틀기: 🏖️ 해변은 직접 만든 잔잔한 음악 + 파도·갈매기 소리, 나머지는 배경음악 파일
+  function sceneMusic(id) {
+    if (id === "beach") { BGM.stop(); try { Chip.play("beach"); Ambient.start(); } catch {} return; }
+    try { if (Chip.playing === "beach") Chip.stop(); Ambient.stop(); } catch {}
+    BGM.play(bgmFor(id));
+  }
+  function stopMusic() { BGM.stop(); try { if (Chip.playing === "beach") Chip.stop(); Ambient.stop(); } catch {} }
   // 혼자 들어가는 공간 (분수대 속 바다 · 젤리젤리샵 안): 다른 사람에게는 입구 앞에 서 있는 것처럼 보임
   const soloScene = (sc) => sc === "sea"; // 젤리젤리샵 · 젤리 시네마는 다른 사람과 함께 있는 방
   function setScene(id, pos) {
@@ -102,12 +110,14 @@
     buildMinimap();
     updateSceneLabels();
     resetChat();
-    if (G.mode === "world" && !G.gameOpen) BGM.play(bgmFor(id));
+    if (G.mode === "world" && !G.gameOpen) sceneMusic(id);
+    if (id !== "beach" && G.fish) endFishing(true);
+    if (id === "plaza") loadWhaleHall();
   }
   function updateSceneLabels() {
     if (!G.scene) return;
-    $("#mm-label").textContent = G.scene === "plaza" ? t("mapPlaza") : G.scene === "sea" ? t("mapSea") : G.scene === "shop" ? t("bShop") : G.scene === "cinema" ? t("bCinema") : G.scene === "meadow" ? t("mapMeadow") : t("mapLounge");
-    $("#chat-title").textContent = G.scene === "lounge" ? t("chatLounge") : G.scene === "shop" ? t("chatShop") : G.scene === "cinema" ? t("chatCinema") : G.scene === "meadow" ? t("chatMeadow") : t("chatPlaza");
+    $("#mm-label").textContent = G.scene === "plaza" ? t("mapPlaza") : G.scene === "sea" ? t("mapSea") : G.scene === "shop" ? t("bShop") : G.scene === "cinema" ? t("bCinema") : G.scene === "meadow" ? t("mapMeadow") : G.scene === "beach" ? t("mapBeach") : t("mapLounge");
+    $("#chat-title").textContent = G.scene === "lounge" ? t("chatLounge") : G.scene === "shop" ? t("chatShop") : G.scene === "cinema" ? t("chatCinema") : G.scene === "meadow" ? t("chatMeadow") : G.scene === "beach" ? t("chatBeach") : t("chatPlaza");
     $("#btn-gb").classList.toggle("hidden", G.scene !== "lounge");
   }
 
@@ -161,7 +171,7 @@
 
   const toWorld = (sx, sy) => ({ x: sx / S + G.cam.x, y: sy / S + G.cam.y });
   canvas.addEventListener("pointerdown", (e) => {
-    if (G.mode !== "world" || G.modalOpen) return;
+    if (G.mode !== "world" || G.modalOpen || G.fish) return; // 낚시 중에는 화면을 눌러도 걷지 않음
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     const p = toWorld(e.clientX, e.clientY);
     const w = scene();
@@ -188,7 +198,8 @@
       G.joy.x = d > 8 ? dx / m : 0; G.joy.y = d > 8 ? dy / m : 0;
     }
   })();
-  $("#act").addEventListener("click", interact);
+  $("#act").addEventListener("click", () => { if (!Fishing.active) interact(); });
+  $("#act").addEventListener("pointerdown", (e) => { if (Fishing.active) { e.preventDefault(); Fishing.tap(); } }); // 🎣 낚시 중: 누르는 순간 바로 (타이밍 게임)
   $("#prompt").addEventListener("click", interact);
 
   // ---------------- 업데이트 ----------------
@@ -302,6 +313,7 @@
     if (G.mode === "world") for (const z of w.zones) if (p.x > z.x && p.x < z.x + z.w && p.y > z.y && p.y < z.y + z.h) { zone = z; break; }
     // 벤치 · 테이블 좌석: 가까운 빈자리가 있으면 "앉기"
     if (G.mode === "world" && G.seat && G.seatObj && G.seatObj.watch) zone = G.watchZone || (G.watchZone = { id: "watch", label: t("actWatch") }); // 영화관 좌석: 다시 영상 보기 (움직이면 일어남)
+    else if (G.mode === "world" && G.seat && G.seatObj && G.seatObj.fish) zone = G.fish ? null : castZone(); // 🎣 낚시 의자: "낚시줄 던지기" (움직이면 일어남)
     else if (G.mode === "world" && G.seat) zone = G.standZone || (G.standZone = { id: "stand", label: t("actStand") });
     else if (G.mode === "world" && !zone && w.seats) {
       let best = null, bd = 26;
@@ -331,7 +343,7 @@
   function renderPrompt() {
     const pr = $("#prompt"), z = G.zone;
     if (!z) return pr.classList.add("hidden");
-    const act = z.id === "exit" || z.id === "exitShop" || z.id === "exitCinema" || z.id === "watch" || z.id === "seat" || z.id === "stand" || z.id === "surface" ? "" : z.id === "piano" ? t("actPlay") : z.id === "cafe" ? t("cafeOrder") : z.id === "clerk" ? t("actShopTalk") : z.id === "fountain" ? t("actDive") : z.id === "chest" ? t("actOpen") : z.id === "recboard" || z.id === "rankboard" || z.id === "profile" || z.id === "guide" || z.id === "guestbook" || z.id === "art" ? t("actView") : t("actEnter");
+    const act = z.id === "exit" || z.id === "exitShop" || z.id === "exitCinema" || z.id === "watch" || z.id === "seat" || z.id === "stand" || z.id === "surface" || z.id === "cast" ? "" : z.id === "piano" ? t("actPlay") : z.id === "cafe" ? t("cafeOrder") : z.id === "clerk" ? t("actShopTalk") : z.id === "fountain" ? t("actDive") : z.id === "chest" ? t("actOpen") : z.id === "recboard" || z.id === "rankboard" || z.id === "profile" || z.id === "guide" || z.id === "guestbook" || z.id === "art" || z.id === "whaleboard" ? t("actView") : t("actEnter");
     pr.innerHTML = `<kbd>E</kbd>${esc(z.label)} ${esc(act)}`;
     pr.classList.remove("hidden");
   }
@@ -357,7 +369,7 @@
   function render() {
     const w = scene();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = w.id === "plaza" ? "#4a4458" : w.id === "sea" ? "#123a58" : w.id === "shop" ? "#3a2a40" : w.id === "cinema" ? "#140c1c" : w.id === "meadow" ? "#2f6e3a" : "#2a2230";
+    ctx.fillStyle = w.id === "plaza" ? "#4a4458" : w.id === "sea" ? "#123a58" : w.id === "shop" ? "#3a2a40" : w.id === "cinema" ? "#140c1c" : w.id === "meadow" ? "#2f6e3a" : w.id === "beach" ? "#155a92" : "#2a2230";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     const k = S * dpr;
     ctx.setTransform(k, 0, 0, k, -G.cam.x * k, -G.cam.y * k);
@@ -366,7 +378,7 @@
 
     const vx0 = G.cam.x - 60, vx1 = G.cam.x + VW / S + 60, vy0 = G.cam.y - 20, vy1 = G.cam.y + VH / S + 80;
     const list = [];
-    for (const o of w.objects) if (o.y > vy0 && o.y < vy1 + 120 && o.x > vx0 - 200 && o.x < vx1) list.push(o);
+    for (const o of w.objects) if (o.always || (o.y > vy0 && o.y < vy1 + 120 && o.x > vx0 - 200 && o.x < vx1)) list.push(o);
     const chars = [];
     if (w.artist) chars.push({ y: w.artist.y, x: w.artist.x, name: L(CFG.artist.name) + " ♪", av: ARTIST_LOOK, dir: "down", frame: 0, crown: true, artist: true, bobby: true, keytar: true });
     if (w.staff) chars.push({ x: w.staff.x, y: w.staff.y, name: t(w.staff.nameKey || "cafeStaff"), av: w.staff.av, dir: "down", frame: 0, npc: w.staff });
@@ -393,6 +405,7 @@
         if (c.artist || c.admin) drawSparkles(c.x, c.y, G.t, c.admin);
       } else o.draw(ctx, G.t);
     }
+    if (w.id === "beach") drawFishingLines(w, chars);
     drawFx(Math.min(0.05, (performance.now() - (G.fxT || performance.now())) / 1000)); G.fxT = performance.now();
     if (w.id === "cinema") drawCinemaLight(w);
     if (G.target) { ctx.fillStyle = "rgba(255,127,174,.8)"; const r = 3 + (Math.floor(G.t / 150) % 2); ctx.fillRect(G.target.x - r, G.target.y - 1, r * 2, 2); ctx.fillRect(G.target.x - 1, G.target.y - r, 2, r * 2); }
@@ -505,7 +518,7 @@
   function drawAmbient(w) {
     const now = performance.now(), dt = Math.min(0.05, (now - ambT) / 1000); ambT = now;
     if (w.id === "sea" || w.id === "cinema" || G.mode !== "world") return;
-    const outdoor = w.id === "plaza" || w.id === "meadow";
+    const outdoor = w.id === "plaza" || w.id === "meadow" || w.id === "beach";
     const want = outdoor ? 26 : 10;
     while (G.amb.length < want) G.amb.push({ x: Math.random() * VW, y: Math.random() * VH, vx: 0, vy: 0, ph: Math.random() * 6.3, k: G.amb.length % 4, s: 0.6 + Math.random() * 0.8 });
     if (G.amb.length > want) G.amb.length = want;
@@ -648,7 +661,7 @@
   function buildMinimap() {
     const w = scene();
     const mm = $("#minimap");
-    const sc = w.id === "plaza" || w.id === "meadow" ? 0.25 : w.id === "lounge" ? 0.3 : 0.4;
+    const sc = w.id === "plaza" || w.id === "meadow" || w.id === "beach" ? 0.25 : w.id === "lounge" ? 0.3 : 0.4;
     mm.width = Math.round(w.W * sc); mm.height = Math.round(w.H * sc);
     const c = document.createElement("canvas");
     c.width = w.W; c.height = w.H;
@@ -675,6 +688,7 @@
 
   // ---------------- 상호작용 ----------------
   function interact() {
+    if (Fishing.active) return Fishing.tap(); // 🎣 낚시 중: 행동 버튼 = 낚시 버튼
     if (G.mode !== "world" || G.modalOpen || G.frozen || G.quizOpen) return;
     if (G.zone) runZone(G.zone.id);
   }
@@ -739,6 +753,8 @@
   }
   async function runTrigger(id) {
     if (id === "soonN" || id === "soonW") { G.keys.clear(); G.target = null; return openPushSetup({ icon: "🚧", title: t("soonTitle"), intro: t("soonMsg") }); }
+    if (id === "toBeach") { await fade(true); setScene("beach", { x: G.worlds.beach.W - 44, y: 450, dir: "left" }); await fade(false); toast(t("enteredBeach"), 4500); return; } // 🏖️ 광장 서쪽 → 젤리 해변 ("오늘은 물고기가 많아 보입니다")
+    if (id === "toPlazaW") { await fade(true); setScene("plaza", { x: 40, y: 500, dir: "right" }); await fade(false); return; }
     if (id === "cave") { G.keys.clear(); G.target = null; G.player.y += 6; try { SFX.beat(); setTimeout(() => SFX.beat(), 350); } catch {} return openPushSetup({ icon: "👁️", title: t("caveTitle"), intro: t("caveMsg"), spooky: true }); }
     if (id === "toMeadow") { await fade(true); setScene("meadow", { x: 34, y: 450, dir: "right" }); await fade(false); toast(t("enteredMeadow")); return; }
     if (id === "toPlaza") { await fade(true); setScene("plaza", { x: 1236, y: 500, dir: "left" }); await fade(false); return; }
@@ -747,6 +763,14 @@
     if (id === "cave") return runTrigger("cave");
     if (id === "seat" && G.zone && G.zone.seat) return sitDown(G.zone.seat);
     if (id === "stand") return standUp();
+    if (id === "cast") return startFishing();
+    if (id.startsWith("sit:")) { // 의자를 눌러서 왔으면 바로 앉기
+      const st = (scene().seats || []).find((x) => x.id === id.slice(4));
+      if (!st) return;
+      if (seatTaken(st.id)) return toast(t("seatTaken"));
+      return sitDown(st);
+    }
+    if (id === "whaleboard") return openWhaleHall();
     if (id === "guestbook") return openGuestbook();
     if (id === "cafe") return openCafe();
     if (id === "gallery") return openGallery();
@@ -769,6 +793,203 @@
     if (id === "surface") return surface(false);
     if (id === "lounge") { await fade(true); setScene("lounge"); await fade(false); toast(t("enteredLounge")); return; }
     if (id === "exit") { const b = G.worlds.plaza.buildings.find((x) => x.id === "lounge"); await fade(true); setScene("plaza", { x: b.door.x, y: b.door.y + 22, dir: "down" }); await fade(false); }
+  }
+
+  // ---------------- 🎣 젤리 해변 낚시 ----------------
+  // 의자에 앉기 → "낚시줄 던지기" → 찌가 둥실 → 입질(버튼이 빨개짐) → 바늘이 노란 칸에 올 때 누르기(Great!) → 어항으로
+  G.fish = null; // { stage: "cast" | "wait" | "fight", at, seat }
+  const FISH_DAY = 30; // 서버 FISH_DAY 와 같게 (하루 미끼)
+  const fishName = (sp) => (Fishing.BY[sp] ? L(Fishing.BY[sp].name) : sp);
+  // 한국어 조사: 받침이 있으면 "을", 없으면 "를" (한글이 아니면 "을(를)")
+  const eul = (w) => { const c = String(w).trim().slice(-1).charCodeAt(0); return c >= 0xac00 && c <= 0xd7a3 ? ((c - 0xac00) % 28 ? "을" : "를") : "을(를)"; };
+  const fishState = () => (G.fish ? (G.fish.stage === "fight" ? 2 : 1) : 0); // 다른 사람에게 보이는 모습
+  const baitText = () => t("fishBait", { n: (G.user.bait | 0) >= 99 ? "∞" : G.user.bait | 0, max: FISH_DAY });
+  function castZone() {
+    const label = `${t("fishCast")} · 🪱 ${baitText()}`;
+    if (!G.castZone || G.castZone.label !== label) G.castZone = { id: "cast", label };
+    return G.castZone;
+  }
+  async function startFishing() {
+    const st = G.seatObj;
+    if (G.fish || !st || !st.fish) return;
+    if ((G.user.bait | 0) <= 0 && G.baitDay === kstDay()) return toast(t("e_fishNoBait")); // (자정이 지나면 서버에 다시 물어봄)
+    G.fish = { stage: "cast", at: performance.now(), seat: st.id };
+    G.frozen = true; G.keys.clear(); G.target = null; G.zone = null; renderPrompt();
+    try { SFX.cast(); } catch {}
+    kickSync();
+    let r;
+    try { r = await API.fishCast(); } catch (e) { toast(e.message); if (e.code === "fishNoBait") { G.user.bait = 0; G.baitDay = kstDay(); } return endFishing(); }
+    setUser(r.user); G.baitDay = kstDay();
+    if (!G.fish || G.seat !== st.id || G.modalOpen) { API.fishEnd(r.cast.id, false).catch(() => {}); if (G.fish) endFishing(); return; } // 그새 그만뒀으면
+    setTimeout(() => { try { SFX.plop(); } catch {} }, 420);
+    G.fish.stage = "wait"; kickSync();
+    const res = await Fishing.start(r.cast, { t, title: "🎣 " + t("fishTitle"), sfx: (k) => { try { SFX[k] && SFX[k](); } catch {} }, onBite: () => { if (G.fish) { G.fish.stage = "fight"; kickSync(); } } });
+    if (res.cancel) { endFishing(); API.fishEnd(r.cast.id, false).catch(() => {}); return; }
+    let out;
+    try { out = await API.fishEnd(r.cast.id, !!res.ok); } catch (e) { toast(e.message); return endFishing(); }
+    setUser(out.user);
+    endFishing();
+    showFishResult(out);
+  }
+  function endFishing(silent) {
+    if (Fishing.active) Fishing.cancel();
+    const was = !!G.fish; G.fish = null; G.frozen = false; G.zone = null;
+    if (was && !silent) kickSync();
+  }
+  // 낚싯대 · 낚싯줄 · 찌 (나와 다른 사람 모두) — 월드 좌표로 그림
+  function drawFishingLines(w) {
+    const items = [];
+    const seatOf = (id) => w.seats.find((x) => x.id === id);
+    for (const o of G.others.values()) if (o.seat && o.fs) { const st = seatOf(o.seat); if (st && st.fish) items.push({ st, fs: o.fs }); }
+    if (G.fish && G.seatObj && G.seatObj.fish) items.push({ st: G.seatObj, fs: fishState(), castT: G.fish.stage === "cast" ? G.fish.at : 0 });
+    for (const { st, fs, castT } of items) {
+      const hx = st.x - 7, hy = st.y - 12, tipX = hx - 20, tipY = hy - 24; // 손 → 낚싯대 끝 (바다 쪽)
+      const k = castT ? Math.min(1, (performance.now() - castT) / 450) : 1;
+      const bx = st.bob.x, by = st.bob.y, px = tipX + (bx - tipX) * k, py = tipY + (by - tipY) * k - Math.sin(k * Math.PI) * 26;
+      const bite = fs === 2, dip = bite ? (Math.sin(G.t / 60) > 0.1 ? 3 : 0) : Math.sin(G.t / 420) * 1.2;
+      ctx.save(); ctx.lineCap = "round";
+      ctx.strokeStyle = "#3a2530"; ctx.lineWidth = 2.6; ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(tipX, tipY); ctx.stroke();
+      ctx.strokeStyle = "#d9a06a"; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(tipX, tipY); ctx.stroke();
+      ctx.strokeStyle = "rgba(255,255,255,.85)"; ctx.lineWidth = 0.7; ctx.beginPath(); ctx.moveTo(tipX, tipY);
+      ctx.quadraticCurveTo((tipX + px) / 2, Math.max(tipY, py) + (bite ? 1 : k < 1 ? 0 : 12), px, py + dip); ctx.stroke();
+      if (k >= 1) {
+        const rr = 4 + ((G.t / 90) % 8); ctx.strokeStyle = `rgba(255,255,255,${0.6 - rr / 20})`; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(px, py + 3, rr, rr * 0.35, 0, 0, 7); ctx.stroke();
+        if (bite) { ctx.fillStyle = "rgba(255,255,255,.8)"; for (let q = 0; q < 4; q++) { const a = G.t / 120 + q * 1.6; ctx.fillRect(px + Math.cos(a) * 6, py + 1 + Math.sin(a) * 2 - Math.abs(Math.sin(G.t / 90 + q)) * 4, 1.5, 1.5); } }
+        ctx.fillStyle = "#3a2530"; ctx.fillRect(px - 2.5, py + dip - 3, 5, 6.5);
+        ctx.fillStyle = "#ff4d6d"; ctx.fillRect(px - 1.5, py + dip - 2, 3, 2.2); ctx.fillStyle = "#ffffff"; ctx.fillRect(px - 1.5, py + dip + 0.4, 3, 2.2);
+        if (bite) { ctx.font = `bold 9px ${FONT}`; ctx.textAlign = "center"; ctx.fillStyle = "#3a2530"; ctx.fillText("!", px + 0.6, py - 7.4); ctx.fillStyle = "#ffd34d"; ctx.fillText("!", px, py - 8); }
+      }
+      ctx.restore();
+    }
+  }
+  function showFishResult(out) {
+    const sp = Fishing.BY[out.sp]; if (!sp) return;
+    const stars = "★".repeat(Math.min(6, sp.stars)) + "☆".repeat(Math.max(0, 6 - sp.stars));
+    if (!out.ok) {
+      try { SFX.aww(); } catch {}
+      openModal("💦 " + t("fishLostTitle"), `<div class="fish-res lost"><canvas class="fr-fish" width="260" height="140"></canvas><h3>${esc(t("fishEscaped", { name: fishName(out.sp), eul: eul(fishName(out.sp)) }))}</h3>
+        <p class="fr-stars">${stars}</p><p class="fr-desc">${esc(t("fishLostTip"))}</p>
+        <p class="fr-btns"><button class="btn pink" id="fr-again">🎣 ${esc(t("fishAgain"))}</button></p></div>`, (el) => mountFishResult(el, out, true));
+      return;
+    }
+    const have = ((G.user.fish && G.user.fish.have) || {})[out.sp] | 0;
+    if (sp.boss) whaleParty(); else try { SFX.catchFish(); } catch {}
+    openModal((sp.boss ? "👑 " : "🎉 ") + t("fishGotTitle"), `<div class="fish-res${sp.boss ? " boss" : ""}"><canvas class="fr-fish" width="260" height="140"></canvas>
+      <h3>${esc(t("fishGot", { name: L(sp.name), eul: eul(L(sp.name)) }))}</h3><p class="fr-stars">${stars}</p><p class="fr-desc">${esc(L(sp.desc))}</p>
+      <div class="fr-meta"><span>📏 ${esc(t("fishSize", { n: out.size.toLocaleString() }))}${out.best ? ` <b class="fr-best">🏅 ${esc(t("fishBest"))}</b>` : ""}</span><span>🪙 ${esc(t("fishPrice", { n: sp.price.toLocaleString() }))}</span></div>
+      <p class="fr-tank">🐠 ${esc(t("fishToTank", { n: have }))}</p>
+      ${sp.boss ? `<p class="fr-hall">🏆 ${esc(t("whaleHallYou", { n: out.hallN || 1 }))}</p>` : ""}
+      <p class="fr-btns"><button class="btn pink" id="fr-again">🎣 ${esc(t("fishAgain"))}</button> <button class="btn sm grape" id="fr-tank">🐠 ${esc(t("aquaBtn"))}</button></p></div>`, (el) => mountFishResult(el, out, false));
+  }
+  function mountFishResult(el, out, lost) {
+    const cv = el.querySelector(".fr-fish"), x = cv.getContext("2d"); let raf = 0;
+    const loop = (now) => {
+      x.clearRect(0, 0, cv.width, cv.height);
+      const g = x.createRadialGradient(130, 70, 10, 130, 70, 130); g.addColorStop(0, lost ? "rgba(120,160,220,.35)" : "rgba(255,240,170,.75)"); g.addColorStop(1, "rgba(255,255,255,0)");
+      x.fillStyle = g; x.fillRect(0, 0, cv.width, cv.height);
+      const wdt = Math.min(230, 120 + Fishing.BY[out.sp].stars * 18);
+      if (lost) { const k = (now % 2400) / 2400; x.globalAlpha = 0.75 * (1 - k); Fishing.draw(x, out.sp, 150 - k * 190, 74 + Math.sin(now / 160) * 3, wdt * 0.7, now, false); x.globalAlpha = 1; } // 꼬리를 흔들며 멀리 도망감
+      else Fishing.draw(x, out.sp, 130, 72, wdt, now, false);
+      if (!lost) for (let k = 0; k < 8; k++) { const a = now / 600 + k * 0.8; if (Math.sin(a * 3) < 0.4) continue; x.fillStyle = "#fff3a8"; x.fillRect(130 + Math.cos(a) * 110, 70 + Math.sin(a * 1.3) * 55, 3, 3); }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    G.modalCleanup = () => cancelAnimationFrame(raf);
+    const again = el.querySelector("#fr-again"); if (again) again.addEventListener("click", () => { closeModal(); if (G.seatObj && G.seatObj.fish) startFishing(); });
+    const tank = el.querySelector("#fr-tank"); if (tank) tank.addEventListener("click", () => openAquarium());
+  }
+  // 👑 털보고래를 낚으면: 빵빠레 + 폭죽 + 배너
+  function whaleParty() {
+    try { Piano.fanfare(); } catch {}
+    G.banner = { text: t("whaleCaughtBanner"), until: performance.now() + 4500 };
+    const cols = ["#ff5f9f", "#ffd34d", "#7fe3ff", "#a77ce0", "#8fe07a", "#ffffff"];
+    for (let k = 0; k < 8; k++) setTimeout(() => {
+      const bx = G.player.x + (Math.random() - 0.5) * 140, by = G.player.y - 60 - Math.random() * 60;
+      for (let i = 0; i < 40; i++) { const a = (i / 40) * Math.PI * 2, sp = 40 + Math.random() * 70; G.fx.push({ x: bx, y: by, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1.3, max: 1.3, col: cols[(k + i) % cols.length], s: 2.5, g: 40 }); }
+    }, k * 380);
+    loadWhaleHall(true);
+  }
+  // ---------------- 🐠 어항 (내가 낚은 물고기) ----------------
+  function openAquarium() {
+    const f = G.user.fish || {}, have = f.have || {}, total = f.total || {}, best = f.best || {};
+    const SP = Fishing.SPECIES, nHave = Object.values(have).reduce((a, b) => a + (b | 0), 0), found = SP.filter((s2) => total[s2.id] > 0).length;
+    const card = (sp) => total[sp.id] > 0
+      ? `<div class="aqua-card${sp.boss ? " boss" : ""}"><canvas width="140" height="70" data-sp="${sp.id}"></canvas><b>${esc(L(sp.name))}</b><small class="st">${"★".repeat(Math.min(6, sp.stars))}</small>
+        <span>${esc(t("aquaHave", { n: have[sp.id] | 0 }))} · ${esc(t("aquaTotal", { n: total[sp.id] | 0 }))}</span><span>📏 ${esc(t("aquaBest", { n: (best[sp.id] | 0).toLocaleString() }))} · 🪙 ${sp.price.toLocaleString()}</span><p>${esc(L(sp.desc))}</p></div>`
+      : `<div class="aqua-card unknown"><canvas width="140" height="70" data-sp="${sp.id}" data-dark="1"></canvas><b>???</b><small class="st">${"★".repeat(Math.min(6, sp.stars))}</small><span>${esc(t("aquaUnknown"))}</span></div>`;
+    openModal("🐠 " + t("aquaTitle"), `<div class="aqua"><canvas class="aqua-tank"></canvas>
+      <p class="aqua-sum">${esc(t("aquaSum", { n: nHave, d: found, m: SP.length }))} · 🪱 ${esc(baitText())}</p>
+      ${nHave ? "" : `<p class="gb-empty">${esc(t("aquaEmpty"))}</p>`}<p class="aqua-sell">${esc(t("aquaSellHint"))}</p>
+      <div class="aqua-grid">${SP.map(card).join("")}</div></div>`, (el) => {
+      el.querySelectorAll(".aqua-card canvas").forEach((c) => { const x = c.getContext("2d"); Fishing.draw(x, c.dataset.sp, 70, 36, Math.min(124, 60 + Fishing.BY[c.dataset.sp].stars * 11), 0, false); if (c.dataset.dark) { x.globalCompositeOperation = "source-atop"; x.fillStyle = "#3a3448"; x.fillRect(0, 0, 140, 70); x.globalCompositeOperation = "source-over"; } });
+      // 어항 속 물고기들이 헤엄침
+      const cv = el.querySelector(".aqua-tank"), x = cv.getContext("2d"), dpr = Math.min(2, window.devicePixelRatio || 1);
+      const Wd = cv.clientWidth || 600, Hd = 170; cv.width = Wd * dpr; cv.height = Hd * dpr; x.scale(dpr, dpr);
+      const swimmers = [];
+      SP.forEach((sp) => { const n = Math.min(3, have[sp.id] | 0); for (let i = 0; i < n; i++) swimmers.push({ id: sp.id, x: Math.random() * Wd, y: 30 + Math.random() * (Hd - 70), v: (14 + Math.random() * 20) * (Math.random() < 0.5 ? -1 : 1), w: Math.min(110, 34 + sp.stars * 11), ph: Math.random() * 6 }); });
+      const weeds = Array.from({ length: 7 }, (_, i) => ({ x: 20 + i * (Wd / 7) + Math.random() * 30, h: 30 + Math.random() * 40 }));
+      let raf = 0, last = performance.now();
+      const loop = (now) => {
+        const dt = Math.min(0.05, (now - last) / 1000); last = now;
+        const g = x.createLinearGradient(0, 0, 0, Hd); g.addColorStop(0, "#7fd6ef"); g.addColorStop(1, "#2a7fb8"); x.fillStyle = g; x.fillRect(0, 0, Wd, Hd);
+        x.fillStyle = "rgba(255,255,255,.12)"; for (let k = 0; k < 4; k++) { const lx = ((now / 40 + k * 170) % (Wd + 120)) - 60; x.beginPath(); x.moveTo(lx, 0); x.lineTo(lx + 40, 0); x.lineTo(lx - 20, Hd); x.lineTo(lx - 60, Hd); x.closePath(); x.fill(); }
+        x.fillStyle = "#e8cd92"; x.fillRect(0, Hd - 18, Wd, 18); x.fillStyle = "#d4b47a"; for (let k = 0; k < Wd; k += 9) x.fillRect(k, Hd - 18 + (k % 3), 4, 2);
+        for (const wd of weeds) { x.strokeStyle = "#3f9a55"; x.lineWidth = 4; x.beginPath(); x.moveTo(wd.x, Hd - 16); for (let k = 1; k <= 5; k++) x.lineTo(wd.x + Math.sin(now / 700 + k + wd.x) * 5, Hd - 16 - (wd.h * k) / 5); x.stroke(); }
+        for (const s2 of swimmers) {
+          s2.x += s2.v * dt; if (s2.x < s2.w / 2) { s2.x = s2.w / 2; s2.v = Math.abs(s2.v); } if (s2.x > Wd - s2.w / 2) { s2.x = Wd - s2.w / 2; s2.v = -Math.abs(s2.v); }
+          Fishing.draw(x, s2.id, s2.x, s2.y + Math.sin(now / 900 + s2.ph) * 6, s2.w, now + s2.ph * 300, s2.v > 0);
+        }
+        x.fillStyle = "rgba(255,255,255,.7)"; for (let k = 0; k < 12; k++) { const bx = (k * 73) % Wd, by = Hd - ((now / 18 + k * 47) % Hd); x.beginPath(); x.arc(bx + Math.sin(now / 300 + k) * 3, by, 2 + (k % 3), 0, 7); x.fill(); }
+        if (!swimmers.length) { x.font = `bold 13px ${FONT}`; x.textAlign = "center"; x.fillStyle = "rgba(255,255,255,.9)"; x.fillText("🎣 " + t("aquaGoFish"), Wd / 2, Hd / 2); }
+        raf = requestAnimationFrame(loop);
+      };
+      raf = requestAnimationFrame(loop);
+      G.modalCleanup = () => cancelAnimationFrame(raf);
+    }, true);
+  }
+  // ---------------- 🛍️ 젤리젤리샵: 물고기 팔기 ----------------
+  function renderSellFish(grid) {
+    const have = (G.user.fish && G.user.fish.have) || {};
+    const list = Fishing.SPECIES.filter((sp) => (have[sp.id] | 0) > 0);
+    const intro = `<p class="sell-intro">🎣 ${esc(t("sellIntro"))}</p>`;
+    if (!list.length) { grid.innerHTML = intro + `<p class="gb-empty sell-empty">${esc(t("sellNone"))}</p>`; return; }
+    const total = list.reduce((a, sp) => a + (sp.boss ? 0 : sp.price * (have[sp.id] | 0)), 0);
+    grid.innerHTML = intro + (total ? `<div class="sell-all"><button class="btn pink" data-all="1">🐟 ${esc(t("sellEverything", { n: total.toLocaleString() }))}</button>${have.furwhale ? `<small>${esc(t("sellWhaleKept"))}</small>` : ""}</div>` : "")
+      + list.map((sp) => `<div class="shop-item sell-item${sp.boss ? " t4 t6" : sp.stars >= 4 ? " t4" : sp.stars >= 3 ? " t3" : ""}" data-sp="${sp.id}"><span class="kind">${"★".repeat(Math.min(6, sp.stars))}</span>
+        <canvas width="120" height="66"></canvas><b>${esc(L(sp.name))}</b><span class="price">🪙 ${sp.price.toLocaleString()} × ${have[sp.id] | 0}</span>
+        <div class="sell-btns"><button class="btn sm pink" data-n="1">${esc(t("sellOne"))}</button>${(have[sp.id] | 0) > 1 ? `<button class="btn sm grape" data-n="${have[sp.id] | 0}">${esc(t("sellAllKind", { n: have[sp.id] | 0 }))}</button>` : ""}</div></div>`).join("");
+    grid.querySelectorAll(".sell-item canvas").forEach((c) => { const sp = c.closest(".sell-item").dataset.sp; Fishing.draw(c.getContext("2d"), sp, 60, 34, Math.min(110, 56 + Fishing.BY[sp].stars * 9), 0, false); });
+    const doSell = async (b, body) => {
+      const sp = body.sp && Fishing.BY[body.sp];
+      if (sp && sp.boss && !b.classList.contains("sure")) { b.classList.add("sure"); b.dataset.label = b.textContent; b.textContent = t("sellSure"); setTimeout(() => { if (b.isConnected) { b.classList.remove("sure"); b.textContent = b.dataset.label; } }, 4000); return; }
+      b.disabled = true;
+      try { const r = await API.fishSell(body); setUser(r.user); try { SFX.coin(); } catch {} toast(t("sellDone", { n: r.earned.toLocaleString(), c: r.sold })); const cEl = $("#shop-coins"); if (cEl) cEl.textContent = (G.user.coins | 0).toLocaleString(); renderShop(); }
+      catch (e) { toast(e.message); b.disabled = false; }
+    };
+    grid.querySelectorAll(".sell-item [data-n]").forEach((b) => b.addEventListener("click", () => doSell(b, { sp: b.closest(".sell-item").dataset.sp, n: +b.dataset.n })));
+    const all = grid.querySelector("[data-all]"); if (all) all.addEventListener("click", () => doSell(all, { all: true }));
+  }
+  // ---------------- 🐋 털보고래 명예의 전당 (광장 서쪽 전광판) ----------------
+  let hallAt = 0;
+  function loadWhaleHall(force) {
+    if (!force && Date.now() - hallAt < 60000) return Promise.resolve();
+    hallAt = Date.now();
+    return API.fishHall().then((r) => { World.whaleHall = r.hall || []; }).catch(() => { hallAt = 0; });
+  }
+  setInterval(() => { if (G.mode === "world" && G.scene === "plaza" && !document.hidden) loadWhaleHall(); }, 120000);
+  function openWhaleHall() {
+    const fmtD = (ts) => { const d = new Date(ts); return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`; };
+    const listHTML = () => { const list = World.whaleHall || []; return list.length ? `<div class="wh-list">${list.map((e) => `<div class="wh-row${G.user && e.id === G.user.id ? " me" : ""}"><span class="wh-n">${esc(t("whaleNth", { n: e.n }))}</span><canvas width="32" height="26" data-av='${esc(JSON.stringify(e.avatar || null))}'></canvas><b>${esc(e.name)}</b><span class="wh-meta">🐋 ${(e.size || 0).toLocaleString()}cm · ${fmtD(e.ts)}</span></div>`).join("")}</div>`
+      : `<p class="gb-empty">${esc(t("whaleNone"))}</p>`; };
+    const faces = (el) => el.querySelectorAll("canvas[data-av]").forEach((c) => { try { const av = JSON.parse(c.dataset.av); const x = c.getContext("2d"); x.imageSmoothingEnabled = false; if (av) Avatar.face(x, av, 32, 26); } catch {} });
+    openModal("🐋 " + t("whaleBoardZ"), `<div class="whale-hall"><canvas class="wh-fish" width="300" height="120"></canvas><p class="wh-intro">${esc(t("whaleHallIntro"))}</p><div class="wh-box">${listHTML()}</div></div>`, (el) => {
+      faces(el);
+      // 최신 명단을 받아 오면 다시 그림
+      loadWhaleHall(true).then(() => { const box = el.querySelector(".wh-box"); if (box && box.isConnected) { box.innerHTML = listHTML(); faces(box); } });
+      const cv = el.querySelector(".wh-fish"), x = cv.getContext("2d"); let raf = 0;
+      const loop = (now) => { x.clearRect(0, 0, 300, 120); const g = x.createLinearGradient(0, 0, 0, 120); g.addColorStop(0, "#2a6fb0"); g.addColorStop(1, "#123a68"); x.fillStyle = g; x.fillRect(0, 0, 300, 120); Fishing.draw(x, "furwhale", 150, 62, 230, now, false); raf = requestAnimationFrame(loop); };
+      raf = requestAnimationFrame(loop); G.modalCleanup = () => cancelAnimationFrame(raf);
+    }, true);
   }
 
   // ---------------- 😊 이모티콘 반응 (머리 위로 떠오름 · 모두에게 보임) ----------------
@@ -1090,6 +1311,7 @@
 
   // ---------------- 모달 콘텐츠 ----------------
   function openModal(title, html, onMount, wide) {
+    if (Fishing.active) Fishing.cancel(); // 🎣 낚시 중에 다른 창을 열면 낚싯줄을 감고 그만둠
     if (G.modalCleanup) { const f = G.modalCleanup; G.modalCleanup = null; try { f(); } catch {} }
     document.querySelector("#modal .modal").classList.toggle("wide", !!wide);
     document.querySelector("#modal .modal").classList.remove("game", "piano");
@@ -1171,12 +1393,12 @@
   function hookVideo(el) {
     const vid = el.querySelector("video"), yt = el.querySelector("iframe");
     if (!vid && !yt) return;
-    if (vid) vid.addEventListener("play", () => { try { BGM.stop(); } catch {} });
+    if (vid) vid.addEventListener("play", () => { try { stopMusic(); } catch {} });
     // 유튜브 영상: 영상 화면을 누르면(재생) 배경음악을 끔 — 창 포커스가 영상 쪽으로 넘어가는 걸로 알아챔
-    const onBlur = () => setTimeout(() => { if (yt && document.activeElement === yt) { try { BGM.stop(); } catch {} } }, 0);
+    const onBlur = () => setTimeout(() => { if (yt && document.activeElement === yt) { try { stopMusic(); } catch {} } }, 0);
     if (yt) window.addEventListener("blur", onBlur);
     const prev = G.modalCleanup;
-    G.modalCleanup = () => { try { vid && vid.pause(); } catch {} if (yt) window.removeEventListener("blur", onBlur); if (prev) try { prev(); } catch {} if (!G.gameOpen) BGM.play(bgmFor(G.scene)); };
+    G.modalCleanup = () => { try { vid && vid.pause(); } catch {} if (yt) window.removeEventListener("blur", onBlur); if (prev) try { prev(); } catch {} if (!G.gameOpen) sceneMusic(G.scene); };
   }
   // ---------------- 🎬 영상 팝업 (정해진 날짜까지 접속할 때마다) ----------------
   function promoActive() { const p = CFG.promo; return !!(p && Date.now() < Date.parse(p.until) && CFG.videos[p.video]); }
@@ -1350,7 +1572,7 @@
   function openShop() {
     const html = `<div class="shop-top"><div class="coin-big">🪙 <b id="shop-coins">${(G.user.coins | 0).toLocaleString()}</b> <small>${esc(t("coinName"))}</small></div>
       <p>${esc(t("shopIntro"))}</p><p class="shop-how">${esc(t("shopHow"))}</p></div>
-      <div class="chips shop-tabs">${["all", "hair", "outfit", "wand", "bubble"].map((k) => `<button class="chip ${k === shopTab ? "on" : ""}" data-k="${k}">${esc(t({ all: "kAll", hair: "kHair", outfit: "kOutfit", wand: "kWand", bubble: "kBubble" }[k]))}</button>`).join("")}</div>
+      <div class="chips shop-tabs">${["all", "hair", "outfit", "wand", "bubble", "fish"].map((k) => `<button class="chip ${k === shopTab ? "on" : ""}${k === "fish" ? " sell" : ""}" data-k="${k}">${esc(t({ all: "kAll", hair: "kHair", outfit: "kOutfit", wand: "kWand", bubble: "kBubble", fish: "sellTab" }[k]))}</button>`).join("")}</div>
       <div class="shop-grid" id="shop-grid"></div>`;
     openModal("🛍️ " + t("bShop"), html, (el) => {
       el.querySelectorAll(".shop-tabs .chip").forEach((b) => b.addEventListener("click", () => { shopTab = b.dataset.k; el.querySelectorAll(".shop-tabs .chip").forEach((x) => x.classList.toggle("on", x === b)); renderShop(); }));
@@ -1359,6 +1581,8 @@
   }
   function renderShop() {
     const grid = $("#shop-grid"); if (!grid) return;
+    grid.classList.toggle("sell-grid", shopTab === "fish");
+    if (shopTab === "fish") return renderSellFish(grid); // 🐟 물고기 팔기
     const av = G.user.avatar || {};
     const KO = { hair: 0, outfit: 1, wand: 2, bubble: 3 };
     const list = SHOP.filter((it) => !it.staff && (shopTab === "all" || it.kind === shopTab)) // 관리자 전용 의상은 팔지 않음
@@ -1413,14 +1637,14 @@
 
   // ---------------- 🎹 피아노 연주 ----------------
   function openPiano(recordable) {
-    BGM.stop(); // 연주하는 동안 배경음악은 잠시 멈춤
+    stopMusic(); // 연주하는 동안 배경음악은 잠시 멈춤
     openModal(t("pianoTitle"), `<div id="pn-root"></div>`, (el) => {
       const pn = Piano.mount(el.querySelector("#pn-root"), {
-        t, lang: I.lang, record: !!recordable,
+        t, lang: I.lang, record: !!recordable, compact: IS_TOUCH && window.innerWidth < 1000, // 📱 휴대폰은 한 옥타브만 크게
         onPost: async (notes, title) => { try { const r = await API.recPost(notes, title); toast(t("recDone")); return r; } catch (e) { toast(e.message); throw e; } },
         onBoard: () => openRecBoard(),
       });
-      G.modalCleanup = () => { pn.destroy(); BGM.play(bgmFor(G.scene)); };
+      G.modalCleanup = () => { pn.destroy(); sceneMusic(G.scene); };
       if (recordable) API.recList(0).then((r) => { const x = el.querySelector(".rc-left"); if (x) x.textContent = t("recLeft", { n: r.left > 3 ? "∞" : r.left }); }).catch(() => {});
     }, true);
     document.querySelector("#modal .modal").classList.add("piano");
@@ -1429,12 +1653,12 @@
   // ---------------- 📼 젤리에게 들려줘! (피아노 녹음 게시판) ----------------
   let recStop = null;
   function openRecBoard(page = 0) {
-    BGM.stop();
+    stopMusic();
     openModal("📼 " + t("recBoard"), `<p class="rec-intro">${esc(t("recBoardIntro"))}</p>
       <div class="rec-list" id="rec-list"><p class="gb-empty">…</p></div><div class="gb-pager" id="rec-pager"></div>
       <p style="text-align:center"><button class="btn sm pink" id="rec-go-piano">🎹 ${esc(t("recGoPiano"))}</button></p>`, (el) => {
       el.querySelector("#rec-go-piano").addEventListener("click", () => openPiano(true));
-      G.modalCleanup = () => { if (recStop) { recStop(); recStop = null; } BGM.play(bgmFor(G.scene)); };
+      G.modalCleanup = () => { if (recStop) { recStop(); recStop = null; } sceneMusic(G.scene); };
       loadRec(page);
     }, true);
   }
@@ -1447,7 +1671,7 @@
         <button class="btn rec-play" title="▶">▶</button>
         <canvas width="32" height="26" data-av='${esc(JSON.stringify(e.avatar || null))}'></canvas>
         <div class="rec-info"><b>${e.role === "artist" ? "✦ " : e.role === "admin" ? "★ " : ""}${esc(e.name)}</b>${e.title ? ` <span class="rec-title" title="${esc(e.title)}">「${esc(trPick(e.title, e.titleTr))}」</span>` : ""}<br>
-          <small>🎵 ${e.notes.length} · ⏱ ${(Math.min(5000, e.len + 500) / 1000).toFixed(1)}s · ${fmtTime(e.ts)}</small></div>
+          <small>🎵 ${e.notes.length} · ⏱ ${(Math.min(60000, e.len + 500) / 1000).toFixed(1)}s · ${fmtTime(e.ts)}</small></div>
         ${G.user && staff(G.user.role) ? `<button class="gb-del" title="${esc(t("del"))}">✕</button>` : ""}</div>`).join("");
       list.querySelectorAll("canvas[data-av]").forEach((c) => { try { const av = JSON.parse(c.dataset.av); if (av) Avatar.face(c.getContext("2d"), av, 32, 26); } catch {} });
       list.querySelectorAll(".rec-item").forEach((row, i) => {
@@ -1533,12 +1757,12 @@
   // 젤리게임월드: 게임 선택 → 점프점프 젤리월드 / 올라올라 / 오늘의 운세
   function openGame(pick) {
     G.gameOpen = true;
-    BGM.play("minigame");
+    stopMusic(); BGM.play("minigame");
     openModal("🎮 " + t("bGame"), `<div id="gw-root"></div>`, (el) => {
       let cur = null;
       const root = el.querySelector("#gw-root");
       const stop = () => { if (cur) { cur.destroy(); cur = null; } };
-      G.modalCleanup = () => { stop(); Chip.stop(); G.gameOpen = false; BGM.play(bgmFor(G.scene)); };
+      G.modalCleanup = () => { stop(); Chip.stop(); G.gameOpen = false; sceneMusic(G.scene); };
       const setTitle = (s2) => ($("#modal-title").textContent = s2);
       function menu() {
         stop(); setTitle("🎮 " + t("bGame"));
@@ -1662,6 +1886,7 @@
     }));
   }
   $("#btn-mail").addEventListener("click", openMail);
+  $("#btn-aqua").addEventListener("click", () => openAquarium()); // 🐠 내 어항
 
   // ---------------- 🛠 관리자: 회원관리 ----------------
   let adminUsers = [];
@@ -2094,7 +2319,7 @@
         if (pts.length) { path = pts.map((q) => [Math.round(q[0] + G.clockOff), q[1], q[2]]); G.trailSent = pts[pts.length - 1][0]; }
       }
       if (path && !G.clockSet) path = path.map((q) => [q[0] - sendT - G.clockOff, q[1], q[2]]); // 아직 서버 시계를 모르면 "몇 ms 전"으로
-      const r = await API.sync({ pv: 1, pathAbs: !!(path && G.clockSet), scene: inSea ? "plaza" : room, x: inSea ? soloX : Math.round(G.player.x), y: inSea ? soloY : Math.round(G.player.y), dir: inSea ? (shopDoor ? "down" : "up") : G.player.dir, seat: inSea ? null : G.seat, vx: inSea ? 0 : Math.round(G.player.vx || 0), vy: inSea ? 0 : Math.round(G.player.vy || 0), since: G.chat.since, ...(G.user.drink && G.user.drink.until > serverNow_() ? { drink: G.user.drink } : {}), ...(emo ? { emo } : {}), ...(path ? { path } : {}) });
+      const r = await API.sync({ pv: 1, pathAbs: !!(path && G.clockSet), scene: inSea ? "plaza" : room, x: inSea ? soloX : Math.round(G.player.x), y: inSea ? soloY : Math.round(G.player.y), dir: inSea ? (shopDoor ? "down" : "up") : G.player.dir, seat: inSea ? null : G.seat, ...(G.fish && !inSea ? { fs: fishState() } : {}), vx: inSea ? 0 : Math.round(G.player.vx || 0), vy: inSea ? 0 : Math.round(G.player.vy || 0), since: G.chat.since, ...(G.user.drink && G.user.drink.until > serverNow_() ? { drink: G.user.drink } : {}), ...(emo ? { emo } : {}), ...(path ? { path } : {}) });
       if (r.now) { const recvT = Date.now(), off = r.now - (sendT + recvT) / 2; if (!G.clockSet) { G.clockOff = off; G.clockSet = true; } else G.clockOff = G.clockOff * 0.8 + off * 0.2; }
       if (room !== G.scene) return;
       if (!inSea) applyOthers(r.others || [], r.now);
@@ -2188,7 +2413,7 @@
     const now = Date.now();
     for (const o of list) {
       const ex = G.others.get(o.id);
-      const upd = { x: o.x, y: o.y, dir: o.dir, name: o.name, avatar: o.avatar, role: o.role, seat: o.seat || null, drink: o.drink || null,
+      const upd = { x: o.x, y: o.y, dir: o.dir, name: o.name, avatar: o.avatar, role: o.role, seat: o.seat || null, fs: o.seat ? o.fs | 0 : 0, drink: o.drink || null,
         vx: o.vx || 0, vy: o.vy || 0, pv: !!o.pv, age: serverNow ? Math.max(0, serverNow - o.ts) : 0, recv: now, seen: now };
       if (ex && o.role === "artist" && upd.seat === "throne" && ex.seat !== "throne") { const st = (scene().seats || []).find((x) => x.id === "throne"); if (st) celebrate(st); }
       const tgt = ex || { id: o.id, rx: o.x, ry: o.y };
@@ -2248,6 +2473,7 @@
     const log = $("#chat-log");
     const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
     const first = G.chat.since === 0;
+    let sysNew = false;
     for (const m of messages) {
       G.chat.since = Math.max(G.chat.since, m.ts);
       if (m.ts < Date.now() - CHAT_TTL) continue;
@@ -2257,12 +2483,14 @@
       const pend = G.chat.msgs.find((x) => x.pending && x.id === m.id && x.text === m.text);
       if (pend) { Object.assign(pend, m, { pending: false }); pend.el && pend.el.replaceWith(makeChatLine(pend)); continue; }
       G.chat.msgs.push(m);
+      if (m.role === "system") sysNew = true;
       if (G.chat.msgs.length > 120) G.chat.msgs.shift();
       addChatLine(m);
       if (!first || Date.now() - m.ts < 8000) G.bubbles.set(m.id, { m, until: Date.now() + 6500 });
       if (!first && m.id !== G.user.id && $("#chat").classList.contains("collapsed")) G.chat.unread++;
     }
     if (G.chat.since === 0) G.chat.since = 1;
+    if (sysNew) loadWhaleHall(true); // 🐋 누가 털보고래를 낚았다는 알림 → 전광판 바로 새로고침
     if (atBottom || first) log.scrollTop = log.scrollHeight;
     const nKey = notice ? notice.ts : 0, oKey = G.chat.notice ? G.chat.notice.ts : 0;
     if (nKey !== oKey) { G.chat.notice = notice; renderNotice(); }
@@ -2281,7 +2509,7 @@
   function makeChatLine(m) {
     const d = document.createElement("div");
     m.el = d;
-    d.className = "msg" + (m.role === "artist" ? " artist" : m.role === "admin" ? " admin" : "") + (m.id === G.user.id ? " mine" : "");
+    d.className = "msg" + (m.role === "artist" ? " artist" : m.role === "admin" ? " admin" : m.role === "system" ? " system" : "") + (m.id === G.user.id ? " mine" : "");
     const time = new Date(m.ts).toLocaleTimeString(I.lang === "en" ? "en-US" : I.lang === "ja" ? "ja-JP" : "ko-KR", { hour: "2-digit", minute: "2-digit" });
     const shown = msgText(m);
     const isTr = shown !== m.text;
@@ -2578,7 +2806,7 @@
     setScene("plaza");
     await fade(false);
     toast(t("welcome", { name: G.user.nickname }));
-    BGM.play(bgmFor(G.scene));
+    sceneMusic(G.scene);
     checkDaily();
     loadMail(true);
     refreshRankTop();
@@ -2609,8 +2837,8 @@
     });
   }
   function logout() {
-    if (G.dive) endDive(); G.frozen = false;
-    API.logout(); G.user = null; G.mode = "title"; G.others.clear(); BGM.play("title");
+    if (G.dive) endDive(); if (G.fish) endFishing(true); G.frozen = false;
+    API.logout(); G.user = null; G.mode = "title"; G.others.clear(); stopMusic(); BGM.play("title");
     closeModal();
     $("#hud").classList.add("hidden"); $("#creator").classList.add("hidden");
     $("#title").classList.remove("hidden");

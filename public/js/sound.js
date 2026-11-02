@@ -69,6 +69,13 @@
     chest() { if (!ctx()) return; const t = actx.currentTime; noise(t, 0.2, 0.2, 400, "lowpass"); [72, 76, 79, 84, 88, 91, 96].forEach((m, i) => tone("triangle", hz(m), 0, t + 0.2 + i * 0.07, 0.3, 0.09)); for (let i = 0; i < 12; i++) tone("sine", hz(96 + (i % 4) * 3), 0, t + 0.75 + i * 0.05, 0.1, 0.04); },
     choke() { if (!ctx()) return; const t = actx.currentTime; tone("sine", 220, 55, t, 1.4, 0.18); noise(t, 1.2, 0.15, 300, "lowpass"); for (let i = 0; i < 5; i++) tone("sine", 700 - i * 60, 1200, t + i * 0.12, 0.06, 0.04); },
     beat() { if (!ctx()) return; const t = actx.currentTime; tone("sine", 90, 50, t, 0.12, 0.3); tone("sine", 80, 45, t + 0.16, 0.14, 0.22); },
+    // 🎣 낚시
+    cast() { if (!ctx()) return; const t = actx.currentTime; noise(t, 0.35, 0.18, 1400, "bandpass"); tone("sine", 900, 300, t, 0.3, 0.05); },
+    plop() { if (!ctx()) return; const t = actx.currentTime; tone("sine", 700, 180, t, 0.16, 0.18); noise(t, 0.2, 0.12, 900, "lowpass"); },
+    bite() { if (!ctx()) return; const t = actx.currentTime; tone("square", hz(76), 0, t, 0.08, 0.09); tone("square", hz(83), 0, t + 0.09, 0.12, 0.09); noise(t, 0.25, 0.2, 800, "lowpass"); },
+    great() { if (!ctx()) return; const t = actx.currentTime; tone("triangle", hz(88), 0, t, 0.09, 0.09); tone("triangle", hz(95), 0, t + 0.06, 0.16, 0.08); },
+    miss() { if (!ctx()) return; const t = actx.currentTime; tone("sawtooth", 160, 120, t, 0.22, 0.08); },
+    catchFish() { if (!ctx()) return; const t = actx.currentTime; noise(t, 0.4, 0.3, 1200, "lowpass"); [72, 76, 79, 84, 88].forEach((m, i) => tone("triangle", hz(m), 0, t + 0.15 + i * 0.07, 0.25, 0.08)); },
     aww() { if (!ctx()) return; const t = actx.currentTime; tone("triangle", hz(67), hz(60), t, 0.35, 0.1); tone("triangle", hz(60), hz(55), t + 0.35, 0.5, 0.1); },
     // 😝 탈락: "깔깔깔깔~" 웃음 + "메롱~" 놀리는 멜로디 (나나나나나~)
     laugh() {
@@ -209,6 +216,22 @@
       return { bpm: 96, spb: 16, bars: 8, parts: [{ wave: "bell", vol: 0.1, notes: bell }, { wave: "sine", vol: 0.12, notes: pad }, { wave: "triangle", vol: 0.35, notes: bass }], drums };
     })(),
   };
+  // 🏖️ 젤리 해변: 잔잔한 보사노바 느낌 F장조 (84bpm) — 오르골 멜로디 + 부드러운 패드
+  SONGS.beach = (() => {
+    const prog = [[53, 0], [50, 1], [55, 1], [48, 0], [53, 0], [57, 1], [55, 1], [48, 0]];
+    const bell = [], pad = [], bass = [], drums = [];
+    const tune = [[[0, 81, 3], [4, 79, 2], [6, 77, 2], [8, 76, 3], [12, 72, 4]], [[0, 77, 3], [4, 74, 2], [6, 77, 2], [8, 81, 6]],
+      [[0, 79, 3], [4, 77, 2], [6, 74, 2], [8, 74, 3], [12, 70, 4]], [[0, 72, 4], [4, 76, 2], [6, 79, 2], [8, 77, 6]]];
+    prog.forEach(([r, mi], b) => {
+      const ch = chordNotes(r, mi);
+      [[0, 0], [3, 1], [6, 2], [8, 1], [11, 2], [14, 0]].forEach(([st, k]) => bell.push([b, st, ch[k] + 12, 1.2])); // 보사 리듬 화음
+      tune[b % 4].forEach(([st, m, l]) => bell.push([b, st, m, l]));
+      pad.push([b, 0, r, 15.5]); pad.push([b, 0, ch[2], 15.5]);
+      [[0, 0], [6, 7], [8, 0], [14, 7]].forEach(([st, iv]) => bass.push([b, st, r - 12 + iv, 2]));
+      for (let st = 2; st < 16; st += 4) drums.push([b, st, "h"]);
+    });
+    return { bpm: 84, spb: 16, bars: 8, parts: [{ wave: "bell", vol: 0.075, notes: bell }, { wave: "sine", vol: 0.07, notes: pad }, { wave: "triangle", vol: 0.28, notes: bass }], drums };
+  })();
   function playNote(part, m, t, len) {
     const c = actx, f = hz(m);
     if (part.wave === "bell") { // 오르골: 사인파 + 높은 배음, 빠르게 사라짐
@@ -254,5 +277,50 @@
     },
     get playing() { return songName; },
   };
-  window.SFX = SFX; window.Chip = Chip;
+  // 🌊 해변 소리: 파도(철썩~ 쏴아~)와 갈매기 — 배경음악 끄기(🔇)를 따름
+  const Ambient = (() => {
+    let on = false, src = null, lp = null, g = null, timer = null, nextSwell = 0, nextGull = 0;
+    function gull() {
+      const t0 = actx.currentTime + 0.03, n = 2 + ((Math.random() * 2) | 0);
+      for (let i = 0; i < n; i++) {
+        const t = t0 + i * 0.26, f0 = 1400 + Math.random() * 350;
+        const o = actx.createOscillator(), bp = actx.createBiquadFilter(), gg = actx.createGain();
+        o.type = "sawtooth"; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f0 * 0.6, t + 0.22);
+        bp.type = "bandpass"; bp.frequency.value = 2100; bp.Q.value = 3;
+        gg.gain.setValueAtTime(0.0001, t); gg.gain.exponentialRampToValueAtTime(0.035, t + 0.03); gg.gain.exponentialRampToValueAtTime(0.0001, t + 0.23);
+        o.connect(bp).connect(gg).connect(master); o.start(t); o.stop(t + 0.25);
+      }
+    }
+    function tick() {
+      if (!on || !actx) return;
+      const t = actx.currentTime, audible = musicOn() && !document.hidden;
+      if (!audible) { g.gain.cancelScheduledValues(t); g.gain.setTargetAtTime(0, t, 0.2); nextSwell = t; return; }
+      if (t >= nextSwell) { // 파도 한 번: 천천히 밀려왔다가 빠짐
+        const peak = 0.07 + Math.random() * 0.05, up = 1.8 + Math.random() * 0.8, down = 3 + Math.random() * 1.5;
+        g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(Math.max(0.006, g.gain.value), t); g.gain.linearRampToValueAtTime(peak, t + up); g.gain.linearRampToValueAtTime(0.012, t + up + down);
+        lp.frequency.cancelScheduledValues(t); lp.frequency.setValueAtTime(450, t); lp.frequency.linearRampToValueAtTime(1500, t + up); lp.frequency.linearRampToValueAtTime(420, t + up + down);
+        nextSwell = t + up + down - 0.6;
+      }
+      if (t >= nextGull) { if (nextGull) gull(); nextGull = t + 6 + Math.random() * 10; }
+    }
+    return {
+      start() {
+        if (on || !ctx()) return; on = true;
+        const len = 4, b = actx.createBuffer(1, actx.sampleRate * len, actx.sampleRate), d = b.getChannelData(0);
+        let last = 0; for (let i = 0; i < d.length; i++) { last = (last + 0.03 * (Math.random() * 2 - 1)) / 1.03; d[i] = last * 4; } // 낮고 부드러운 잡음
+        src = actx.createBufferSource(); src.buffer = b; src.loop = true;
+        lp = actx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 500;
+        g = actx.createGain(); g.gain.value = 0;
+        src.connect(lp).connect(g).connect(master); src.start();
+        nextSwell = 0; nextGull = actx.currentTime + 2; tick(); timer = setInterval(tick, 400);
+      },
+      stop() {
+        if (!on) return; on = false; clearInterval(timer); timer = null;
+        try { const t = actx.currentTime; g.gain.cancelScheduledValues(t); g.gain.setTargetAtTime(0, t, 0.15); const s0 = src; setTimeout(() => { try { s0.stop(); } catch {} }, 800); } catch {}
+        src = null;
+      },
+      get on() { return on; },
+    };
+  })();
+  window.SFX = SFX; window.Chip = Chip; window.Ambient = Ambient;
 })();
