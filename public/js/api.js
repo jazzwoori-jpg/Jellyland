@@ -41,7 +41,7 @@
   };
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
   const fail = (code, s = 400) => { throw mkErr(code, s); };
-  const pub = (u) => ({ slotLeft: u.slotDay === new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10) ? Math.max(0, 20 - (u.slotCount | 0)) : 20, id: u.id, email: u.email, nickname: u.nickname, avatar: u.avatar, lang: u.lang || "ko", role: u.role || "fan", coins: u.coins | 0, inv: u.inv || [], daily: u.lastDaily || null, tempPw: !!u.tempPw, drink: u.drink && u.drink.until > Date.now() ? u.drink : null, fish: { have: u.fishHave || {}, total: u.fishTotal || {}, best: u.fishBest || {} }, bait: u.fishDay === kstDay() ? Math.max(0, 30 - (u.fishCount | 0)) : 30 });
+  const pub = (u) => ({ slotLeft: u.slotDay === new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10) ? Math.max(0, 20 - (u.slotCount | 0)) : 20, id: u.id, email: u.email, nickname: u.nickname, avatar: u.avatar, lang: u.lang || "ko", role: u.role || "fan", coins: u.coins | 0, inv: u.inv || [], daily: u.lastDaily || null, tempPw: !!u.tempPw, drink: u.drink && u.drink.until > Date.now() ? u.drink : null, fish: { have: u.fishHave || {}, total: u.fishTotal || {}, best: u.fishBest || {} }, bait: u.fishDay === kstDay() ? Math.max(0, 15 - (u.fishCount | 0)) : 15 });
   const kstDay = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
   async function mock(path, opts = {}) {
@@ -166,7 +166,7 @@
       if (route === "fish/hall") return { hall: ls.get("jl_demo_whale", []) };
       if (route === "fish/cast") {
         if (me.fishDay !== kstDay()) { me.fishDay = kstDay(); me.fishCount = 0; }
-        if ((me.fishCount | 0) >= 30) fail("fishNoBait", 429);
+        if ((me.fishCount | 0) >= 15) fail("fishNoBait", 429);
         let roll = Math.random() * F.reduce((a, f) => a + f[2], 0), f = F[0];
         for (const x of F) { roll -= x[2]; if (roll <= 0) { f = x; break; } }
         const id = Math.random().toString(36).slice(2, 10), tier = F.indexOf(f), size = Math.round(f[9] + (f[10] - f[9]) * Math.pow(Math.random(), 1.6));

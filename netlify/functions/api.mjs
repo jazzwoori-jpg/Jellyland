@@ -248,7 +248,7 @@ const FISH = [
 ].map(([id, price, w, need, speed, zone, miss, move, rev, size]) => ({ id, price, w, need, speed, zone, miss, move, rev, size }));
 const FISH_BY = Object.fromEntries(FISH.map((f) => [f.id, f]));
 const FISH_W = FISH.reduce((a, f) => a + f.w, 0);
-const FISH_DAY = 30;      // 하루 미끼 30개 (코인이 너무 빨리 늘지 않게)
+const FISH_DAY = 15;      // 하루 미끼 15개 (코인이 너무 빨리 늘지 않게)
 const FISH_GAP = 2000;    // 던지기 사이 최소 간격
 const fishLimitMs = (f) => Math.round(f.need * (1000 / f.speed) * 2.4 + 6000); // 싸움 제한 시간
 
