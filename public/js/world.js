@@ -18,6 +18,7 @@
     ctx.textAlign = a; ctx.textBaseline = b;
   }
   function blit(ctx, c, dx, dy) { ctx.drawImage(c, dx, dy); blitText(ctx, c, dx, dy); }
+  const WARM = [232, 150, 44], WIN = [214, 136, 48]; // 불빛 색 (gfx.js 의 곱하기 레이어에 더해짐)
   const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 
   // ---------------- 공용 스프라이트 ----------------
@@ -104,7 +105,7 @@
   function addBench(objects, colliders, seats, id, bx, by) {
     const W2 = 46, back = benchBack(W2, true), front = benchFront(W2);
     objects.push({ y: by - 8, x: bx, draw: (c) => c.drawImage(back, bx - W2 / 2, by - 20) });
-    objects.push({ y: by + 6, x: bx, draw: (c) => c.drawImage(front, bx - W2 / 2, by) });
+    objects.push({ y: by + 6, x: bx, sh: [0, 0, 46, 10, 12], draw: (c) => c.drawImage(front, bx - W2 / 2, by) });
     colliders.push([bx - W2 / 2, by - 12, W2, 18]);
     seats.push({ id: id + "a", x: bx - 11, y: by + 1, dir: "down", ax: bx - 11, ay: by + 16 }, { id: id + "b", x: bx + 11, y: by + 1, dir: "down", ax: bx + 11, ay: by + 16 });
   }
@@ -114,7 +115,7 @@
     objects.push({ y: ty - 26, x: tx, draw: (c) => c.drawImage(upB, tx - TW / 2, ty - 38) });
     objects.push({ y: ty - 19, x: tx, draw: (c) => c.drawImage(upF, tx - TW / 2, ty - 20) });
     objects.push({ y: ty + 12, x: tx, draw: (c) => c.drawImage(tt, tx - TW / 2 - 1, ty - 10) });
-    objects.push({ y: ty + 18, x: tx, draw: (c) => c.drawImage(lowB, tx - TW / 2, ty + 5) });
+    objects.push({ y: ty + 18, x: tx, sh: [0, 0, 50, 10, 40], draw: (c) => c.drawImage(lowB, tx - TW / 2, ty + 5) });
     colliders.push([tx - TW / 2, ty - 30, TW, 58]);
     seats.push(
       { id: id + "a", x: tx - 12, y: ty - 19, dir: "down", ax: tx - 12, ay: ty - 36 },
@@ -188,6 +189,7 @@
     x.fillStyle = "#fff8ea"; x.fillRect(sx, sy, tw, 15);
     x.fillStyle = b.roof; x.fillRect(sx, sy + 13, tw, 2);
     x.fillStyle = OUT; x.fillText(b.name, sx + 7, sy + 7);
+    b.signRect = [sx, sy, tw, 15];
     return c;
   }
 
@@ -197,12 +199,12 @@
     const CX = 640, CY = 500;
     const gardens = [[420, 380], [860, 380], [420, 650]]; // 젤리게임월드 옆 화단(860,650)은 랭킹 게시판 자리로
     const buildings = [
-      { id: "gallery", name: T("bGallery"), x: 250, y: 118, w: 190, h: 130, roof: "#d8434e", wall: "#fffaf2", trim: "#c98b5a", icon: "📷" },
-      { id: "albums", name: T("bAlbums"), x: 840, y: 118, w: 190, h: 130, roof: "#a77ce0", wall: "#fffaf2", trim: "#a86d42", icon: "💿" },
-      { id: "cinema", name: T("bCinema"), x: 150, y: 420, w: 170, h: 130, roof: "#f2a93b", wall: "#fff6e8", trim: "#8f5a34", icon: "🎬" },
-      { id: "lounge", name: T("bLounge"), x: 960, y: 420, w: 176, h: 136, roof: "#5fb8c9", wall: "#fffaf2", trim: "#a86d42", icon: "💬" },
-      { id: "shop", name: T("bShop"), x: 170, y: 640, w: 176, h: 130, roof: "#ff7fae", wall: "#fff4f8", trim: "#c98b5a", icon: "🛍️", deco: "shop" },
-      { id: "game", name: T("bGame"), x: 934, y: 640, w: 176, h: 130, roof: "#4fc3b0", wall: "#f4fffb", trim: "#8f5a34", icon: "🎮", deco: "game" },
+      { id: "gallery", neonCol: "#ff5f7a", name: T("bGallery"), x: 250, y: 118, w: 190, h: 130, roof: "#d8434e", wall: "#fffaf2", trim: "#c98b5a", icon: "📷" },
+      { id: "albums", neonCol: "#c08cff", name: T("bAlbums"), x: 840, y: 118, w: 190, h: 130, roof: "#a77ce0", wall: "#fffaf2", trim: "#a86d42", icon: "💿" },
+      { id: "cinema", neonCol: "#ffb83a", name: T("bCinema"), x: 150, y: 420, w: 170, h: 130, roof: "#f2a93b", wall: "#fff6e8", trim: "#8f5a34", icon: "🎬" },
+      { id: "lounge", neonCol: "#4fe8ff", name: T("bLounge"), x: 960, y: 420, w: 176, h: 136, roof: "#5fb8c9", wall: "#fffaf2", trim: "#a86d42", icon: "💬" },
+      { id: "shop", neonCol: "#ff6fb8", name: T("bShop"), x: 170, y: 640, w: 176, h: 130, roof: "#ff7fae", wall: "#fff4f8", trim: "#c98b5a", icon: "🛍️", deco: "shop" },
+      { id: "game", neonCol: "#4fffc8", name: T("bGame"), x: 934, y: 640, w: 176, h: 130, roof: "#4fc3b0", wall: "#f4fffb", trim: "#8f5a34", icon: "🎮", deco: "game" },
     ];
     // 건물 크기를 조금 줄임 (문 위치·바닥선은 그대로)
     for (const b of buildings) { const nw = Math.round(b.w * 0.76), nh = Math.round(b.h * 0.8); b.x += Math.round((b.w - nw) / 2); b.y += b.h - nh; b.w = nw; b.h = nh; }
@@ -306,6 +308,7 @@
       for (let a = 0; a < 18; a++) { gx.fillStyle = ["#ff8fb8", "#ffe07a", "#b58cff"][a % 3]; gx.fillRect(cx + Math.cos(a / 18 * Math.PI * 2) * 34 - 2, cy + Math.sin(a / 18 * Math.PI * 2) * 34 - 2, 4, 4); }
     }
 
+
     // 나무: 광장에서 먼 숲은 바닥에 굽고, 가장자리는 오브젝트로
     const objects = [];
     const colliders = [];
@@ -315,16 +318,23 @@
     const tower = towerSprite();
     [[120, 240], [120, 760], [1160, 240], [1160, 760], [260, 100], [1020, 100], [260, 900], [1020, 900]].forEach(([tx0, ty0]) => {
       const ang = Math.atan2(ty0 - CY, tx0 - CX), tx = Math.round(tx0 + Math.cos(ang) * 40), ty = Math.round(ty0 + Math.sin(ang) * 30);
-      objects.push({ y: ty, x: tx, draw: (c) => c.drawImage(tower, tx - 24, ty - 76) });
+      objects.push({ y: ty, x: tx, sh: [0, 0, 30, 66, 8], draw: (c) => c.drawImage(tower, tx - 24, ty - 76) });
     });
     // 광장 안 화단: 나무 대신 영롱하게 빛나는 큰 다이아 원석
-    for (const [cx, cy] of gardens) objects.push({ y: cy + 12, x: cx, anim: true, draw: (c, t) => drawDiamond(c, cx, cy, t) });
+    for (const [cx, cy] of gardens) objects.push({ y: cy + 12, x: cx, anim: true, sh: [0, 0, 16, 28, 2], li: [{ dy: -12, r: 62, c: [130, 100, 200], sq: 0.8 }], draw: (c, t) => drawDiamond(c, cx, cy, t) });
 
     // 건물
     for (const b of buildings) {
       b.sprite = buildingSprite(b);
-      objects.push({ y: b.y + b.h, x: b.x, draw: (c) => blit(c, b.sprite, b.x - 2, b.y) });
-      const wt = Math.round(b.h * 0.42);
+      const wt = Math.round(b.h * 0.42), wy = wt + 12, panes = [], rects = [], li = [{ dx: b.w / 2, dy: 10, r: 36, c: WARM }];
+      [b.x - 2 + 12, b.x - 2 + b.w - 28].forEach((wx) => { // 창문 자리 (buildingSprite 와 같은 계산)
+        panes.push([wx + 1, b.y + wy + 1, 7, 8], [wx + 10, b.y + wy + 1, 7, 8], [wx + 1, b.y + wy + 11, 7, 7], [wx + 10, b.y + wy + 11, 7, 7]);
+        rects.push([wx, b.y + wy, 18, 20]);
+        li.push({ dx: wx - b.x + 9, dy: wy + 10 - b.h, r: 26, c: WIN, sq: 1 }, { dx: wx - b.x + 9, dy: 14, r: 44, c: WIN });
+      });
+      objects.push({ y: b.y + b.h, x: b.x, sh: [b.w / 2, 0, b.w, Math.round(b.h * 0.72), 44], li, win: { panes, rects },
+        neon: { c: b.sprite, dx: b.x - 2, dy: b.y, rect: b.signRect, col: b.neonCol },
+        draw: (c) => blit(c, b.sprite, b.x - 2, b.y) });
       colliders.push([b.x, b.y + wt - 10, b.w, b.h - wt + 8]);
       b.door = { x: b.x + b.w / 2, y: b.y + b.h + 4 };
     }
@@ -333,27 +343,28 @@
     // 무대: 피아노(왼쪽) · 호스트 전용 공주 의자(가운데) · "젤리에게 들려줘!" 게시판(오른쪽)
     const PX = CX - 64, PY = CY + 2;
     const piano = pianoSprite();
-    objects.push({ y: PY + 6, x: PX, draw: (c) => c.drawImage(piano, PX - 22, PY - 30) });
+    objects.push({ y: PY + 6, x: PX, sh: [0, 0, 44, 22, 18], draw: (c) => c.drawImage(piano, PX - 22, PY - 30) });
     colliders.push([PX - 22, PY - 14, 44, 20]);
     const seats = [];
     const TX = CX, TY = CY - 2; // 의자 앉는 자리
     const [thB, thF] = throneSprites();
     objects.push({ y: TY - 8, x: TX, draw: (c) => c.drawImage(thB, TX - 24, TY - 52) });
-    objects.push({ y: TY + 8, x: TX, draw: (c) => c.drawImage(thF, TX - 24, TY - 14) });
+    objects.push({ y: TY + 8, x: TX, sh: [0, 0, 36, 34, 12], li: [{ dy: CY + 12 - TY - 8, r: 92, c: [120, 84, 40] }], draw: (c) => c.drawImage(thF, TX - 24, TY - 14) });
     colliders.push([TX - 20, TY - 14, 40, 18]);
     seats.push({ id: "throne", x: TX, y: TY + 1, dir: "down", ax: TX, ay: TY + 22, hostOnly: true });
     const RX = CX + 64, RY = CY + 2;
     const recB = recBoardSprite(T("recBoard"));
-    objects.push({ y: RY, x: RX, draw: (c) => blit(c, recB, RX - 40, RY - 44) });
+    objects.push({ y: RY, x: RX, sh: [0, 0, 50, 36, 3], neon: { c: recB, dx: RX - 40, dy: RY - 44, rect: [1, 1, 78, 13], lift: [[4, 15, 72, 13]], col: "#4fffc8" }, draw: (c) => blit(c, recB, RX - 40, RY - 44) });
     colliders.push([RX - 24, RY - 8, 48, 10]);
     // 랭킹 1위 게시판 (젤리게임월드 옆)
     const BX = 888, BY = 770; // 젤리게임월드 바로 왼쪽, 건물 앞면과 같은 선
-    objects.push({ y: BY, x: BX, draw: (c, t) => drawRankBoard(c, BX, BY, t) });
+    objects.push({ y: BY, x: BX, sh: [0, 0, 112, 56, 3], draw: (c, t) => drawRankBoard(c, BX, BY, t),
+      neon: { rect: [BX - 57, BY - 109, 114, 16], lift: [[BX - 53, BY - 92, 106, 64]], col: "#ffd34d", texts: () => [{ t: rankNeon.t, x: BX, y: BY - 100, font: rankNeon.font, align: "center", base: "middle" }] } });
     colliders.push([BX - 56, BY - 14, 112, 16]);
 
     // 분수 (북쪽)
     const FX = 640, FY = 215;
-    objects.push({ y: FY + 20, x: FX, anim: true, draw: (c, t) => drawFountain(c, FX, FY, t) });
+    objects.push({ y: FY + 20, x: FX, anim: true, sh: [0, 0, 72, 20, 36], li: [{ dy: -14, r: 70, c: [90, 140, 200], sq: 0.8 }], draw: (c, t) => drawFountain(c, FX, FY, t) });
     colliders.push([FX - 36, FY - 18, 72, 38]);
 
     // 가판대
@@ -363,13 +374,13 @@
     ];
     stalls.forEach(([sx, sy, a, s, goods]) => {
       const sp = stallSprite(a, s, goods);
-      objects.push({ y: sy + 34, x: sx, draw: (c) => c.drawImage(sp, sx, sy) });
+      objects.push({ y: sy + 34, x: sx, sh: [20, 2, 40, 26, 16], li: [{ dx: 20, r: 44, c: WARM }], draw: (c) => c.drawImage(sp, sx, sy) });
       colliders.push([sx + 2, sy + 16, 36, 20]);
     });
 
     // 가로등
     [[520, 420], [760, 420], [520, 590], [760, 590], [580, 780], [700, 780], [330, 330], [950, 330], [600, 880], [680, 880]].forEach(([lx, ly]) => {
-      objects.push({ y: ly, x: lx, anim: true, draw: (c, t) => {
+      objects.push({ y: ly, x: lx, anim: true, sh: [0, 0, 4, 28, 0], li: [{ dy: 2, r: 66, c: WARM, lamp: true }], draw: (c, t) => {
         c.drawImage(LAMP, lx - 5, ly - 28);
         // 따뜻한 가로등 불빛 (살짝 일렁임)
         const k = 0.75 + 0.25 * Math.sin(t / 700 + lx);
@@ -387,19 +398,19 @@
     let tCount = 0;
     for (const [tx, ty] of tableSpots) { if (tCount >= 5) break; if (!okArea(tx - 30, ty - 44, 60, 94)) continue; addTableSet(objects, colliders, seats, "t" + tCount, tx, ty); tCount++; }
     [[560, 860, "#ff8fb8"], [720, 860, "#ffd34d"], [150, 800, "#b58cff"], [1130, 800, "#ff8fb8"], [480, 200, "#ffd34d"], [800, 200, "#b58cff"]].forEach(([px, py, col]) => {
-      const sp = flowerPot(col); objects.push({ y: py + 16, x: px, draw: (c) => c.drawImage(sp, px - 7, py) }); colliders.push([px - 6, py + 8, 12, 8]);
+      const sp = flowerPot(col); objects.push({ y: py + 16, x: px, sh: [0, 0, 12, 14, 2], draw: (c) => c.drawImage(sp, px - 7, py) }); colliders.push([px - 6, py + 8, 12, 8]);
     });
 
     // 남쪽 게이트
     const gate = gateSprite();
-    objects.push({ y: 914, x: 640, draw: (c) => blit(c, gate, 640 - 80, 860) });
+    objects.push({ y: 914, x: 640, sh: [[-71, 0, 18, 48, 3], [71, 0, 18, 48, 3]], neon: { c: gate, dx: 640 - 80, dy: 860, rect: [5, 1, 150, 22], col: "#ff6fb8" }, draw: (c) => blit(c, gate, 640 - 80, 860) });
     colliders.push([560, 900, 18, 14], [702, 900, 18, 14]);
 
     // 🚧 북쪽 통로: 아직 준비 중 (바리케이드)
     const barH = (() => { const [c, s2] = cv(104, 40); s2.fillStyle = OUT; s2.fillRect(6, 10, 6, 30); s2.fillRect(92, 10, 6, 30);
       s2.fillStyle = OUT; s2.fillRect(0, 12, 104, 14); for (let k = 0; k < 104; k += 12) { s2.fillStyle = (k / 12) % 2 ? "#ffffff" : "#ff7fae"; s2.fillRect(k + 1, 13, 11, 12); }
       s2.fillStyle = OUT; s2.fillRect(30, 0, 44, 14); s2.fillStyle = "#ffe07a"; s2.fillRect(31, 1, 42, 12); s2.font = `bold 8px ${FONT}`; s2.textAlign = "center"; s2.textBaseline = "middle"; s2.fillStyle = OUT; s2.fillText("🚧 " + T("soonShort"), 52, 7); return c; })();
-    objects.push({ y: 44, x: CX, draw: (c) => blit(c, barH, CX - 52, 8) });
+    objects.push({ y: 44, x: CX, neon: { c: barH, dx: CX - 52, dy: 8, rect: [31, 1, 42, 12], col: "#ffd34d" }, draw: (c) => blit(c, barH, CX - 52, 8) });
     colliders.push([CX - 52, 18, 104, 22]);
     // 🏖️ 서쪽 통로: 젤리 해변으로 (구명튜브 기둥 + 표지판) · 🐋 털보고래 전광판
     const buoyPost = (() => { const [c, s2] = cv(18, 40); s2.fillStyle = "rgba(25,12,35,.25)"; s2.fillRect(2, 36, 15, 3);
@@ -415,11 +426,11 @@
       s2.fillStyle = "#9fdcff"; s2.beginPath(); s2.moveTo(13, 3); s2.lineTo(79, 3); s2.lineTo(79, 23); s2.lineTo(13, 23); s2.lineTo(2, 13); s2.closePath(); s2.fill();
       let fs = 10; s2.font = `bold ${fs}px ${FONT}`; const tt = "🏖️ " + T("mapBeach"); while (s2.measureText(tt).width > 64 && fs > 6) { fs--; s2.font = `bold ${fs}px ${FONT}`; }
       s2.textAlign = "center"; s2.textBaseline = "middle"; s2.fillStyle = OUT; s2.fillText(tt, 44, 13); return c; })();
-    objects.push({ y: CY + 112, x: 64, draw: (c) => blit(c, westSign, 30, CY + 64) });
+    objects.push({ y: CY + 112, x: 64, neon: { c: westSign, dx: 30, dy: CY + 64, rect: [14, 3, 64, 20], col: "#6fe8ff" }, draw: (c) => blit(c, westSign, 30, CY + 64) });
     colliders.push([66, CY + 104, 10, 8]);
     // 🐋 전광판: 마지막으로 털보고래를 낚은 사람의 모습 (World.whaleHall 은 게임 화면이 서버에서 받아 넣어 줌)
     const WB = { x: 26, y: 352, w: 140, h: 92 };
-    objects.push({ y: WB.y + WB.h + 12, x: WB.x + WB.w / 2, anim: true, draw: (c, t) => drawWhaleBoard(c, t, WB) });
+    objects.push({ y: WB.y + WB.h + 12, x: WB.x + WB.w / 2, anim: true, sh: [0, 0, WB.w - 8, 44, 3], neon: { lift: [[WB.x, WB.y, WB.w, WB.h]], col: "#ffb43a" }, draw: (c, t) => drawWhaleBoard(c, t, WB) });
     colliders.push([WB.x + 12, WB.y + WB.h - 2, 8, 12], [WB.x + WB.w - 20, WB.y + WB.h - 2, 8, 12]);
     // 🌿 동쪽 통로: 젤리 초원으로 (꽃 아치 + 표지판)
     const arch = (() => { const [c, s2] = cv(40, 120); s2.fillStyle = OUT; s2.fillRect(14, 0, 12, 120); s2.fillStyle = "#3fa04a"; s2.fillRect(15, 0, 10, 120); for (let k = 4; k < 120; k += 10) { s2.fillStyle = ["#ff8fb8", "#ffe07a", "#ffffff"][(k / 10 | 0) % 3]; s2.fillRect(13 + (k % 3) * 4, k, 4, 4); } return c; })();
@@ -431,11 +442,11 @@
       s2.fillStyle = "#8fd474"; s2.beginPath(); s2.moveTo(1, 3); s2.lineTo(67, 3); s2.lineTo(78, 13); s2.lineTo(67, 23); s2.lineTo(1, 23); s2.closePath(); s2.fill();
       let fs = 10; s2.font = `bold ${fs}px ${FONT}`; const tt = "🌿 " + T("mapMeadow"); while (s2.measureText(tt).width > 64 && fs > 6) { fs--; s2.font = `bold ${fs}px ${FONT}`; }
       s2.textAlign = "center"; s2.textBaseline = "middle"; s2.fillStyle = OUT; s2.fillText(tt, 36, 13); return c; })();
-    objects.push({ y: CY + 112, x: 1190, draw: (c) => blit(c, eastSign, 1150, CY + 64) });
+    objects.push({ y: CY + 112, x: 1190, neon: { c: eastSign, dx: 1150, dy: CY + 64, rect: [2, 3, 64, 20], col: "#8fff8f" }, draw: (c) => blit(c, eastSign, 1150, CY + 64) });
 
     // 안내 게시판
     const board = boardSprite(T("zGuide"));
-    objects.push({ y: 812, x: 532, draw: (c) => blit(c, board, 492, 748) });
+    objects.push({ y: 812, x: 532, sh: [0, 0, 72, 34, 3], neon: { c: board, dx: 492, dy: 748, rect: [11, 1, 58, 16], lift: [[2, 19, 76, 30]], col: "#4fe8ff" }, draw: (c) => blit(c, board, 492, 748) });
     colliders.push([498, 798, 70, 12]);
 
     const zones = [
@@ -449,7 +460,7 @@
     ];
 
     return {
-      id: "plaza", W, H, ground: g, objects, colliders, zones, buildings, seats,
+      id: "plaza", W, H, ground: g, objects, colliders, zones, buildings, seats, fx: { kind: "outdoor" },
       walkable: (x, y) => isP(x | 0, y | 0),
       spawn: { x: 640, y: 840 },
       artist: null, // 조젤리 NPC 는 없앰 (피아노를 직접 연주)
@@ -564,6 +575,7 @@
     return c;
   }
   // 🏆 점프점프 랭킹 1위 게시판 — 1위가 바뀌면 자동으로 바뀜 (World.rankTops 를 게임에서 채워 줌)
+  const rankNeon = { t: "", font: "" }; // 밤 네온 글자도 같은 제목을 씀
   function drawRankBoard(c, bx, by, t) {
     const W = 116, H = 104, x0 = bx - W / 2, y0 = by - H - 6;
     c.fillStyle = "rgba(40,30,20,.28)"; c.fillRect(x0 + 6, by - 4, W - 4, 8);
@@ -582,6 +594,7 @@
     c.textAlign = "center"; c.textBaseline = "middle";
     let fs = 10; c.font = `bold ${fs}px ${FONT}`; while (c.measureText(title).width > W - 10 && fs > 6) { fs--; c.font = `bold ${fs}px ${FONT}`; }
     c.fillStyle = OUT; c.fillText(title, bx, y0 + 10);
+    rankNeon.t = title; rankNeon.font = c.font;
     ORDER.forEach((g, i) => { c.fillStyle = which === g ? OUT : "#c9982c"; c.fillRect(bx - 10 + i * 8, y0 + H - 21, 4, 2); }); // 페이지 표시
     const top = tops[which];
     const cy0 = y0 + 18;
@@ -706,9 +719,9 @@
     // 출입문
     x.fillStyle = OUT; x.fillRect(456, 402, 48, 18); x.fillStyle = "#6a3f28"; x.fillRect(458, 404, 44, 16); x.fillStyle = "#ffe8a3"; x.fillRect(466, 408, 28, 4);
 
-    const objects = [], colliders = [];
+    const objects = [], colliders = [], neons = [];
     const piano = pianoSprite();
-    objects.push({ y: 136, x: 98, draw: (c) => c.drawImage(piano, 98, 100) });
+    objects.push({ y: 136, x: 98, sh: [22, 0, 44, 20, 16], li: [{ dx: 22, dy: 2, r: 46, c: WARM }], draw: (c) => c.drawImage(piano, 98, 100) });
     colliders.push([98, 110, 44, 22], [0, 0, W, 90]);
     // 소파 (3인용: 등받이·쿠션은 캐릭터 뒤, 앞면·팔걸이는 캐릭터 앞에 그려서 실제로 앉은 느낌)
     const seats = [];
@@ -783,10 +796,10 @@
       return c;
     })();
     const ABX = 636, ABY = 86;
-    objects.push({ y: ABY + 68, x: ABX + 48, draw: (c) => blit(c, artBoard, ABX, ABY) });
+    objects.push({ y: ABY + 68, x: ABX + 48, sh: [0, 0, 84, 30, 3], li: [{ dy: 6, r: 50, c: WARM }], neon: { c: artBoard, dx: ABX, dy: ABY, rect: [19, 1, artBoard.width - 38, 16], col: "#ff6fb8" }, draw: (c) => blit(c, artBoard, ABX, ABY) });
     colliders.push([ABX + 8, ABY + 44, 80, 24]);
     const GBX = 228, GBY = 86;
-    objects.push({ y: GBY + 68, x: GBX + 48, draw: (c) => blit(c, gbBoard, GBX, GBY) });
+    objects.push({ y: GBY + 68, x: GBX + 48, sh: [0, 0, 84, 30, 3], li: [{ dy: 6, r: 50, c: WARM }], neon: { c: gbBoard, dx: GBX, dy: GBY, rect: [19, 1, gbBoard.width - 38, 16], col: "#ff5f7a" }, draw: (c) => blit(c, gbBoard, GBX, GBY) });
     colliders.push([GBX + 8, GBY + 44, 80, 24]);
     // ---------- ☕ 젤리 카페: 매대 · 알바생 · 테이블 ----------
     const counter = (() => {
@@ -816,7 +829,9 @@
       return c;
     })();
     const CTX0 = 346, CTY0 = 80;
-    objects.push({ y: 136, x: CTX0 + 134, draw: (c) => blit(c, counter, CTX0, CTY0) });
+    objects.push({ y: 136, x: CTX0 + 134, sh: [0, 0, 268, 20, 10], li: [{ dx: -90, dy: 6, r: 56, c: WARM }, { dx: 90, dy: 6, r: 56, c: WARM }],
+      neon: { c: counter, dx: CTX0, dy: CTY0, rect: [counter.width / 2 - 44, 33, 88, 14], col: "#ff8fc8" }, draw: (c) => blit(c, counter, CTX0, CTY0) });
+    neons.push({ y: 0, lift: [[396, 2, 168, 52]], col: "#ffe8a3" }); // 바닥에 그려진 메뉴판 (칠판)
     colliders.push([CTX0 - 6, 84, 280, 54]);
     // 의자 (방향별) · 테이블
     const chairCol = ["#ff8fb8", "#8fd3bd", "#ffd34d", "#b58cff"];
@@ -845,8 +860,8 @@
       return c;
     };
     const chair = (sx, sy, dir, col, id, ax, ay) => {
-      if (dir === "up") { const sp = mkChairBackFront(col); objects.push({ y: sy + 1, x: sx, draw: (c) => c.drawImage(sp, sx - 11, sy - 22) }); }
-      else { const sp = mkChair(dir, col); objects.push({ y: sy - 0.5, x: sx, draw: (c) => c.drawImage(sp, sx - 11, sy - 22) }); }
+      if (dir === "up") { const sp = mkChairBackFront(col); objects.push({ y: sy + 1, x: sx, sh: [0, 0, 18, 8, 3], draw: (c) => c.drawImage(sp, sx - 11, sy - 22) }); }
+      else { const sp = mkChair(dir, col); objects.push({ y: sy - 0.5, x: sx, sh: [0, 0, 18, 8, 3], draw: (c) => c.drawImage(sp, sx - 11, sy - 22) }); }
       colliders.push([sx - 7, sy - 4, 14, 9]);
       seats.push({ id, x: sx, y: sy, dir, ax, ay });
     };
@@ -871,14 +886,14 @@
     let tn = 0;
     const table2 = (cx, cy, col) => {
       const id = "t2" + tn++;
-      objects.push({ y: cy + 8, x: cx, draw: (c) => c.drawImage(roundTop, cx - 15, cy - 13) });
+      objects.push({ y: cy + 8, x: cx, sh: [0, 0, 26, 12, 8], li: [{ r: 46, c: WARM }], draw: (c) => c.drawImage(roundTop, cx - 15, cy - 13) });
       colliders.push([cx - 13, cy - 8, 26, 14]);
       chair(cx - 23, cy + 2, "right", col, id + "a", cx - 38, cy + 8);
       chair(cx + 23, cy + 2, "left", col, id + "b", cx + 38, cy + 8);
     };
     const table4 = (cx, cy, col) => {
       const id = "t4" + tn++;
-      objects.push({ y: cy + 12, x: cx, draw: (c) => c.drawImage(squareTop, cx - 25, cy - 12) });
+      objects.push({ y: cy + 12, x: cx, sh: [0, 0, 50, 12, 18], li: [{ r: 54, c: WARM }], draw: (c) => c.drawImage(squareTop, cx - 25, cy - 12) });
       colliders.push([cx - 25, cy - 10, 50, 22]);
       chair(cx, cy - 11, "down", col, id + "a", cx, cy - 30);
       chair(cx, cy + 24, "up", col, id + "b", cx, cy + 38);
@@ -891,11 +906,11 @@
     const staffOutfit = Math.max(0, Avatar.OUTFITS.findIndex((o) => o.id === "cherry"));
     const staff = { x: 480, y: 104, dir: "down", nameKey: "cafeStaff", linesKey: "cafeLines", welcomeKey: "cafeWelcome", thanksKey: "cafeThanks", av: { gender: "f", hair: 2, hairColor: 1, skin: 1, outfit: staffOutfit, eye: 0, wand: 0 } };
 
-    [[16, 170, "#b58cff"], [944, 170, "#9fdc7a"], [20, 392, "#ffd34d"], [940, 392, "#ff8fb8"], [150, 392, "#ff8fb8"], [810, 392, "#b58cff"]].forEach(([px, py, col]) => { const sp = flowerPot(col); objects.push({ y: py + 16, x: px, draw: (c) => c.drawImage(sp, px - 7, py) }); colliders.push([px - 7, py + 6, 14, 10]); });
+    [[16, 170, "#b58cff"], [944, 170, "#9fdc7a"], [20, 392, "#ffd34d"], [940, 392, "#ff8fb8"], [150, 392, "#ff8fb8"], [810, 392, "#b58cff"]].forEach(([px, py, col]) => { const sp = flowerPot(col); objects.push({ y: py + 16, x: px, sh: [0, 0, 12, 14, 2], draw: (c) => c.drawImage(sp, px - 7, py) }); colliders.push([px - 7, py + 6, 14, 10]); });
 
     const collide = (px, py) => colliders.some(([a, b, w, h]) => px > a && px < a + w && py > b && py < b + h);
     return {
-      id: "lounge", W, H, ground: g, objects, colliders: [], zones: [{ id: "exit", x: 450, y: 388, w: 60, h: 32, label: T("zExit") }, { id: "guestbook", x: GBX - 6, y: 150, w: 108, h: 30, label: T("zGuestbook") }, { id: "piano", x: 88, y: 132, w: 64, h: 22, label: T("zPiano") }, { id: "art", x: ABX - 6, y: 150, w: 108, h: 30, label: T("zArt") }, { id: "cafe", x: 444, y: 138, w: 72, h: 26, label: T("zCafe") }], seats, staff,
+      id: "lounge", W, H, ground: g, objects, colliders: [], fx: { kind: "indoor" }, neons, zones: [{ id: "exit", x: 450, y: 388, w: 60, h: 32, label: T("zExit") }, { id: "guestbook", x: GBX - 6, y: 150, w: 108, h: 30, label: T("zGuestbook") }, { id: "piano", x: 88, y: 132, w: 64, h: 22, label: T("zPiano") }, { id: "art", x: ABX - 6, y: 150, w: 108, h: 30, label: T("zArt") }, { id: "cafe", x: 444, y: 138, w: 72, h: 26, label: T("zCafe") }], seats, staff,
       walkable: (px, py) => px > 10 && px < W - 10 && py > 92 && py < H - 4 && !collide(px, py),
       spawn: { x: 480, y: 380 }, artist: null, piano: { x: 120, y: 118, front: { x: 120, y: 142 } }, icons: [{ x: GBX + 48, y: 84, icon: "✍️" }, { x: 120, y: 96, icon: "🎹" }, { x: ABX + 48, y: 84, icon: "🎨" }, { x: 410, y: 84, icon: "☕" }], signs: [{ x: GBX + 48, y: 76, key: "gbSign" }, { x: ABX + 48, y: 76, key: "artSign" }],
       clickables: [{ x: 480, y: 96, r: 34, go: "cafe", front: { x: 480, y: 150 } }, { x: ABX + 48, y: 120, r: 40, go: "art", front: { x: ABX + 48, y: 164 } }, { x: GBX + 48, y: 120, r: 40, go: "guestbook", front: { x: GBX + 48, y: 164 } }],
@@ -957,7 +972,8 @@
       return c;
     })();
     const CTX0 = 228, CTY0 = 82;
-    objects.push({ y: 136, x: 320, draw: (c) => blit(c, counter, CTX0, CTY0) });
+    objects.push({ y: 136, x: 320, sh: [0, 0, 184, 20, 10], li: [{ dx: -60, dy: 6, r: 54, c: WARM }, { dx: 60, dy: 6, r: 54, c: WARM }],
+      neon: { c: counter, dx: CTX0, dy: CTY0, rect: [counter.width / 2 - 40, 33, 80, 14], col: "#ff6fb8" }, draw: (c) => blit(c, counter, CTX0, CTY0) });
     colliders.push([CTX0 - 4, 84, 192, 54]);
     // 옷걸이 행거 (드레스 5벌)
     const rack = (rx, ry, outfits) => {
@@ -976,7 +992,7 @@
         if (o.frill || o.sleeve) { s.fillStyle = o.frill || o.sleeve; s.fillRect(hx + 1, 12, 2, 3); s.fillRect(hx + 10, 12, 2, 3); }
         s.fillStyle = "#ffffff"; s.fillRect(hx + 9, 22 + (i % 2) * 4, 2, 2);
       });
-      objects.push({ y: ry + RH - 4, x: rx + RW / 2, draw: (cc) => cc.drawImage(c, rx, ry) });
+      objects.push({ y: ry + RH - 4, x: rx + RW / 2, sh: [0, 0, RW, 16, 6], li: [{ dy: 4, r: 58, c: WARM }], draw: (cc) => cc.drawImage(c, rx, ry) });
       colliders.push([rx + 2, ry + RH - 18, RW - 4, 16]);
     };
     const OF = (id) => Math.max(0, Avatar.OUTFITS.findIndex((o) => o.id === id));
@@ -988,7 +1004,7 @@
     const mannequin = (mx, my, av) => {
       const [pc, p] = cv(36, 14);
       p.fillStyle = OUT; p.beginPath(); p.ellipse(18, 7, 17, 6, 0, 0, 7); p.fill(); p.fillStyle = "#fff8ea"; p.beginPath(); p.ellipse(18, 6, 16, 5, 0, 0, 7); p.fill(); p.fillStyle = "#f2c14e"; p.fillRect(4, 8, 28, 2);
-      objects.push({ y: my + 2, x: mx, draw: (cc) => { cc.drawImage(pc, mx - 18, my - 6); Avatar.draw(cc, av, mx, my - 2, "down", 0); } });
+      objects.push({ y: my + 2, x: mx, sh: [0, 0, 18, 30, 2], li: [{ dy: -6, r: 44, c: WARM }], draw: (cc) => { cc.drawImage(pc, mx - 18, my - 6); Avatar.draw(cc, av, mx, my - 2, "down", 0); } });
       colliders.push([mx - 14, my - 6, 28, 10]);
     };
     const pale = { gender: "f", hair: 23, hairColor: 0, skin: 0, eye: 0, wand: 0 };
@@ -996,20 +1012,21 @@
     mannequin(444, 220, { ...pale, outfit: OF("rose"), gender: "f" });
     // 전신 거울 · 피팅룸 커튼
     const mirror = (() => { const [c, s] = cv(30, 60); s.fillStyle = OUT; s.beginPath(); s.ellipse(15, 26, 14, 25, 0, 0, 7); s.fill(); s.fillStyle = "#f2c14e"; s.beginPath(); s.ellipse(15, 26, 13, 24, 0, 0, 7); s.fill(); s.fillStyle = "#cfefff"; s.beginPath(); s.ellipse(15, 26, 10, 21, 0, 0, 7); s.fill(); s.fillStyle = "rgba(255,255,255,.8)"; s.fillRect(9, 12, 3, 16); s.fillRect(14, 10, 2, 8); s.fillStyle = OUT; s.fillRect(8, 50, 14, 8); s.fillStyle = "#c98b5a"; s.fillRect(9, 51, 12, 6); return c; })();
-    objects.push({ y: 372, x: 600, draw: (c) => c.drawImage(mirror, 586, 314) });
+    objects.push({ y: 372, x: 600, sh: [0, 0, 26, 30, 3], draw: (c) => c.drawImage(mirror, 586, 314) });
     colliders.push([588, 360, 26, 12]);
     const fitting = (() => { const [c, s] = cv(64, 76); s.fillStyle = OUT; s.fillRect(0, 0, 64, 6); s.fillStyle = "#c98b5a"; s.fillRect(1, 1, 62, 4);
       for (let k = 0; k < 8; k++) { s.fillStyle = OUT; s.fillRect(2 + k * 7.6, 6, 8, 66); s.fillStyle = k % 2 ? "#b58cff" : "#c9a0ef"; s.fillRect(3 + k * 7.6, 6, 6, 65); }
       s.fillStyle = "#f2c14e"; s.fillRect(2, 40, 60, 3); s.font = `bold 8px ${FONT}`; s.textAlign = "center"; s.textBaseline = "middle"; s.fillStyle = "#fff"; s.fillText("FITTING", 32, 24); return c; })();
-    objects.push({ y: 390, x: 50, draw: (c) => blit(c, fitting, 18, 314) });
+    objects.push({ y: 390, x: 50, sh: [0, 0, 64, 30, 6], neon: { c: fitting, dx: 18, dy: 314, rect: [8, 17, 48, 14], col: "#c08cff" }, draw: (c) => blit(c, fitting, 18, 314) });
     colliders.push([18, 370, 64, 20]);
-    [[176, 112, "#ff8fb8"], [464, 112, "#b58cff"], [560, 384, "#ffd34d"], [110, 384, "#9fdc7a"]].forEach(([px, py, col]) => { const sp = flowerPot(col); objects.push({ y: py + 16, x: px, draw: (c) => c.drawImage(sp, px - 7, py) }); colliders.push([px - 7, py + 6, 14, 10]); });
+    [[176, 112, "#ff8fb8"], [464, 112, "#b58cff"], [560, 384, "#ffd34d"], [110, 384, "#9fdc7a"]].forEach(([px, py, col]) => { const sp = flowerPot(col); objects.push({ y: py + 16, x: px, sh: [0, 0, 12, 14, 2], draw: (c) => c.drawImage(sp, px - 7, py) }); colliders.push([px - 7, py + 6, 14, 10]); });
     // 점원 NPC (계산대 뒤)
     const staff = { x: 320, y: 106, dir: "down", nameKey: "shopStaff", linesKey: "shopLines", welcomeKey: "shopWelcome", thanksKey: "shopThanks",
       av: { gender: "f", hair: 1, hairColor: 6, skin: 0, outfit: OF("tweed"), eye: 2, wand: 0 } };
     const collide = (px, py) => colliders.some(([a, b, w, h]) => px > a && px < a + w && py > b && py < b + h);
     return {
-      id: "shop", W, H, ground: g, objects, colliders: [], seats: [], staff,
+      id: "shop", W, H, ground: g, objects, colliders: [], seats: [], staff, fx: { kind: "indoor" },
+      neons: [{ y: 0, c: g, rect: [238, 6, 164, 24], col: "#ff6fb8" }], // 바닥에 그려진 벽 간판
       zones: [{ id: "exitShop", x: 290, y: 368, w: 60, h: 32, label: T("zExit") }, { id: "clerk", x: 284, y: 138, w: 72, h: 26, label: T("zShopClerk") }],
       walkable: (px, py) => px > 10 && px < W - 10 && py > 92 && py < H - 4 && !collide(px, py),
       spawn: { x: 320, y: 362 }, artist: null, icons: [{ x: 252, y: 84, icon: "🛍️" }], signs: [],
@@ -1077,10 +1094,10 @@
       s.fillStyle = OUT; s.fillRect(5, 2, 22, 12); s.fillStyle = "#e8dc90"; for (let k = 0; k < 5; k++) { s.beginPath(); s.arc(8 + k * 4, 7 + (k % 2) * 2, 4, 0, 7); s.fill(); } return c; })();
     objects.push({ y: 318, x: 390, draw: (c) => c.drawImage(popcorn, 372, 282) });
     colliders.push([372, 300, 32, 18]);
-    [[24, 300, "#ff8fb8"]].forEach(([px, py, col]) => { const sp = flowerPot(col); objects.push({ y: py + 16, x: px, draw: (c) => c.drawImage(sp, px - 7, py) }); colliders.push([px - 7, py + 6, 14, 10]); });
+    [[24, 300, "#ff8fb8"]].forEach(([px, py, col]) => { const sp = flowerPot(col); objects.push({ y: py + 16, x: px, sh: [0, 0, 12, 14, 2], draw: (c) => c.drawImage(sp, px - 7, py) }); colliders.push([px - 7, py + 6, 14, 10]); });
     const collide = (px, py) => colliders.some(([a, b, w, h]) => px > a && px < a + w && py > b && py < b + h);
     return {
-      id: "cinema", W, H, ground: g, objects, colliders: [], seats, screen: SC,
+      id: "cinema", W, H, ground: g, objects, colliders: [], seats, screen: SC, fx: { kind: "cinema" },
       aisleLights: [...[110, 140, 170, 200, 230, 260, 290].flatMap((yy) => [[185, yy], [235, yy]])], exitSign: { x: 140, y: 304, w: 32, h: 11 },
       zones: [{ id: "exitCinema", x: 180, y: 296, w: 60, h: 34, label: T("zExit") }],
       walkable: (px, py) => px > 10 && px < W - 10 && py > 100 && py < H - 4 && !collide(px, py),
@@ -1153,7 +1170,7 @@
     // 서쪽 입구 표지 (광장으로)
     const signBoard = (() => { const [c, s] = cv(70, 44); s.fillStyle = OUT; s.fillRect(32, 18, 6, 26); s.fillStyle = "#8f5a34"; s.fillRect(33, 19, 4, 25); s.fillStyle = OUT; s.fillRect(2, 2, 66, 20); s.fillStyle = "#fff8ea"; s.fillRect(3, 3, 64, 18);
       s.font = `bold 9px ${FONT}`; s.textAlign = "center"; s.textBaseline = "middle"; s.fillStyle = OUT; s.fillText("◀ " + T("signPlaza"), 35, 12); return c; })();
-    objects.push({ y: 412, x: 60, draw: (c) => blit(c, signBoard, 26, 368) });
+    objects.push({ y: 412, x: 60, neon: { c: signBoard, dx: 26, dy: 368, rect: [3, 3, 64, 18], col: "#8fff8f" }, draw: (c) => blit(c, signBoard, 26, 368) });
     colliders.push([56, 404, 14, 8]);
     // 나무 (남·서·동쪽 가장자리 + 군데군데)
     const trees = [0, 1, 2].map((v) => treeSprite(v));
@@ -1161,7 +1178,7 @@
     for (let xx = 20; xx < W; xx += 46) spots.push([xx + 20, H - 6 - (xx % 2) * 12]);
     for (let yy = 260; yy < H; yy += 50) { if (Math.abs(yy - 450) > 70) spots.push([14 + (yy % 3) * 8, yy]); spots.push([W - 16 - (yy % 2) * 10, yy]); }
     [[230, 300], [380, 270], [700, 290], [300, 700], [520, 760], [800, 760], [180, 600], [1150, 520], [640, 560]].forEach((p) => spots.push(p));
-    spots.forEach(([tx, ty], i) => { const sp = trees[i % 3]; objects.push({ y: ty, x: tx, draw: (c) => c.drawImage(sp, tx - 17, ty - 42) }); colliders.push([tx - 8, ty - 8, 16, 8]); });
+    spots.forEach(([tx, ty], i) => { const sp = trees[i % 3]; objects.push({ y: ty, x: tx, sh: [0, 0, 20, 34, 5], draw: (c) => c.drawImage(sp, tx - 17, ty - 42) }); colliders.push([tx - 8, ty - 8, 16, 8]); });
     // 바위
     [[420, 560], [760, 640], [1180, 330], [240, 820], [520, 280], [820, 280]].forEach(([bx, by]) => { objects.push({ y: by + 6, x: bx, draw: (c) => { c.fillStyle = OUT; c.beginPath(); c.ellipse(bx, by, 15, 10, 0, 0, 7); c.fill(); c.fillStyle = "#9a93a8"; c.beginPath(); c.ellipse(bx, by - 1, 13, 8, 0, 0, 7); c.fill(); c.fillStyle = "#c2bcce"; c.fillRect(bx - 7, by - 6, 6, 2); } }); colliders.push([bx - 14, by - 6, 28, 12]); });
     // 연못
@@ -1169,7 +1186,7 @@
     x.fillStyle = "#9fe0f5"; x.fillRect(920, 684, 20, 3); x.fillRect(980, 708, 26, 3); x.fillStyle = "#3fa04a"; [[910, 716], [1000, 690]].forEach(([a, b]) => { x.beginPath(); x.ellipse(a, b, 9, 5, 0, 0, 7); x.fill(); });
     colliders.push([960 - 92, 700 - 40, 184, 80]);
     // 동굴: 안쪽 보랏빛 · 가끔 깜빡이는 빨간 눈 · 피어나오는 검보라 안개
-    objects.push({ y: CVB - 1, x: CVX, anim: true, draw: (c, t) => {
+    objects.push({ y: CVB - 1, x: CVX, anim: true, li: [{ dy: 8, r: 92, c: [120, 44, 170] }], draw: (c, t) => {
       const tt = t || 0, k = 0.55 + 0.45 * Math.sin(tt / 380);
       const gl = c.createRadialGradient(CVX, CVB - 18, 2, CVX, CVB - 18, 44); gl.addColorStop(0, `rgba(170,60,220,${0.5 * k})`); gl.addColorStop(1, "rgba(120,30,170,0)");
       c.fillStyle = gl; c.beginPath(); c.ellipse(CVX, CVB, 38, 58, 0, Math.PI, 0); c.closePath(); c.fill();
@@ -1183,7 +1200,7 @@
       }
     } });
     const ws = warnSign();
-    objects.push({ y: CVB + 46, x: CVX + 64, draw: (c) => blit(c, ws, CVX + 44, CVB + 2) });
+    objects.push({ y: CVB + 46, x: CVX + 64, neon: { c: ws, dx: CVX + 44, dy: CVB + 2, rect: [2, 2, 36, 14], col: "#ff5060" }, draw: (c) => blit(c, ws, CVX + 44, CVB + 2) });
     colliders.push([CVX + 60, CVB + 40, 10, 8]);
     // 나비
     objects.push({ y: H + 100, x: 0, anim: true, draw: (c, t) => {
@@ -1196,7 +1213,7 @@
     } });
     const collide = (px, py) => colliders.some(([a, b, w, h]) => px > a && px < a + w && py > b && py < b + h);
     return {
-      id: "meadow", W, H, ground: g, objects, colliders: [], seats: [],
+      id: "meadow", W, H, ground: g, objects, colliders: [], seats: [], fx: { kind: "outdoor", moon: [14, 22, 18] },
       zones: [],
       triggers: [{ id: "toPlaza", x: 0, y: 400, w: 12, h: 100 }, { id: "cave", x: CVX - 34, y: CVB + 4, w: 68, h: 26 }],
       walkable: (px, py) => px > 4 && px < W - 24 && py < H - 20 && py > cliffY(px) + 8 && !collide(px, py),
@@ -1326,7 +1343,7 @@
       [-2.8, -2.2, -1.5, -0.9, -0.35, 0.3].forEach((a, i) => leaf(a, 18 + (i % 2) * 4));
       s.fillStyle = OUT; s.fillRect(19, 11, 8, 7); s.fillStyle = "#7a4a2a"; s.fillRect(20, 12, 3, 3); s.fillRect(23, 14, 3, 3);
       return c; })();
-    [[W - 50, 120], [W - 36, 300], [W - 56, 610], [W - 40, 780], [W - 64, 210], [W - 30, 700]].forEach(([px, py]) => { objects.push({ y: py, x: px, draw: (c) => c.drawImage(palm, px - 22, py - 66) }); colliders.push([px - 8, py - 6, 16, 8]); });
+    [[W - 50, 120], [W - 36, 300], [W - 56, 610], [W - 40, 780], [W - 64, 210], [W - 30, 700]].forEach(([px, py]) => { objects.push({ y: py, x: px, sh: [0, 0, 14, 44, 3], draw: (c) => c.drawImage(palm, px - 22, py - 66) }); colliders.push([px - 8, py - 6, 16, 8]); });
     // ⛱️ 파라솔 + 돗자리
     const umbrella = (col) => { const [c, s] = cv(46, 50);
       s.fillStyle = "rgba(25,12,35,.2)"; s.beginPath(); s.ellipse(26, 46, 18, 5, 0, 0, 7); s.fill();
@@ -1338,7 +1355,7 @@
     [[860, 230, "#ff7fae"], [930, 640, "#5fb8ff"], [1010, 340, "#ffd34d"]].forEach(([px, py, col]) => {
       const u = umbrella(col), tw = towel(col);
       x.drawImage(tw, px + 8, py - 20); // 돗자리는 바닥에
-      objects.push({ y: py + 2, x: px, draw: (c) => c.drawImage(u, px - 23, py - 46) }); colliders.push([px - 4, py - 4, 8, 6]);
+      objects.push({ y: py + 2, x: px, sh: [0, 0, 26, 38, 4], draw: (c) => c.drawImage(u, px - 23, py - 46) }); colliders.push([px - 4, py - 4, 8, 6]);
     });
     // 🏰 모래성
     const castle = (() => { const [c, s] = cv(40, 34); s.fillStyle = "rgba(25,12,35,.2)"; s.fillRect(3, 29, 36, 4);
@@ -1346,14 +1363,14 @@
       s.fillStyle = "#e3c27f"; s.fillRect(3, 13, 34, 18); s.fillRect(5, 5, 8, 9); s.fillRect(27, 5, 8, 9); s.fillRect(15, 1, 10, 13);
       s.fillStyle = "#c9a35f"; s.fillRect(17, 22, 6, 9); s.fillRect(3, 26, 34, 2);
       s.fillStyle = "#f7dfa4"; s.fillRect(5, 5, 8, 2); s.fillRect(27, 5, 8, 2); s.fillRect(15, 1, 10, 2); return c; })();
-    objects.push({ y: 560, x: 820, draw: (c) => c.drawImage(castle, 800, 528) }); colliders.push([802, 546, 36, 14]);
+    objects.push({ y: 560, x: 820, sh: [0, 0, 38, 24, 8], draw: (c) => c.drawImage(castle, 800, 528) }); colliders.push([802, 546, 36, 14]);
     // 🛟 안내판 (동쪽 입구 · 광장으로)
     const signBoard = (() => { const [c, s] = cv(78, 44); s.fillStyle = OUT; s.fillRect(36, 18, 6, 26); s.fillStyle = "#8f5a34"; s.fillRect(37, 19, 4, 25);
       s.fillStyle = OUT; s.beginPath(); s.moveTo(10, 2); s.lineTo(78, 2); s.lineTo(78, 24); s.lineTo(10, 24); s.lineTo(0, 13); s.closePath(); s.fill();
       s.fillStyle = "#fff8ea"; s.beginPath(); s.moveTo(11, 3); s.lineTo(77, 3); s.lineTo(77, 23); s.lineTo(11, 23); s.lineTo(2, 13); s.closePath(); s.fill();
       let fs = 9; s.font = `bold ${fs}px ${FONT}`; const tt = T("signPlaza") + " ▶"; while (s.measureText(tt).width > 62 && fs > 6) { fs--; s.font = `bold ${fs}px ${FONT}`; }
       s.textAlign = "center"; s.textBaseline = "middle"; s.fillStyle = OUT; s.fillText(tt, 44, 13); return c; })();
-    objects.push({ y: 412, x: W - 120, draw: (c) => blit(c, signBoard, W - 160, 370) }); colliders.push([W - 124, 404, 10, 8]);
+    objects.push({ y: 412, x: W - 120, neon: { c: signBoard, dx: W - 160, dy: 370, rect: [12, 3, 65, 20], col: "#6fe8ff" }, draw: (c) => blit(c, signBoard, W - 160, 370) }); colliders.push([W - 124, 404, 10, 8]);
 
     // 🎣 낚시 의자 8개 (바다를 보고 앉음) + 양동이
     const chairSp = (() => { const [c, s] = cv(26, 30);
@@ -1367,7 +1384,7 @@
     const bucket = (() => { const [c, s] = cv(12, 13); s.fillStyle = OUT; s.fillRect(1, 3, 10, 10); s.fillStyle = "#ffd34d"; s.fillRect(2, 4, 8, 8); s.fillStyle = "#e8a92a"; s.fillRect(2, 10, 8, 2); s.fillStyle = "#55cdd8"; s.fillRect(2, 4, 8, 2); s.fillStyle = OUT; s.fillRect(2, 0, 8, 1); s.fillRect(1, 1, 1, 3); s.fillRect(10, 1, 1, 3); return c; })();
     for (let i = 0; i < 8; i++) {
       const sy = 196 + i * 76, sx = shoreX(sy) + 46; // 물가를 따라 위에서 아래로
-      objects.push({ y: sy - 0.5, x: sx, draw: (c) => c.drawImage(chairSp, sx - 12, sy - 22) });
+      objects.push({ y: sy - 0.5, x: sx, sh: [0, 0, 18, 12, 3], li: [{ dx: 14, dy: 4, r: 46, c: WARM }], draw: (c) => c.drawImage(chairSp, sx - 12, sy - 22) });
       objects.push({ y: sy + 6, x: sx + 14, draw: (c) => c.drawImage(bucket, sx + 9, sy - 6) });
       colliders.push([sx - 8, sy - 4, 16, 9], [sx + 9, sy - 2, 10, 8]);
       seats.push({ id: "f" + i, x: sx, y: sy, dir: "left", ax: sx + 4, ay: sy + 16, fish: true, labelKey: "actFishSit", bob: { x: shoreX(sy) - 64 - (i % 3) * 12, y: sy - 6 } });
@@ -1420,7 +1437,7 @@
     const collide = (px, py) => colliders.some(([a, b, w, h]) => px > a && px < a + w && py > b && py < b + h);
     const midSeat = seats[4];
     return {
-      id: "beach", W, H, ground: g, objects, colliders: [], seats, shoreX,
+      id: "beach", W, H, ground: g, objects, colliders: [], seats, shoreX, fx: { kind: "outdoor", moon: [18, 28, 26], petals: ["#ffffff", "#e8f6ff", "#fff3d8"] },
       zones: [],
       triggers: [{ id: "toPlazaW", x: W - 14, y: 410, w: 14, h: 80 }],
       walkable: (px, py) => px > shoreX(py) + 14 && px < W - 6 && py > 40 && py < H - 16 && !collide(px, py),
@@ -1529,7 +1546,7 @@
     const chestClick = { x: CX, y: CY - 16, r: 26, go: "chest", front: { x: CX, y: CY + 12 } };
     const chestIcon = { x: CX, y: CY - 40, icon: "❓" };
     const world = {
-      id: "sea", W, H, ground: g, objects, colliders: [], sea,
+      id: "sea", W, H, ground: g, objects, colliders: [], sea, fx: { kind: "sea" },
       zones: [chestZone, { id: "surface", x: 270, y: 36, w: 100, h: 30, label: T("zSurface") }],
       walkable: (px, py) => px > 12 && px < W - 12 && py > 36 && py < H - 6 && !collide(px, py),
       spawn: { x: 320, y: 140 }, artist: null, chest: { x: CX, y: CY },

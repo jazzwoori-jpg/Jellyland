@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FONT = "'Galmuri11', 'Galmuri9', 'Apple SD Gothic Neo', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   const ARTIST_LOOK = { gender: "f", hair: 1, hairColor: 0, skin: 0, outfit: 1, eye: 1 }; // 긴 흑발 + Can't Stop! 곰돌이 후디 + 키타
-  const APP_VERSION = "55"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
+  const APP_VERSION = "56"; // public/version.json 과 같게 — 배포 때마다 올리면 접속 중인 사람에게 새 버전 알림
   const staff = (r) => r === "artist" || r === "admin"; // 관리자 (호스트 포함)
   const IS_TOUCH = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   if (IS_TOUCH) document.body.classList.add("touch");
@@ -41,10 +41,12 @@
 
   // ---------------- 화면 크기 / 모바일 대응 ----------------
   function resize() {
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // 효과가 켜져 있으면 기기 픽셀 그대로 쓰고(폰의 3배 화면 포함), 세계 1픽셀 = 정수 칸이 되도록 맞춤
+    dpr = Math.min(window.devicePixelRatio || 1, window.Gfx.on && !window.Gfx.low ? 3 : 2);
     VW = window.innerWidth; VH = window.innerHeight;
     canvas.width = Math.round(VW * dpr); canvas.height = Math.round(VH * dpr);
     S = Math.max(1.5, Math.min(4, Math.floor(Math.min(VW / 470, VH / 300) * 2) / 2));
+    if (window.Gfx.on) S = Math.max(2, Math.ceil(S * dpr - 0.5)) / dpr;
     ctx.imageSmoothingEnabled = false;
     document.documentElement.style.setProperty("--vh", VH + "px");
   }
@@ -57,6 +59,7 @@
     const onVV = () => {
       const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
       document.documentElement.style.setProperty("--kb", kb + "px");
+      document.documentElement.style.setProperty("--vvh", vv.height + "px"); G.chatRectT = 0;
       document.body.classList.toggle("kb-open", kb > 80);
     };
     vv.addEventListener("resize", onVV); vv.addEventListener("scroll", onVV);
@@ -117,7 +120,8 @@
   function updateSceneLabels() {
     if (!G.scene) return;
     $("#mm-label").textContent = G.scene === "plaza" ? t("mapPlaza") : G.scene === "sea" ? t("mapSea") : G.scene === "shop" ? t("bShop") : G.scene === "cinema" ? t("bCinema") : G.scene === "meadow" ? t("mapMeadow") : G.scene === "beach" ? t("mapBeach") : t("mapLounge");
-    $("#chat-title").textContent = G.scene === "lounge" ? t("chatLounge") : G.scene === "shop" ? t("chatShop") : G.scene === "cinema" ? t("chatCinema") : G.scene === "meadow" ? t("chatMeadow") : G.scene === "beach" ? t("chatBeach") : t("chatPlaza");
+    const ct = G.scene === "lounge" ? t("chatLounge") : G.scene === "shop" ? t("chatShop") : G.scene === "cinema" ? t("chatCinema") : G.scene === "meadow" ? t("chatMeadow") : G.scene === "beach" ? t("chatBeach") : t("chatPlaza");
+    $("#chat-title").innerHTML = `<span class="ct-long">${esc(ct)}</span><span class="ct-short">${esc(t("chatShort"))}</span>`; // 폰 세로 화면에서 접혀 있을 때는 짧게 (캐릭터를 가리지 않게)
     $("#btn-gb").classList.toggle("hidden", G.scene !== "lounge");
   }
 
@@ -321,24 +325,29 @@
       if (best) zone = best.zone || (best.zone = { id: "seat", seat: best, label: t(best.labelKey || "actSit") });
     }
     if (zone !== G.zone) { G.zone = zone; renderPrompt(); }
-    // 카메라
+    // 카메라: 화면에서 실제로 보이는 띠(위 메뉴 아래 ~ 채팅창 위) 안에 캐릭터와 방을 맞춤
     const vw = VW / S, vh = VH / S;
-    let cx = p.x - vw / 2, cy = p.y - 18 - vh / 2;
-    // 모바일에서 채팅창이 열려 있으면 캐릭터가 가려지지 않게 카메라를 옮김
-    if (IS_TOUCH && G.mode === "world") {
-      if (!G.chatRectT || G.t - G.chatRectT > 400) { G.chatRectT = G.t; const c = $("#chat"); G.chatRect = c.classList.contains("collapsed") ? null : c.getBoundingClientRect(); G.hudBottom = $(".hud-top").getBoundingClientRect().bottom; }
-      const r = G.chatRect;
-      if (r) {
-        if (r.width > VW * 0.6) cy = p.y - 18 - (G.hudBottom + r.top) / 2 / S; // 세로 화면: 상단 메뉴와 채팅창 사이 가운데
-        else if (r.left > VW * 0.3) cx = p.x - r.left / 2 / S; // 가로 화면: 채팅창 왼쪽 공간 가운데
-      }
+    let cx = p.x - vw / 2, top = 0, bot = VH;
+    if (G.mode === "world" && (!G.chatRectT || G.t - G.chatRectT > 250)) {
+      G.chatRectT = G.t; const c = $("#chat"), vv = window.visualViewport;
+      G.chatRect = c.classList.contains("collapsed") ? null : c.getBoundingClientRect();
+      const hb = [$(".hud-top"), $("#minimap-wrap")].map((el) => el.getBoundingClientRect()).filter((r) => r.height);
+      G.hudRects = hb; G.hudBottom = hb.length ? Math.max(...hb.map((r) => r.bottom)) + 4 : 0; // 메뉴가 숨겨져 있으면 0
+      G.vvTop = vv ? Math.max(0, vv.offsetTop) : 0; // 아이폰 키보드가 화면을 밀어 올린 만큼
     }
+    if (IS_TOUCH && G.mode === "world") {
+      const r = G.chatRect, sheet = r && r.width > VW * 0.6;
+      if (sheet) { top = Math.max(G.hudBottom, G.vvTop); bot = r.top; } // 세로 화면: 위 메뉴와 채팅창 사이
+      else if (r && r.left > VW * 0.3) cx = p.x - r.left / 2 / S; // 가로 화면: 채팅창 왼쪽 공간 가운데
+      if (!sheet && w.fx && w.fx.kind === "indoor") top = G.hudBottom; // 실내(라운지·샵): 벽 쪽 알바생·게시판이 위 메뉴에 가리지 않게
+    }
+    let cy = p.y - 18 - (top + bot) / 2 / S;
     if (G.mode === "title") { cx = 640 - vw / 2 + Math.sin(G.t / 9000) * 260; cy = 470 - vh / 2 + Math.cos(G.t / 11000) * 160; }
     if (w.W > vw) cx = Math.max(0, Math.min(w.W - vw, cx)); else cx = (w.W - vw) / 2;
-    const chatUp = IS_TOUCH && G.mode === "world" && G.chatRect && G.chatRect.width > VW * 0.6;
-    if (chatUp) cy = Math.max(Math.min(0, (w.H - vh) / 2), Math.min(w.H - G.chatRect.top / S + 30, cy)); // 채팅창 위로 맵 끝까지 보이게
-    else if (w.H > vh) cy = Math.max(0, Math.min(w.H - vh, cy)); else cy = (w.H - vh) / 2;
-    G.cam.x = Math.round(cx * S) / S; G.cam.y = Math.round(cy * S) / S;
+    if (w.H * S > bot - top) cy = Math.max(-top / S, Math.min(w.H - bot / S, cy)); else cy = w.H / 2 - (top + bot) / 2 / S; // 방이 띠보다 작으면 띠 가운데
+    const snap = window.Gfx.on ? S * dpr : S; // 카메라도 실제 픽셀 칸에 맞춤
+    G.cam.x = Math.round(cx * snap) / snap; G.cam.y = Math.round(cy * snap) / snap;
+    updatePoi();
   }
   function renderPrompt() {
     const pr = $("#prompt"), z = G.zone;
@@ -346,6 +355,56 @@
     const act = z.id === "exit" || z.id === "exitShop" || z.id === "exitCinema" || z.id === "watch" || z.id === "seat" || z.id === "stand" || z.id === "surface" || z.id === "cast" ? "" : z.id === "piano" ? t("actPlay") : z.id === "cafe" ? t("cafeOrder") : z.id === "clerk" ? t("actShopTalk") : z.id === "fountain" ? t("actDive") : z.id === "chest" ? t("actOpen") : z.id === "recboard" || z.id === "rankboard" || z.id === "profile" || z.id === "guide" || z.id === "guestbook" || z.id === "art" || z.id === "whaleboard" ? t("actView") : t("actEnter");
     pr.innerHTML = `<kbd>E</kbd>${esc(z.label)} ${esc(act)}`;
     pr.classList.remove("hidden");
+  }
+  // 📍 실내(라운지·샵)에서 화면 밖에 있는 할 거리(방명록·그림·피아노·카페·점원)를 화면 가장자리에 알려 줌. 누르면 그쪽으로 걸어가서 열림
+  const POI_SKIP = /^(exit|exitShop|exitCinema|seat|stand)$/;
+  function buildPoi() {
+    const w = scene(), box = $("#poi");
+    G.poiScene = G.scene; G.poiWorld = w; G.poi = []; box.innerHTML = "";
+    if (!w || !w.fx || w.fx.kind !== "indoor") return;
+    for (const z of w.zones || []) {
+      if (POI_SKIP.test(z.id)) continue;
+      const zx = z.x + z.w / 2, zy = z.y + z.h / 2;
+      let ic = null, bd = 130;
+      for (const i of w.icons || []) { const d = Math.hypot(i.x - zx, i.y - zy); if (d < bd) { bd = d; ic = i; } }
+      const ck = (w.clickables || []).find((c) => c.go === z.id);
+      const front = ck ? ck.front : z.id === "piano" && w.piano ? w.piano.front : { x: zx, y: zy };
+      const el = document.createElement("button");
+      el.className = "poi win hidden"; el.type = "button";
+      el.setAttribute("aria-label", t("poiGo", { name: z.label }));
+      el.innerHTML = `<i class="ar"></i>${ic ? `<span class="ic">${ic.icon}</span>` : ""}<span class="lb">${esc(z.label)}</span>`;
+      el.addEventListener("click", () => { if (G.mode !== "world" || G.modalOpen || G.frozen) return; G.target = { ...front }; G.pendingZone = z.id; });
+      box.appendChild(el);
+      G.poi.push({ el, ax: zx, ay: zy, ty: ic ? (ic.y + zy) / 2 : zy, side: "", pos: "" }); // 보이는지는 물건 가운데(ty), 옆 알림 높이는 물건 앞 바닥(ay) → 알림이 매대·게시판을 가리지 않게
+    }
+  }
+  function updatePoi() {
+    if (G.poiScene !== G.scene || G.poiWorld !== scene()) buildPoi();
+    if (!G.poi || !G.poi.length) return;
+    const off = G.mode !== "world" || G.modalOpen || G.frozen || G.seat;
+    const top = G.hudBottom || 0, bot = VH, mid = { l: [], r: [], u: [] }, rects = G.hudRects || [];
+    const under = (x, y) => rects.some((r) => x > r.left - 4 && x < r.right + 4 && y > r.top - 4 && y < r.bottom + 4); // 위 메뉴에 가려짐
+    for (const q of G.poi) {
+      const x = (q.ax - G.cam.x) * S, y = (q.ay - G.cam.y) * S, ty = (q.ty - G.cam.y) * S;
+      q.side = off ? "" : x < 14 ? "l" : x > VW - 14 ? "r" : ty < 24 || under(x, ty) ? "u" : y > bot - 40 ? "d" : "";
+      q.x = x; q.y = y;
+      if (q.side === "l" || q.side === "r") mid[q.side].push(q); else if (q.side === "u" || q.side === "d") mid.u.push(q);
+    }
+    // 같은 쪽에 여러 개면 겹치지 않게 차례로 밀어냄
+    const t0 = top + 8 + (mid.u.some((q) => q.side === "u") ? 50 : 0); // 위쪽 알림 줄 아래부터
+    for (const k of ["l", "r"]) { let last = -1e9; mid[k].sort((a, b) => a.y - b.y).forEach((q) => { q.py = Math.max(t0, Math.min(bot - 200, q.y - 22), last + 50); last = q.py; }); }
+    { let last = -1e9; mid.u.sort((a, b) => a.x - b.x).forEach((q) => { const w2 = (q.el.offsetWidth || 120) / 2; q.px = Math.max(8 + w2, Math.min(VW - 8 - w2, q.x), last + w2 + 6); last = q.px + w2; q.py = q.side === "u" ? Math.max(46, ...rects.filter((r) => r.right > q.px - w2 && r.left < q.px + w2).map((r) => r.bottom)) + 6 : bot - 200; }); }
+    for (const q of G.poi) {
+      const pos = q.side ? q.side + (q.side === "l" || q.side === "r" ? Math.round(q.py) : Math.round(q.px) + "," + Math.round(q.py)) : "";
+      if (pos === q.pos) continue;
+      q.pos = pos; const el = q.el;
+      el.classList.toggle("hidden", !q.side);
+      if (!q.side) continue;
+      el.dataset.side = q.side;
+      el.querySelector(".ar").textContent = { l: "◀", r: "▶", u: "▲", d: "▼" }[q.side];
+      el.style.top = Math.round(q.py) + "px";
+      el.style.left = q.side === "u" || q.side === "d" ? Math.round(q.px) + "px" : "";
+    }
   }
 
   // ---------------- 렌더 ----------------
@@ -391,6 +450,8 @@
     }
     if (G.mode === "world") chars.push({ swim: G.scene === "sea", emo: G.myEmo, x: G.player.x, y: G.player.y, name: G.user.nickname, av: G.user.avatar, dir: G.player.dir, frame: frameOf(G.player.moving, G.player.t), crown: G.user.role === "artist", me: true, id: G.user.id, artist: G.user.role === "artist", admin: G.user.role === "admin", sit: !!G.seat, drink: G.user.drink });
     for (const c of chars) list.push({ y: c.y, char: c });
+    const fx = window.Gfx.on && !!w.fx; // 그래픽 효과 (gfx.js)
+    if (fx) list.push(...window.Gfx.under(ctx, w, G.cam, VW / S, VH / S, chars, G.t));
     list.sort((a, b) => a.y - b.y);
     for (const o of list) {
       if (o.char) {
@@ -405,9 +466,11 @@
         if (c.artist || c.admin) drawSparkles(c.x, c.y, G.t, c.admin);
       } else o.draw(ctx, G.t);
     }
+    if (fx) window.Gfx.over(ctx, w, chars, G.t); // 낚싯줄·찌는 효과 위에 그려서 밤에도 잘 보이게
     if (w.id === "beach") drawFishingLines(w, chars);
     drawFx(Math.min(0.05, (performance.now() - (G.fxT || performance.now())) / 1000)); G.fxT = performance.now();
     if (w.id === "cinema") drawCinemaLight(w);
+    if (fx) window.Gfx.post(ctx, w);
     if (G.target) { ctx.fillStyle = "rgba(255,127,174,.8)"; const r = 3 + (Math.floor(G.t / 150) % 2); ctx.fillRect(G.target.x - r, G.target.y - 1, r * 2, 2); ctx.fillRect(G.target.x - 1, G.target.y - r, 2, r * 2); }
 
     // ---- 화면 해상도 오버레이 (이름표, 말풍선, 아이콘) ----
@@ -420,7 +483,7 @@
       G.vig = v;
     }
     ctx.fillStyle = G.vig; ctx.fillRect(0, 0, VW, VH);
-    drawAmbient(w);
+    if (!fx || !window.Gfx.replacesAmbient(w)) drawAmbient(w);
     const sx = (x) => (x - G.cam.x) * S, sy = (y) => (y - G.cam.y) * S;
     for (const ic of w.icons) {
       const X = sx(ic.x), Y = sy(ic.y) - 16 - Math.sin(G.t / 300) * 4;
@@ -1773,7 +1836,6 @@
           <button class="gw-card up" data-g="up"><span class="gw-ico">⬆️</span><b>${esc(t("upTitle"))}</b><small>${esc(t("gwUp"))}</small></button>
           <button class="gw-card tet" data-g="tet"><span class="gw-ico">🧱</span><b>${esc(t("tgTitle"))}</b><small>${esc(t("gwTet"))}</small></button>
           <button class="gw-card jx" data-g="jx"><span class="gw-ico">🍬</span><b>${esc(t("jxTitle"))}</b><small>${esc(t("gwJx"))}</small></button>
-          <button class="gw-card lucky" data-g="slot"><span class="gw-ico">🎰</span><b>${esc(t("slTitle"))}</b><small>${esc(t("gwSlot"))}</small></button>
           <button class="gw-card ft" data-g="fortune"><span class="gw-ico">🔮</span><b>${esc(t("ftBtn").replace(/^🔮\s*/, ""))}</b><small>${esc(t("gwFortune"))}</small></button></div>
           <p class="gw-day">🪙 ${esc(t("gameDayLeft", { n: G.user.gameLeft ?? 600 }))}</p>`;
         root.querySelectorAll("[data-g]").forEach((b) => b.addEventListener("click", () => go(b.dataset.g)));
@@ -1787,17 +1849,6 @@
           root.innerHTML = backBtn() + `<div id="gw-play"></div>`;
           root.querySelector("#gw-back").addEventListener("click", menu);
           fortuneBox(root.querySelector("#gw-play"), true);
-          return;
-        }
-        if (g === "slot") {
-          setTitle("🎰 " + t("slTitle"));
-          root.innerHTML = backBtn() + `<div id="gw-play"></div>`;
-          root.querySelector("#gw-back").addEventListener("click", menu);
-          cur = LuckyJelly.mount(root.querySelector("#gw-play"), {
-            t, toast, coins: () => G.user.coins | 0, left: () => (G.user.slotLeft ?? 20),
-            onSpin: async () => { const r = await API.slotSpin(); G.user.coins = (r.user.coins | 0) - (r.payout | 0); G.user.slotLeft = r.user.slotLeft; renderCoins(); G._slotUser = r.user; return r; },
-            onResult: () => { if (G._slotUser) { setUser(G._slotUser); G._slotUser = null; } },
-          });
           return;
         }
         const up = g === "up", tet = g === "tet", jx = g === "jx";
@@ -2535,10 +2586,12 @@
     b.textContent = G.chat.unread > 99 ? "99+" : G.chat.unread;
     b.classList.toggle("hidden", !G.chat.unread);
   }
-  function openChat() { $("#chat").classList.remove("collapsed"); $("#chat-toggle").textContent = "_"; G.chat.unread = 0; updateBadge(); $("#chat-log").scrollTop = $("#chat-log").scrollHeight; }
+  // 채팅창 열림 상태를 body 에도 표시 (폰 세로 화면: 아래 시트로 열리고 조이스틱·위 메뉴는 잠시 숨김)
+  function setChatOpen(open) { $("#chat").classList.toggle("collapsed", !open); $("#chat-toggle").textContent = open ? "_" : "▲"; document.body.classList.toggle("chat-open", open); G.chatRectT = 0; }
+  function openChat() { setChatOpen(true); G.chat.unread = 0; updateBadge(); $("#chat-log").scrollTop = $("#chat-log").scrollHeight; }
   function toggleChat() {
     if ($("#chat").classList.contains("collapsed")) openChat();
-    else { $("#chat").classList.add("collapsed"); $("#chat-toggle").textContent = "▲"; }
+    else setChatOpen(false);
   }
   $("#chat-head").addEventListener("click", toggleChat);
   $("#chat-form").addEventListener("submit", async (e) => {
@@ -2801,7 +2854,7 @@
     $("#hud").classList.remove("hidden");
     G.mode = "world";
     // 모바일은 채팅창을 접은 상태로 시작
-    if (IS_TOUCH) { $("#chat").classList.add("collapsed"); $("#chat-toggle").textContent = "▲"; }
+    setChatOpen(!IS_TOUCH && !$("#chat").classList.contains("collapsed"));
     refreshMe();
     setScene("plaza");
     await fade(false);
@@ -2850,13 +2903,14 @@
   // ---------------- 메인 루프 ----------------
   let last = performance.now();
   function loop(now) {
+    if (window.Gfx.guard(now - last, G.modalOpen || G.mode !== "world")) resize(); // 프레임이 계속 느리면 효과를 자동으로 낮춤
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
     if (G.scene) { update(dt); render(); }
     if (!$("#creator").classList.contains("hidden")) drawPreview();
     requestAnimationFrame(loop);
   }
 
-  window.__jelly = { G, runZone: (z) => runZone(z), closeModal: () => closeModal() };
+  window.__jelly = { G, runZone: (z) => runZone(z), closeModal: () => closeModal(), render: () => render(), resize: () => resize(), scale: () => ({ S, dpr, k: S * dpr, VW, VH, canvasW: canvas.width, canvasH: canvas.height }) };
   // ---------------- 시작 ----------------
   (async function boot() {
     I.apply();
