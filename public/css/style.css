@@ -528,19 +528,6 @@ body.touch .pn-hint:first-of-type { display: none; }
 @keyframes shotflash { 0% { opacity: .85; } 100% { opacity: 0; } }
 .shot-view { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
 .shot-view img { max-width: 100%; max-height: 60vh; border: 3px solid var(--ink); border-radius: 8px; -webkit-touch-callout: default; -webkit-user-select: auto; user-select: auto; }
-/* ---------- v21: 럭키젤리! ---------- */
-.gw-card.lucky { background: linear-gradient(#fff3a8, #ffd34d); }
-.sl-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.sl { width: min(100%, 640px); aspect-ratio: 360 / 250; image-rendering: pixelated; border: 3px solid var(--ink); border-radius: 10px; }
-.sl-bar { display: flex; gap: 12px; align-items: center; }
-.sl-bar .sl-coins { font-weight: bold; background: #fff3a8; border: 2px solid var(--ink); border-radius: 12px; padding: 4px 10px; }
-.sl-bar .sl-spin { font-size: 18px; padding: 10px 22px; }
-.sl-pay { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; width: 100%; max-width: 640px; }
-.sl-row { display: flex; align-items: center; gap: 3px; border: 2px solid var(--ink); border-radius: 8px; background: #fff; padding: 3px 6px; }
-.sl-row canvas { width: 26px; height: 26px; image-rendering: pixelated; }
-.sl-row i.any { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; font-style: normal; font-weight: bold; color: #9a8a9a; }
-.sl-row b { margin-left: auto; font-size: 12px; color: #d8434e; }
-.sl-note { font-size: 11px; opacity: .75; text-align: center; margin: 0; }
 /* ---------- v25: 관리자 코인 ---------- */
 .adm-row .adm-coin { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .adm-row .adm-coin .inp { width: 140px; -webkit-user-select: text; user-select: text; }
@@ -815,3 +802,44 @@ body.kb-open #fish-ui { align-items: flex-start; padding-top: 70px; }
 /* 📣 JELLY LAND 알림 (채팅) */
 #chat .msg.system { background: #fff6d6; border-left: 3px solid #f2c14e; padding: 2px 6px; border-radius: 4px; }
 #chat .msg.system b { color: #b07a00; }
+
+/* ================= v56: 폰 화면 맞춤 ================= */
+/* 📍 실내에서 화면 밖에 있는 할 거리 알림 (누르면 그쪽으로 걸어감) */
+#hud > #poi { position: absolute; inset: 0; pointer-events: none; }
+.poi { position: absolute; pointer-events: auto; display: flex; align-items: center; gap: 4px; min-height: 40px; max-width: min(46vw, 220px); padding: 4px 10px; font: inherit; font-size: 12px; color: var(--ink); cursor: pointer; opacity: .95; touch-action: manipulation; }
+.poi .lb { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.poi .ic { font-size: 15px; line-height: 1; }
+.poi .ar { font-style: normal; font-size: 10px; color: #8459c2; }
+.poi[data-side="l"] { left: max(6px, env(safe-area-inset-left)); }
+.poi[data-side="r"] { right: max(6px, env(safe-area-inset-right)); flex-direction: row-reverse; }
+.poi[data-side="u"], .poi[data-side="d"] { transform: translateX(-50%); }
+body.touch .poi { min-height: 44px; }
+body.touch.chat-open #poi, body.kb-open #poi { display: none; }
+/* 폰 위 메뉴: 버튼은 누르기 쉽게 키우고, 로고는 빼서 화면을 덜 가림 */
+body.touch .hud-btns { gap: 4px; }
+body.touch .hud-btns .btn.sm { min-height: 44px; min-width: 40px; }
+body.touch #chat-head { min-height: 44px; box-sizing: border-box; }
+#chat-title .ct-short { display: none; }
+@media (max-width: 700px) and (orientation: portrait) {
+  body.touch .mini-logo { display: none; }
+  body.touch #chat.collapsed { min-width: 0; }
+  body.touch #chat.collapsed .ct-long { display: none; }
+  body.touch #chat.collapsed .ct-short { display: inline; }
+  body.touch.chat-open #demo { display: none; }
+  body.touch #toast { top: 58%; } /* 들어올 때 뜨는 안내가 가장자리 알림과 겹치지 않게 */
+  body.touch.chat-open #toast { top: 24%; }
+  /* 💬 채팅: 화면 아래쪽 시트(약 42%). 위쪽 게임 화면과 말풍선은 그대로 움직임 */
+  body.touch #chat:not(.collapsed) { left: 0; right: 0; bottom: 0; width: auto; max-height: none; height: calc(var(--vh, 100vh) * 0.42); border-radius: 12px 12px 0 0; border-bottom: 0; padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); box-sizing: border-box; }
+  body.touch #chat:not(.collapsed) .win-head { border-radius: 9px 9px 0 0; }
+  body.touch #chat:not(.collapsed) .log { min-height: 0; }
+  body.touch.chat-open .hud-top, body.touch.chat-open #minimap-wrap, body.touch.chat-open #joy, body.touch.chat-open #act, body.touch.chat-open #emo-fab { display: none; }
+  body.touch.chat-open #prompt { bottom: calc(var(--vh, 100vh) * 0.42 + 8px); }
+  body.touch.chat-open #notice { top: max(8px, env(safe-area-inset-top)); bottom: auto; }
+  /* 아이폰 키보드가 올라오면 시트를 키보드 바로 위에, 조금 낮게 */
+  body.touch.kb-open #chat:not(.collapsed) { bottom: var(--kb, 0px); height: max(170px, calc(var(--vvh, 100vh) * 0.45)); padding-bottom: 0; }
+}
+@media (max-height: 500px) and (orientation: landscape) { /* 가로 화면: 접힌 채팅 버튼을 작게 */
+  body.touch #chat.collapsed { width: auto; min-width: 0; bottom: max(14px, env(safe-area-inset-bottom)); right: calc(max(12px, env(safe-area-inset-right)) + 172px); }
+  body.touch #chat.collapsed .ct-long { display: none; }
+  body.touch #chat.collapsed .ct-short { display: inline; }
+}
